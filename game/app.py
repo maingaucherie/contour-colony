@@ -29,6 +29,12 @@ class App:
         flags = pygame.SCALED | pygame.RESIZABLE if scaled and not WEB else 0
         self.window = pygame.display.set_mode(D.SCREEN_SIZE, flags)
         pygame.display.set_caption(D.WINDOW_TITLE)
+        if WEB:
+            # pygbag sizes the page canvas from its last known aspect ratio, which
+            # is the 1x1 placeholder until asked again: fit it to our 16:9 frame.
+            import platform
+
+            platform.window.window_resize()
         # Everything draws into this offscreen frame, copied to the window per frame.
         self.screen = new_surface(D.SCREEN_SIZE)
         self.clock = pygame.time.Clock()

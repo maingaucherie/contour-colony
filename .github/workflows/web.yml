@@ -36,7 +36,7 @@ jobs:
       - name: Install pygbag
         run: pip install -r requirements-dev.txt
       - name: Build web version
-        run: python -m pygbag --build --template web/contour.tmpl --title "Contour Colony" .
+        run: python -m pygbag --build --template web/contour.tmpl --width 960 --height 540 --title "Contour Colony" .
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
