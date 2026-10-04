@@ -3,9 +3,10 @@
 A small, systems-driven lunar mining game in Python, drawn as a CRT vector
 console. `DESIGN.md` is the design brief and the single source of truth.
 
-Status: **Milestone 1 (console and terrain)**: procedural site generation,
-chunked marching-squares contours with three detail tiers, pan and zoom,
-glow, operations and survey views.
+Status: **Milestone 2 (ant farm)**. On top of Milestone 1's terrain and
+contours: the lander, debris that spawns and respawns, two scavengers that
+collect it on batteries and recharge at the lander, slope-aware pathing,
+phosphor trails, an inspect panel, and selling scrap for credits.
 
 ## Run
 
@@ -24,6 +25,11 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | Tab or V | Operations / survey view |
 | G | Glow on / off |
 | F or F3 | Performance stats |
+| Left click | Inspect a unit or the lander |
+| C | Centre on the selection |
+| X / Shift+X | Sell 10 scrap / all scrap from the lander |
+| Space | Pause |
+| , / . | Slower / faster (1x, 2x, 4x) |
 | N | Generate a new site |
 | Esc | Quit (desktop) |
 
@@ -34,7 +40,8 @@ python3.12 -m unittest -v
 ```
 
 Tests cover the headless parts only (`game/sim`, `game/render/contours.py`),
-which never import pygame.
+which never import pygame: terrain, contours, pathing, scrap conservation,
+debris reservations, battery safety and deterministic replay.
 
 ## Browser build
 
@@ -52,10 +59,10 @@ loads the Python WASM runtime at run time, both from `pygame-web.github.io`.
 ```
 main.py            async entry point (pygbag needs it at the root)
 game/app.py        loading and running states, one frame at a time
-game/sim/          simulation: terrain generation and queries (no pygame)
+game/sim/          simulation, no pygame: terrain, world + tick, pathing, units, debris
 game/content/      tunable numbers only, as plain data tables
-game/render/       contours (pure Python), camera + drawing, glow, Hershey text
-game/ui/           HUD and input
+game/render/       contours (pure Python), camera + terrain, entities, glow, Hershey text
+game/ui/           HUD, inspect panel and input
 tests/             unittest, headless
 tools/             hershey_convert.py regenerates game/render/hershey_data.py
 ```

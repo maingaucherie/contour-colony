@@ -67,7 +67,54 @@ KEY_BINDINGS = {
     "toggle_glow": ("g",),
     "toggle_stats": ("f3", "f"),
     "new_site": ("n",),
+    "pause": ("space",),
+    "speed_up": (".",),
+    "speed_down": (",",),
+    "sell": ("x",),
+    "centre": ("c",),
     "quit": ("escape",),
 }
 # Mouse button used to drag-pan (1 left, 2 middle, 3 right).
 PAN_DRAG_BUTTONS = (1, 2)
+
+# Entities. Sizes are in cells, with a minimum on-screen size in pixels.
+START_ZOOM = 9.0                  # opening camera, centred on the lander
+LANDER_SIZE_CELLS = 3.0
+LANDER_MIN_PX = 20
+UNIT_SIZE_CELLS = 1.2
+UNIT_MIN_PX = 10
+DEBRIS_SIZE_CELLS = 0.8
+DEBRIS_MIN_PX = 6
+SELECT_PICK_RADIUS_PX = 14
+CLICK_MAX_DRAG_PX = 5
+
+COLOR_STRUCTURE = (235, 245, 235)
+COLOR_UNIT = (240, 250, 240)
+COLOR_DEBRIS = (150, 140, 120)
+COLOR_POWER = (255, 176, 40)      # amber: power links, charging
+COLOR_FLOW = (70, 220, 235)       # cyan: item flow, routes, buffer gauges
+COLOR_ALERT = (255, 70, 60)       # red: broken, stranded, deadlines
+COLOR_SELECT = (255, 255, 255)
+
+# Unit state cues.
+IDLE_BLINK_HZ = 1.0
+PICKUP_BLINK_HZ = 6.0
+LOW_BATTERY_FLICKER_BELOW = 0.3   # battery fraction
+LOW_BATTERY_FLICKER_RATE = 53.0   # radians per second of the brightness wobble
+LOW_BATTERY_FLICKER_MIN = 0.45    # dimmest brightness during the flicker
+CARGO_PIP_PX = 2
+
+# Phosphor trails: colour by age from fresh to old, fading out.
+TRAIL_COLOR_FRESH = (200, 255, 210)
+TRAIL_COLOR_OLD = (20, 70, 35)
+
+# Line styles that back up colour meaning.
+DASH_PX = 6
+GAP_PX = 4
+DOT_SPACING_PX = 5
+
+# Panels.
+PANEL_WIDTH = 230
+PANEL_TOP = 100                   # below the stats block
+SELL_BATCH = 10                   # scrap sold per press of the sell key
+PANEL_BATTERY_BAR = (120, 8)

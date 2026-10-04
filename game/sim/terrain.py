@@ -19,6 +19,7 @@ class Heightmap:
     heights: array  # flat array('f'), row-major: index = y * size + x
     min_h: float
     max_h: float
+    craters: tuple = ()  # (x, y, radius) in cells, as placed by the generator
 
     def at(self, x: int, y: int) -> float:
         return self.heights[y * self.size + x]
@@ -35,6 +36,20 @@ class Heightmap:
         top = h[i] + (h[i + 1] - h[i]) * tx
         bottom = h[i + self.size] + (h[i + self.size + 1] - h[i + self.size]) * tx
         return top + (bottom - top) * ty
+
+    def cell_slopes(self) -> array:
+        """Slope in degrees at every grid point (central differences, clamped at edges)."""
+        n, h, two_cell = self.size, self.heights, 2 * self.cell_m
+        out = array("f", bytes(4 * n * n))
+        for y in range(n):
+            up, down = max(y - 1, 0) * n, min(y + 1, n - 1) * n
+            row = y * n
+            for x in range(n):
+                left, right = max(x - 1, 0), min(x + 1, n - 1)
+                gx = (h[row + right] - h[row + left]) / two_cell
+                gy = (h[down + x] - h[up + x]) / two_cell
+                out[row + x] = math.degrees(math.atan(math.hypot(gx, gy)))
+        return out
 
     def slope_deg(self, x: float, y: float) -> float:
         """Slope in degrees from central differences one cell apart."""
@@ -191,4 +206,4 @@ def generate_terrain(seed: int, size: int = T.GRID_SIZE):
             yield done / total
 
     heights = array("f", h)
-    return Heightmap(size, T.CELL_SIZE_M, heights, min(heights), max(heights))
+    return Heightmap(size, T.CELL_SIZE_M, heights, min(heights), max(heights), tuple(craters))

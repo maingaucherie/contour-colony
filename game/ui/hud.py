@@ -42,11 +42,18 @@ def draw_running(surface, info):
     w, h = surface.get_size()
     lh = D.HUD_LINE_HEIGHT
 
-    # Top left: site and view.
+    # Top left: site, economy, clock and view.
     draw_text(surface, f"SITE {info['seed']}", (M + 6, M + 4), 2)
+    y = M + 4 + line_height(2) + 4
+    draw_text(surface, f"CREDITS {info['credits']}   SCRAP {info['scrap']}/{info['storage']}", (M + 6, y), 1)
+    t = int(info["time_s"])
+    clock = f"T+{t // 3600:02d}:{t // 60 % 60:02d}:{t % 60:02d}"
+    rate = "PAUSED" if info["paused"] else f"SPEED {info['speed']}X"
+    draw_text(surface, f"{clock}   {rate}", (M + 6, y + lh), 1,
+              D.COLOR_ALERT if info["paused"] else D.COLOR_TEXT_DIM)
     view = "SURVEY VIEW" if info["view"] == "survey" else "OPERATIONS VIEW"
     draw_text(surface, f"{view}   CONTOUR INTERVAL {info['interval']:g} M",
-              (M + 6, M + 4 + line_height(2) + 4), 1, D.COLOR_TEXT_DIM)
+              (M + 6, y + 2 * lh), 1, D.COLOR_TEXT_DIM)
 
     # Bottom left: cursor readout and controls.
     y = h - M - 4 - 2 * lh
@@ -55,14 +62,14 @@ def draw_running(surface, info):
         x_km, y_km, elev, slope = cursor
         draw_text(surface, f"X {x_km:5.1f} KM   Y {y_km:5.1f} KM   ELEV {elev:+6.0f} M   SLOPE {slope:4.1f} DEG",
                   (M + 6, y), 1)
-    draw_text(surface, "WASD/DRAG PAN   WHEEL Q/E ZOOM   TAB VIEW   G GLOW   F STATS   N NEW SITE",
-              (M + 6, y + lh), 1, D.COLOR_TEXT_DIM)
+    draw_text(surface, "DRAG/WASD PAN  WHEEL ZOOM  CLICK INSPECT  C CENTRE  SPACE PAUSE  ,/. SPEED"
+              "  TAB VIEW  G GLOW  F STATS  N NEW", (M + 6, y + lh), 1, D.COLOR_TEXT_DIM)
 
     # Bottom right: scale bar.
     km_per_px = info["cell_m"] / 1000.0 / info["zoom"]
     km = _scale_bar_km(km_per_px)
     px = int(km / km_per_px)
-    bx1, by = w - M - 6, h - M - 8
+    bx1, by = w - M - 6, h - M - 8 - lh
     bx0 = bx1 - px
     pygame.draw.lines(surface, D.COLOR_TEXT, False, [(bx0, by - 5), (bx0, by), (bx1, by), (bx1, by - 5)])
     draw_text(surface, f"{km} KM", (bx1, by - 5 - lh), 1, align="right")

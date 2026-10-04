@@ -5,7 +5,8 @@ import pygame
 from game.content import display as D
 
 # Actions that fire once per key press (the rest are held).
-_TRIGGERS = ("toggle_view", "toggle_glow", "toggle_stats", "new_site", "quit")
+_TRIGGERS = ("toggle_view", "toggle_glow", "toggle_stats", "new_site", "quit",
+             "pause", "speed_up", "speed_down", "sell", "centre")
 
 
 class Input:
@@ -13,27 +14,37 @@ class Input:
         self.keys = {action: tuple(pygame.key.key_code(name) for name in names)
                      for action, names in D.KEY_BINDINGS.items()}
         self.dragging = False
+        self.drag_px = 0
         self.mouse = (0, 0)
         self.mouse_inside = False
+        self.click = None  # screen position of a left click (press and release without dragging)
 
     def process(self, events, camera):
         """Handle this frame's events. Returns the triggered actions."""
         actions = []
+        self.click = None
         for event in events:
             if event.type == pygame.QUIT:
                 actions.append("quit")
             elif event.type == pygame.KEYDOWN:
                 for action in _TRIGGERS:
                     if event.key in self.keys[action]:
-                        actions.append(action)
+                        shifted = action == "sell" and event.mod & pygame.KMOD_SHIFT
+                        actions.append("sell_all" if shifted else action)
             elif event.type == pygame.MOUSEMOTION:
                 self.mouse = event.pos
                 self.mouse_inside = True
-                if self.dragging and camera is not None:
-                    camera.pan_pixels(*event.rel)
+                if self.dragging:
+                    self.drag_px += abs(event.rel[0]) + abs(event.rel[1])
+                    # Small wobbles during a click don't pan.
+                    if camera is not None and self.drag_px > D.CLICK_MAX_DRAG_PX:
+                        camera.pan_pixels(*event.rel)
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button in D.PAN_DRAG_BUTTONS:
                 self.dragging = True
+                self.drag_px = 0
             elif event.type == pygame.MOUSEBUTTONUP and event.button in D.PAN_DRAG_BUTTONS:
+                if event.button == 1 and self.drag_px <= D.CLICK_MAX_DRAG_PX:
+                    self.click = event.pos
                 self.dragging = False
             elif event.type == pygame.MOUSEWHEEL and camera is not None and event.y:
                 camera.zoom_at(D.ZOOM_WHEEL_FACTOR ** event.y, *self.mouse)
