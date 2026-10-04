@@ -8,7 +8,13 @@ contours: the lander, debris that spawns and respawns, two scavengers that
 collect it on batteries and recharge at the lander, slope-aware pathing,
 phosphor trails, an inspect panel, and selling scrap for credits.
 
-## Run
+## Play
+
+In the browser, nothing to install: **https://maingaucherie.github.io/contour-colony/**
+(click once to start). Every push to the default branch runs the tests and
+republishes this build (`.github/workflows/web.yml`).
+
+## Run locally
 
 Python 3.12, pygame-ce is the only runtime dependency.
 
