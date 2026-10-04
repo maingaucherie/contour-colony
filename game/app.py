@@ -45,7 +45,11 @@ class App:
     # Site loading -------------------------------------------------------
 
     def start_site(self, seed=None):
-        self.seed = random.randrange(T.SEED_MAX) if seed is None else seed
+        if seed is None:
+            # Seed from the clock: the browser build's default random source
+            # gave every visitor the same site.
+            seed = random.Random(time.time_ns()).randrange(T.SEED_MAX)
+        self.seed = seed
         self.heightmap = None
         self.contours = None
         self.camera = None
