@@ -12,6 +12,7 @@ from game.content import world as W
 from game.render import draw, entities
 from game.render.contours import build_contours, tier_for_zoom
 from game.render.glow import Glow
+from game.render.surfaces import new_surface
 from game.sim.terrain import generate_terrain
 from game.sim.world import build_world
 from game.ui import hud, panels
@@ -23,11 +24,13 @@ _TICK_S = 1.0 / W.TICK_RATE
 
 
 class App:
-    def __init__(self, seed=None):
+    def __init__(self, seed=None, scaled=D.SCALED_WINDOW):
         pygame.init()
-        flags = 0 if WEB else pygame.SCALED | pygame.RESIZABLE
-        self.screen = pygame.display.set_mode(D.SCREEN_SIZE, flags)
+        flags = pygame.SCALED | pygame.RESIZABLE if scaled and not WEB else 0
+        self.window = pygame.display.set_mode(D.SCREEN_SIZE, flags)
         pygame.display.set_caption(D.WINDOW_TITLE)
+        # Everything draws into this offscreen frame, copied to the window per frame.
+        self.screen = new_surface(D.SCREEN_SIZE)
         self.clock = pygame.time.Clock()
         self.glow = Glow(self.screen)
         self.glow_on = D.GLOW_ENABLED
@@ -102,6 +105,7 @@ class App:
         if self.glow_on:
             self.glow.apply(self.screen)
         self.frame_ms = (time.perf_counter() - start) * 1000.0
+        self.window.blit(self.screen, (0, 0))
         pygame.display.flip()
 
     def _do(self, action):

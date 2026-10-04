@@ -1,6 +1,8 @@
 """Display, camera, input and loading tables. Plain data: no logic."""
 
 SCREEN_SIZE = (960, 540)
+SURFACE_DEPTH = 32                # bits per pixel of every offscreen surface
+SCALED_WINDOW = True              # scale the 960x540 frame to the window (off: --no-scale)
 WINDOW_TITLE = "Contour Colony"
 FRAME_RATE_CAP = 60
 

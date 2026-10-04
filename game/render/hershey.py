@@ -8,6 +8,7 @@ import pygame
 
 from game.content import display as D
 from game.render.hershey_data import GLYPHS
+from game.render.surfaces import new_surface
 
 _FALLBACK = GLYPHS["\x7f"]
 _TOP = min(y for _, _, strokes in GLYPHS.values() for s in strokes for _, y in s)
@@ -35,7 +36,7 @@ def render(text, size=1, color=D.COLOR_TEXT):
     if surf is not None:
         return surf
     scale = D.TEXT_SCALES[size]
-    surf = pygame.Surface((max(1, text_width(text, size) + 2), line_height(size) + 2))
+    surf = new_surface((max(1, text_width(text, size) + 2), line_height(size) + 2))
     surf.fill(D.COLOR_BACKGROUND)
     pen = 1.0
     for left, right, strokes in map(_glyph, text):

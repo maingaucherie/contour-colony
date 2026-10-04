@@ -14,7 +14,10 @@ def _seed_from_args(argv):
 
 
 async def main():
-    app = App(_seed_from_args(sys.argv))
+    if "--no-scale" in sys.argv:
+        app = App(_seed_from_args(sys.argv), scaled=False)
+    else:
+        app = App(_seed_from_args(sys.argv))
     while app.running:
         app.frame()
         await asyncio.sleep(0)

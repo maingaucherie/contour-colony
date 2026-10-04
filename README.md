@@ -33,6 +33,11 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | N | Generate a new site |
 | Esc | Quit (desktop) |
 
+If the game crashes at startup, try `python main.py --no-scale` (a plain
+960x540 window without SDL's SCALED mode), then run
+`python tools/display_check.py` and send its output: it tries each display
+step in a separate process and shows which one fails.
+
 ## Tests
 
 ```sh

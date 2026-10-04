@@ -7,15 +7,16 @@ sharp lines looks the same as drawing it underneath, and needs one pass.
 import pygame
 
 from game.content import display as D
+from game.render.surfaces import new_surface
 
 
 class Glow:
     def __init__(self, frame):
-        # Scratch surfaces share the frame's pixel format, which smoothscale requires.
+        # smoothscale needs matching formats: the frame must come from new_surface too.
         self.size = frame.get_size()
         self.small_size = (self.size[0] // D.GLOW_DOWNSCALE, self.size[1] // D.GLOW_DOWNSCALE)
-        self.small = pygame.Surface(self.small_size, 0, frame)
-        self.big = pygame.Surface(self.size, 0, frame)
+        self.small = new_surface(self.small_size)
+        self.big = new_surface(self.size)
 
     def apply(self, frame):
         pygame.transform.smoothscale(frame, self.small_size, self.small)
