@@ -11,6 +11,9 @@ LOAD_BUDGET_MS = 30
 
 # Camera. Zoom is screen pixels per terrain cell.
 ZOOM_FIT_MARGIN = 0.92            # min zoom shows the whole site with this fill fraction
+CAMERA_OVERSCAN_CELLS = 72        # the camera may look this far past the site's edge (scenery)
+SCENERY_BRIGHTNESS = 0.75         # surrounding terrain at the site's edge, relative to site contours
+SCENERY_FADE_POWER = 1.6          # how quickly it fades toward the band's outer edge
 ZOOM_MAX = 32.0
 ZOOM_WHEEL_FACTOR = 1.15
 ZOOM_KEY_FACTOR_PER_S = 2.5

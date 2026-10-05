@@ -19,13 +19,14 @@ class Audio:
         self.plan = MusicPlan()
         self.pad_channels = []
         self.hum_channel = None
+        self.ambient_channels = {}
         try:
             if pygame.mixer.get_init() is None:
                 pygame.mixer.init(A.SAMPLE_RATE, -16, 1, 512)
             freq, _, channels = pygame.mixer.get_init()
             self.rate, self.channels = freq, channels
             pygame.mixer.set_num_channels(A.CHANNELS)
-            pygame.mixer.set_reserved(1)  # channel 0: the hum
+            pygame.mixer.set_reserved(1 + len(A.AMBIENT_LOOPS))  # channel 0: the hum; then close-up loops
             self.ok = True
         except Exception as exc:  # no device, or a browser without audio
             print("audio disabled:", exc)
@@ -44,6 +45,11 @@ class Audio:
         self.hum_channel = pygame.mixer.Channel(0)
         self.hum_channel.play(self.sounds["hum"], loops=-1)
         self.hum_channel.set_volume(0.0)
+        for i, kind in enumerate(A.AMBIENT_LOOPS):
+            ch = pygame.mixer.Channel(1 + i)
+            ch.play(self.sounds[f"ambient:{kind}"], loops=-1)
+            ch.set_volume(0.0)
+            self.ambient_channels[kind] = ch
 
     # Controls ----------------------------------------------------------------
 
@@ -69,13 +75,17 @@ class Audio:
 
     # Per frame ------------------------------------------------------------------
 
-    def update(self, now, load):
-        """now: seconds; load: power demand / supply (0..1+) for the hum."""
+    def update(self, now, load, ambient=None):
+        """now: seconds; load: power demand / supply (0..1+) for the hum;
+        ambient: {category: loudness 0..1} for the close-up sounds."""
         if not self.ok or not self.sounds:
             return
         lo, hi = A.HUM_VOLUME
         hum = 0.0 if self.mode == "off" else (lo + (hi - lo) * max(0.0, min(1.0, load))) * A.MASTER
         self.hum_channel.set_volume(hum)
+        for kind, ch in self.ambient_channels.items():
+            level = 0.0 if self.mode == "off" or not ambient else ambient.get(kind, 0.0)
+            ch.set_volume(level * A.AMBIENT_VOLUME[kind] * A.MASTER)
         if self.mode != "all":
             return
         for action in self.plan.update(now):

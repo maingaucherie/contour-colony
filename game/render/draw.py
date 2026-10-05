@@ -14,14 +14,15 @@ class Camera:
     def __init__(self, screen_size, world_extent):
         self.sw, self.sh = screen_size
         self.extent = world_extent
-        self.min_zoom = min(self.sw, self.sh) / world_extent * D.ZOOM_FIT_MARGIN
+        self.min_zoom = min(self.sw, self.sh) / (world_extent + D.CAMERA_OVERSCAN_CELLS) * D.ZOOM_FIT_MARGIN
         self.zoom = self.min_zoom
         self.x = self.y = world_extent / 2
 
     def clamp(self):
         self.zoom = min(max(self.zoom, self.min_zoom), D.ZOOM_MAX)
-        self.x = min(max(self.x, 0.0), self.extent)
-        self.y = min(max(self.y, 0.0), self.extent)
+        o = D.CAMERA_OVERSCAN_CELLS
+        self.x = min(max(self.x, -o), self.extent + o)
+        self.y = min(max(self.y, -o), self.extent + o)
 
     def offset(self):
         return self.sw / 2 - self.x * self.zoom, self.sh / 2 - self.y * self.zoom
@@ -175,6 +176,34 @@ def draw_contours(surface, contours, camera, colors, shading=None):
                 pts = [(x * z + ox, y * z + oy) for x, y in pl.points]
                 aalines(surface, ramp[q], False, pts)
                 count += len(pts) - 1
+    return count
+
+
+def draw_scenery(surface, scenery, camera, colors):
+    """Surrounding terrain: coarse contours fading out with distance from the site."""
+    if scenery is None:
+        return 0
+    z = camera.zoom
+    ox, oy = camera.offset()
+    vx0, vy0, vx1, vy1 = camera.visible_rect()
+    e = camera.extent
+    margin = T.SCENERY_MARGIN_CELLS
+    steps = D.CONTOUR_FADE_STEPS
+    keys = sorted(colors)
+    count = 0
+    for k, lines in scenery.levels:
+        ramp = colors[min(max(k, keys[0]), keys[-1])]
+        for pl in lines:
+            if pl.max_x < vx0 or pl.min_x > vx1 or pl.max_y < vy0 or pl.min_y > vy1:
+                continue
+            dx = max(0.0, -pl.mx, pl.mx - e)
+            dy = max(0.0, -pl.my, pl.my - e)
+            fade = max(0.0, 1.0 - (dx * dx + dy * dy) ** 0.5 / margin) ** D.SCENERY_FADE_POWER
+            q = int(D.SCENERY_BRIGHTNESS * fade * steps + 0.5)
+            if q <= 0:
+                continue
+            pygame.draw.aalines(surface, ramp[min(q, steps)], False, [(x * z + ox, y * z + oy) for x, y in pl.points])
+            count += len(pl.points) - 1
     return count
 
 

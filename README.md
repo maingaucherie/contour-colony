@@ -76,6 +76,9 @@ needed; solar arrays click together into farms. Slightly steep ground can be
 graded for credits (amber marks while placing). Outposts give far fields
 their own power, charging and storage.
 
+Zoom right in to hear the site: machinery thumping, process plant humming,
+rovers whining past.
+
 Storage is one colony-wide pool: the lander plus every depot. No single good
 may fill more than 30% of it (scrap 60%), so a surplus backs up at its
 producer instead of clogging the colony; sell surplus from the orbit menu.

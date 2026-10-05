@@ -67,5 +67,19 @@ CONTOUR_UNSURVEYED_BRIGHTNESS = 0.55
 # Every INDEX_STEP-th level is an index contour, drawn slightly brighter.
 CONTOUR_INDEX_STEP = 4
 
+# Scenery around the site (drawn only, never simulated): a band this wide,
+# sampled this coarsely, matching the site's heights at its edge and blending
+# into independent noise over SCENERY_BLEND_CELLS. Only every LEVEL_STEP-th
+# contour level is traced, and lines fade out toward the band's outer edge.
+SCENERY_MARGIN_CELLS = 128
+SCENERY_STEP_CELLS = 4
+SCENERY_BLEND_CELLS = 40.0
+SCENERY_NOISE_PERIOD_CELLS = 90.0
+SCENERY_RELIEF = 0.45                # noise amplitude as a fraction of the site's height range
+SCENERY_CRATERS = 14
+SCENERY_CRATER_RADIUS_CELLS = (8.0, 30.0)
+SCENERY_LEVEL_STEP = 4
+SCENERY_TOLERANCE_CELLS = 1.0
+
 # Seeds for new sites are drawn from [0, SEED_MAX).
 SEED_MAX = 1_000_000

@@ -113,6 +113,41 @@ def pluck(freq, rate, table):
     return [table[(i * freq) % rate] * math.exp(-k * i) * _edge(i, n, rate) for i in range(n)]
 
 
+def ambient_loop(kind, rate):
+    """One second of a close-up sound that loops seamlessly (whole-Hz
+    periodic parts; noise faded at the seam)."""
+    spec = A.AMBIENT_LOOPS[kind]
+    rng = random.Random(kind)
+    out = [0.0] * rate
+    if kind == "machine":
+        period = rate // spec["thumps"]
+        for i in range(rate):
+            t = (i % period) / rate
+            out[i] = math.sin(2 * math.pi * spec["pitch"] * i / rate) * math.exp(-t * 18.0)
+            out[i] += rng.uniform(-1, 1) * spec["grit"] * math.exp(-t * 30.0)
+    elif kind == "process":
+        total = sum(a for _, a in spec["hum"])
+        prev = 0.0
+        for i in range(rate):
+            hum_ = sum(math.sin(2 * math.pi * f * i / rate) * a for f, a in spec["hum"]) / total
+            prev = prev * 0.85 + rng.uniform(-1, 1) * 0.15
+            out[i] = hum_ * 0.7 + prev * spec["hiss"] * 3.0
+    else:
+        period = rate // spec["clicks"]
+        for i in range(rate):
+            trem = 0.75 + 0.25 * math.sin(2 * math.pi * spec["tremolo"] * i / rate)
+            whine = _wave("triangle", spec["pitch"] * i / rate) * trem * 0.6
+            click = rng.uniform(-1, 1) * 0.5 if i % period < rate // 400 else 0.0
+            out[i] = whine + click
+    seam = rate // 100
+    for i in range(seam):  # soften the loop point
+        k = i / seam
+        out[i] *= k
+        out[rate - 1 - i] *= k
+    peak = max(abs(v) for v in out) or 1.0
+    return [v / peak * 0.8 for v in out]
+
+
 def to_int16(samples, channels):
     if channels == 1:
         return array("h", (_clip16(v) for v in samples))
@@ -133,6 +168,7 @@ def build_bank(rate, channels):
     pad_notes = sorted({f for chord in A.PAD_CHORDS for f in chord})
     jobs += [(f"pad:{f}", f) for f in pad_notes]
     jobs += [(f"pluck:{f}", f) for f in A.PLUCK_SCALE]
+    jobs += [(f"ambient:{k}", k) for k in A.AMBIENT_LOOPS]
     table = sine_table(rate, A.PAD_SECOND_HARMONIC)
     plain = sine_table(rate)
     for i, (name, arg) in enumerate(jobs):
@@ -140,6 +176,8 @@ def build_bank(rate, channels):
             samples = sfx(arg, rate)
         elif name == "hum":
             samples = hum(rate)
+        elif name.startswith("ambient:"):
+            samples = ambient_loop(arg, rate)
         elif name.startswith("pad:"):
             samples = loop_note(arg, table, A.PAD_DETUNE_HZ, 1.0, rate)
         else:

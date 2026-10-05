@@ -18,11 +18,13 @@ from game.audio.player import Audio
 from game.render import draw, entities
 from game.render.contours import build_contours, tier_for_zoom
 from game.render.glow import Glow
+from game.render.scenery import build_scenery
 from game.render.surfaces import new_surface
 from game.sim.terrain import generate_terrain
 from game.sim.world import build_world
 from game.sim import jobs
 from game.sim import structures as ST
+from game.content import audio as AUDIO
 from game.content import contracts as CT
 from game.sim.orbit import Orbit
 from game.sim import body
@@ -31,7 +33,7 @@ from game.ui.intro import Intro
 from game.ui.input import Input
 
 WEB = sys.platform == "emscripten"
-_STAGES = ("TUNING AUDIO", "GENERATING TERRAIN", "TRACING CONTOURS", "LANDING")
+_STAGES = ("TUNING AUDIO", "GENERATING TERRAIN", "TRACING CONTOURS", "SURVEYING SURROUNDINGS", "LANDING")
 _TICK_S = 1.0 / W.TICK_RATE
 
 
@@ -75,6 +77,7 @@ class App:
         self.seed = seed
         self.heightmap = None
         self.contours = None
+        self.scenery = None
         self.camera = None
         self.world = None
         self.selected = None
@@ -109,6 +112,8 @@ class App:
         self.colors = {view: draw.contour_colors(self.contours, hm.min_h, hm.max_h, view)
                        for view in ("operations", "survey")}
         self.stage = 4
+        self.scenery = yield from build_scenery(hm, self.contours.interval, self.seed)
+        self.stage = 5
         self.world = yield from build_world(self.seed, hm, self.mode)
         self.events_heard = 0
         self.camera = draw.Camera(D.SCREEN_SIZE, hm.size - 1)
@@ -152,7 +157,7 @@ class App:
         if self.world is not None and self.loader is None:
             self._sounds_for_events()
             supply, demand = self._power_summary()
-            self.audio.update(time.perf_counter(), demand / supply if supply else 0.0)
+            self.audio.update(time.perf_counter(), demand / supply if supply else 0.0, self._ambient_levels())
         hud.draw_frame(self.screen)
         if self.glow_on:
             self.glow.apply(self.screen)
@@ -444,7 +449,8 @@ class App:
         world = self.world
         if self.shading is None or self.shading.survey is not world.survey:
             self.shading = draw.ContourShading(world.survey)
-        self.segments = draw.draw_contours(self.screen, self.contours, cam, self.colors[self.view], self.shading)
+        self.segments = draw.draw_scenery(self.screen, self.scenery, cam, self.colors[self.view])
+        self.segments += draw.draw_contours(self.screen, self.contours, cam, self.colors[self.view], self.shading)
         draw.draw_site_border(self.screen, cam)
         if self.view == "survey" and not self.placing:
             draw.draw_slope_marks(self.screen, world, cam, W.SLOPE_BUILDABLE_DEG, impassable_only=True)
@@ -555,6 +561,34 @@ class App:
         idle = sum(1 for u in haulers if u.haul is None and not u.cargo_total())
         waiting = sum(1 for o in jobs.offers(self.world) if o[3] == "production")
         return len(haulers), idle, waiting
+
+    def _ambient_levels(self):
+        """Close-up sounds: how loud each category should be, from working
+        machines and moving rovers near the middle of the screen."""
+        cam = self.camera
+        lo, hi = AUDIO.AMBIENT_ZOOM
+        zoom_k = (cam.zoom - lo) / (hi - lo) if cam is not None else 0.0
+        if zoom_k <= 0.0 or self.intro is not None or self.paused:
+            return {}
+        zoom_k = min(1.0, zoom_k)
+        cx, cy = cam.sw / 2, cam.sh / 2
+        levels = {}
+
+        def add(kind, x, y):
+            for cat, sources in AUDIO.AMBIENT_SOURCES.items():
+                if kind in sources:
+                    sx, sy = cam.world_to_screen(x, y)
+                    k = 1.0 - ((sx - cx) ** 2 + (sy - cy) ** 2) ** 0.5 / AUDIO.AMBIENT_RANGE_PX
+                    if k > 0:
+                        levels[cat] = min(1.0, levels.get(cat, 0.0) + k)
+
+        for s in self.world.structures.values():
+            if s.built and s.status == "working" and s.powered:
+                add(s.kind, s.x, s.y)
+        for u in self.world.units.values():
+            if u.state == "moving":
+                add(u.kind, u.x, u.y)
+        return {cat: v * zoom_k for cat, v in levels.items()}
 
     def _power_summary(self):
         grid = self.world.power_grids.get(self.world.lander.grid)

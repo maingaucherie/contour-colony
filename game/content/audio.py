@@ -63,5 +63,25 @@ PLUCK_VOLUME = 0.12
 PLUCK_ECHOES = ((0.42, 0.45), (0.84, 0.2))  # (delay s, relative volume)
 MUSIC_VOLUME = 1.0
 
+# Close-up sounds: one-second loops per category, heard only when zoomed in
+# (silent below AMBIENT_ZOOM[0], full from AMBIENT_ZOOM[1]) and louder for
+# working sources nearer the middle of the screen (silent AMBIENT_RANGE_PX out).
+AMBIENT_ZOOM = (10.0, 20.0)
+AMBIENT_RANGE_PX = 320
+AMBIENT_SOURCES = {
+    "machine": ("ilmenite_mine", "ice_mine", "crusher"),
+    "process": ("ice_melter", "sinter_kiln", "electrolyzer", "reduction_furnace", "machine_shop"),
+    "motor": ("scavenger", "hauler", "constructor", "survey_rover"),
+}
+AMBIENT_VOLUME = {"machine": 0.22, "process": 0.16, "motor": 0.12}
+AMBIENT_LOOPS = {
+    # thumps per second, thump pitch (Hz), grit (noise) level
+    "machine": {"thumps": 2, "pitch": 55, "grit": 0.35},
+    # hum harmonics (Hz, amplitude) and hiss level
+    "process": {"hum": ((90, 1.0), (180, 0.4), (270, 0.15)), "hiss": 0.25},
+    # whine pitch (Hz), tremolo (Hz, whole), tread clicks per second
+    "motor": {"pitch": 330, "tremolo": 8, "clicks": 12},
+}
+
 # Mute cycle (M): all on -> effects only -> silent.
 MODES = ("all", "sfx", "off")
