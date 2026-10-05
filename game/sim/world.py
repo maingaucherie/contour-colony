@@ -53,6 +53,7 @@ class World:
         self.orbit = Orbit()
         self.outcome = None           # None, "won" or "lost"
         self.storage_full = False
+        self.autosold = 0             # scrap sold on arrival since the last report
         self.outcome_text = ""
         self.end_s = None
         self.debris_timer = round(W.DEBRIS_SPAWN_INTERVAL_S * W.TICK_RATE)
@@ -126,14 +127,74 @@ class World:
             put += self.store(s, item, amount - put)
         return put
 
+    # Colony storage ----------------------------------------------------------------------
+
+    def capacity(self):
+        return sum(s.spec["storage"] for s in self.storages())
+
+    def stored_total(self):
+        return sum(s.stored() for s in self.storages())
+
+    def item_cap(self, item):
+        share = I.ITEMS[item].get("cap_fraction", W.ITEM_CAP_FRACTION)
+        return max(W.ITEM_CAP_MIN, int(share * self.capacity()))
+
+    def storage_room(self, item):
+        """How many more of item storage will take (cap minus stock and what's on its way)."""
+        coming = sum(s.reserved_in.get(item, 0) for s in self.storages() if not s.spec.get("export_bay")
+                     or item not in self.contracts.needs())
+        return max(0, self.item_cap(item) - self.stock(item) - coming)
+
+    @staticmethod
+    def price(item):
+        spec = I.ITEMS[item]
+        return spec.get("sell_price", max(1, int(spec["value"] * W.SPOT_PRICE_FRACTION)))
+
+    def sell(self, item, amount):
+        """Sell up to amount of item from colony storage (lander first, never
+        items a hauler has reserved). Returns how many were sold."""
+        sold = 0
+        for s in [self.lander] + [s for s in self.storages() if s is not self.lander]:
+            free = s.storage.get(item, 0) - s.reserved_out.get(item, 0)
+            n = max(0, min(amount - sold, free))
+            if n:
+                s.storage[item] -= n
+                if not s.storage[item]:
+                    del s.storage[item]
+                sold += n
+        if sold:
+            self._sold(item, sold)
+        return sold
+
+    def _sold(self, item, n):
+        self.credits += n * self.price(item)
+        if item == "scrap":
+            self.scrap_sold += n
+        else:
+            self.consumed[item] = self.consumed.get(item, 0) + n
+
+    def unload_scrap(self, s, amount):
+        """A scavenger unloading at s: store what fits under the cap, sell the rest."""
+        keep = min(amount, max(0, self.item_cap("scrap") - self.stock("scrap")))
+        stored = self.store(s, "scrap", keep)
+        extra = amount - stored
+        if extra:
+            self._sold("scrap", extra)
+            self.autosold += extra
+        return amount
+
     def take_items(self, cost):
         """Take a whole cost {item: n} from storage (lander first), or nothing."""
-        if any(self.stock(k) < n for k, n in cost.items()):
-            return False
         order = [self.lander] + [s for s in self.storages() if s is not self.lander]
+
+        def free(s, k):  # never what a hauler has reserved
+            return max(0, s.storage.get(k, 0) - s.reserved_out.get(k, 0))
+
+        if any(sum(free(s, k) for s in order) < n for k, n in cost.items()):
+            return False
         for k, n in cost.items():
             for s in order:
-                take = min(n, s.storage.get(k, 0))
+                take = min(n, free(s, k))
                 if take:
                     s.storage[k] -= take
                     if not s.storage[k]:
@@ -153,13 +214,8 @@ class World:
     # Commands (applied between ticks) ------------------------------------------------
 
     def sell_scrap(self, amount):
-        """Sell up to amount scrap from the lander. Returns how many were sold."""
-        n = min(amount, self.lander.storage.get("scrap", 0))
-        if n > 0:
-            self.lander.storage["scrap"] -= n
-            self.credits += n * I.ITEMS["scrap"]["sell_price"]
-            self.scrap_sold += n
-        return n
+        """Sell up to amount scrap from colony storage. Returns how many were sold."""
+        return self.sell("scrap", amount)
 
     def place(self, kind, x, y):
         return structures.place_site(self, kind, x, y)
@@ -290,9 +346,10 @@ class World:
         self.spawn_map.update(self.charge_field, [(s.x, s.y) for s in chargers], max_round_trip)
 
     def _check_storage(self):
-        stored = sum(s.stored() for s in self.storages())
-        capacity = sum(s.spec["storage"] for s in self.storages())
-        full = stored >= W.STORAGE_FULL_FRACTION * capacity
+        if self.autosold >= W.SELL_EVENT_EVERY:
+            self.event(f"SURPLUS SCRAP SOLD: {self.autosold} FOR {self.autosold * self.price('scrap')} CR")
+            self.autosold = 0
+        full = self.stored_total() >= W.STORAGE_FULL_FRACTION * self.capacity()
         if full and not self.storage_full:
             self.event("STORAGE FULL - BUILD A DEPOT", "alert")
         self.storage_full = full

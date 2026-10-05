@@ -8,6 +8,7 @@ outputs appear when it finishes. A full output buffer stops the structure
 
 from game.content import structures as S
 from game.content import world as W
+from game.content.items import ITEMS
 
 WORKING, STARVED, BLOCKED, UNPOWERED, IDLE = "working", "starved", "blocked", "unpowered", "idle"
 
@@ -18,7 +19,9 @@ def recipe(s):
 
 def input_cap(s, item):
     r = recipe(s)
-    return r["in"].get(item, 0) * S.INPUT_BUFFER_CYCLES if r else 0
+    if not r or item not in r["in"]:
+        return 0
+    return max(r["in"][item] * S.INPUT_BUFFER_CYCLES, S.INPUT_BUFFER_MIN)
 
 
 def output_cap(s, item):
@@ -44,14 +47,19 @@ def update(world, s):
         if s.cycle_left_s <= 0.0:
             s.cycle_left_s = 0.0
             for item, n in r["out"].items():
-                s.outputs[item] = s.outputs.get(item, 0) + n
                 world.produced[item] = world.produced.get(item, 0) + n
+                keep = min(n, output_cap(s, item) - s.outputs.get(item, 0))
+                s.outputs[item] = s.outputs.get(item, 0) + keep
+                if n > keep:  # a gas with nowhere to go is vented
+                    world.consumed[item] = world.consumed.get(item, 0) + n - keep
+                    s.vented += n - keep
             s.cycles += 1
         return
     if any(s.inputs.get(item, 0) < n for item, n in r["in"].items()):
         s.status = STARVED
         return
-    if any(s.outputs.get(item, 0) + n > output_cap(s, item) for item, n in r["out"].items()):
+    if any(s.outputs.get(item, 0) + n > output_cap(s, item) and not ITEMS[item].get("vents")
+           for item, n in r["out"].items()):
         s.status = BLOCKED
         return
     if not s.powered:

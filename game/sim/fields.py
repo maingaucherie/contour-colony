@@ -27,6 +27,7 @@ class Field:
     hinted: bool = False
     confirmed: bool = False
     signal_passes: int = 0  # scanner beam passes over it
+    survey_done: bool = False  # every reachable part surveyed in detail (cliffs may hide the rest)
     boundary: list = field(default_factory=list)  # closed polyline [(x, y), ...]
 
     def edge(self, theta):

@@ -92,6 +92,16 @@ PRIORITIES = ("high", "normal", "low")
 
 # Debris now spawns around every charging point, not just the lander.
 
+# Colony storage: the lander and every depot form one pool. No single item may
+# take more than ITEM_CAP_FRACTION of the pool (at least ITEM_CAP_MIN); haulers
+# won't bring more, so its producer backs up instead of filling the colony.
+# Scrap over its cap, or that doesn't fit, is sold on arrival. Any stored good
+# can be sold on the market at SPOT_PRICE_FRACTION of its contract value.
+ITEM_CAP_FRACTION = 0.3
+ITEM_CAP_MIN = 30
+SPOT_PRICE_FRACTION = 0.3
+SELL_EVENT_EVERY = 10                # report automatic scrap sales in batches of this many
+
 # Storage warning: checked every STORAGE_CHECK_S; warns once it passes this fraction.
 STORAGE_CHECK_S = 5
 STORAGE_FULL_FRACTION = 0.95

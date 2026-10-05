@@ -196,7 +196,7 @@ def work_done(world, unit):
         if store is not None and site is not None and not site.built:
             space = unit.spec["cargo"] - unit.cargo_total()
             for k, n in site.materials_needed().items():
-                take = min(n, store.storage.get(k, 0), space)
+                take = min(n, store.storage.get(k, 0) - store.reserved_out.get(k, 0), space)
                 if take > 0:
                     store.storage[k] -= take
                     if not store.storage[k]:

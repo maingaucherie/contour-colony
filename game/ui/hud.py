@@ -59,12 +59,10 @@ def draw_running(surface, info):
     if fill:
         pygame.draw.rect(surface, rep_color if rep < D.REPUTATION_WARN else D.COLOR_FIELD, (bx + 2, y + 3, fill, 5))
     y += lh
-    stock = f"SCRAP {info['scrap']}   PARTS {info['parts']}   SINTER {info['sinter']}"
+    stored, cap = info["storage"]
+    stock = f"STORAGE {stored}/{cap}   SCRAP {info['scrap']}   PARTS {info['parts']}   SINTER {info['sinter']}"
     draw_text(surface, stock, (M + 6, y), 1, D.COLOR_TEXT_DIM)
-    supply, demand = info["power"]
-    spare = supply - demand
-    text = f"POWER {spare:.0f} KW FREE OF {supply:.0f}" if spare >= 0 else f"POWER {-spare:.0f} KW SHORT"
-    draw_text(surface, text, (M + 6 + text_width(stock) + 18, y), 1, D.COLOR_ALERT if spare < 0 else D.COLOR_POWER)
+
     t = int(info["time_s"])
     clock = f"T+{t // 3600:02d}:{t // 60 % 60:02d}:{t % 60:02d}"
     rate = "PAUSED" if info["paused"] else f"SPEED {info['speed']}X"
@@ -72,13 +70,23 @@ def draw_running(surface, info):
         rate += f" (MANAGING {info['actual_speed']:.0f}X)"
     draw_text(surface, f"{clock}   {rate}", (M + 6, y + lh), 1,
               D.COLOR_ALERT if info["paused"] else D.COLOR_TEXT_DIM)
+    supply, demand = info["power"]
+    spare = supply - demand
+    text = f"POWER {spare:.0f} KW FREE OF {supply:.0f}" if spare >= 0 else f"POWER {-spare:.0f} KW SHORT"
+    px = M + 6 + max(text_width(f"{clock}   {rate}") + 18, 200)
+    draw_text(surface, text, (px, y + lh), 1, D.COLOR_ALERT if spare < 0 else D.COLOR_POWER)
     research = info.get("research")
     rtext = f"RESEARCH {research[0].upper()} {research[1] * 100:3.0f}%" if research else "RESEARCH IDLE (R)"
     view = "SURVEY VIEW" if info["view"] == "survey" else "OPERATIONS VIEW"
     draw_text(surface, f"{rtext}   {view}", (M + 6, y + 2 * lh), 1, D.COLOR_TEXT_DIM)
+    haulers, idle, waiting = info["haulers"]
+    if haulers or waiting:
+        busy = waiting > idle and waiting >= D.HAULERS_SHORT_LOADS
+        text = f"HAULERS {haulers} ({idle} FREE)   LOADS WAITING {waiting}" + ("   BUILD MORE HAULERS" if busy else "")
+        draw_text(surface, text, (M + 6, y + 3 * lh), 1, D.COLOR_ALERT if busy else D.COLOR_TEXT_DIM)
 
     # Event log, newest at the bottom, fading out.
-    ey = h - M - 4 - 3 * lh
+    ey = h - M - 7 - 3 * lh
     for age_s, text, kind in reversed(info.get("events", [])):
         if age_s > D.EVENT_SHOW_S:
             continue
@@ -90,7 +98,7 @@ def draw_running(surface, info):
         ey -= lh
 
     # Bottom left: cursor readout and controls.
-    y = h - M - 4 - 2 * lh
+    y = h - M - 7 - 2 * lh
     cursor = info.get("cursor")
     if cursor:
         x_km, y_km, elev, slope = cursor
@@ -105,7 +113,7 @@ def draw_running(surface, info):
         draw_text(surface, f"X {x_km:5.1f} KM   Y {y_km:5.1f} KM   ELEV {elev:+6.0f} M   SLOPE {slope:4.1f} DEG  {kind}",
                   (M + 6, y), 1, color)
     draw_text(surface, info.get("hint") or "B BUILD  R RESEARCH  O ORBIT  CLICK SELECT  RIGHT CLICK ORDER"
-              "  SPACE PAUSE  ,/. SPEED  TAB VIEW  M SOUND  I ICONS", (M + 6, y + lh), 1, D.COLOR_TEXT_DIM)
+              "  SPACE PAUSE  ,/. SPEED  TAB VIEW  M SOUND  I ICONS", (M + 6, y + lh + 4), 1, D.COLOR_TEXT_DIM)
 
     # Bottom right: scale bar.
     km_per_px = info["cell_m"] / 1000.0 / info["zoom"]

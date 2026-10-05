@@ -96,13 +96,8 @@ def work_done(world, unit):
         think(world, unit)
     elif unit.activity == "unload":
         s = world.structures[unit.dock]
-        moved = world.store(s, "scrap", unit.cargo.get("scrap", 0))
-        unit.cargo["scrap"] -= moved
-        if not unit.cargo["scrap"]:
-            del unit.cargo["scrap"]
-            think(world, unit)
-        else:
-            UN.work(unit, "unload", unit.spec["unload_s"])  # storage full: wait and retry
+        world.unload_scrap(s, unit.cargo.pop("scrap", 0))  # what doesn't fit is sold
+        think(world, unit)
 
 
 def drop_job(world, unit):

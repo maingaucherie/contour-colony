@@ -39,6 +39,7 @@ class Unit:
     target: int | None = None        # debris, structure or site id the activity is about
     job: int | None = None           # constructor: the site it is supplying
     haul: tuple | None = None        # hauler: (source id, dest id, item, amount)
+    survey_at: tuple | None = None   # survey rover: the field spot it's going to survey
     order: tuple | None = None       # direct order: ("move" | "survey", x, y)
     path: list = field(default_factory=list)
     path_left: float = 0.0           # cells of path still to drive
@@ -229,7 +230,9 @@ def go_dock(world, unit, role, only=None):
     for s in ([only] if only is not None else world.structures.values()):
         if role == "charge" and not (s.charges() and (s.powered or s is world.lander)):
             continue
-        if role == "store" and not (s.stores() and s.stored() < s.spec["storage"]):
+        # Scrap can always be unloaded: what doesn't fit is sold.
+        only_scrap = set(unit.cargo) <= {"scrap"}
+        if role == "store" and not (s.stores() and (s.stored() < s.spec["storage"] or only_scrap)):
             continue
         d = f.dist[grid.node_at(s.x, s.y)]
         if d == math.inf:

@@ -4,7 +4,7 @@
 REPUTATION_START = 50
 REPUTATION_MAX = 100
 REPUTATION_DRAIN_PER_MIN = 1.0
-REPUTATION_DRAIN_GRACE_S = 600       # no drain while the site is being set up
+REPUTATION_DRAIN_GRACE_S = 900       # no drain while the site is being set up
 REPUTATION_ON_TIME = 10
 REPUTATION_EXPIRED = -15
 
@@ -12,7 +12,7 @@ REPUTATION_EXPIRED = -15
 # NEW_CONTRACT_EVERY_S while there's room. Filled late (within the grace
 # period after the deadline) pays credits only; past that it expires.
 MAX_OPEN = 3
-FIRST_CONTRACT_S = 20
+FIRST_CONTRACT_S = 300               # a quiet start: the first offer comes this far in
 NEW_CONTRACT_EVERY_S = 300
 LATE_GRACE_FRACTION = 0.5            # of the contract's duration
 PAY_MULTIPLIER = 1.8                 # credits = quantity x item value x this

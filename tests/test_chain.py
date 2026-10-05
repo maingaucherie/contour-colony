@@ -246,3 +246,103 @@ class ExitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ColonyStorageTests(unittest.TestCase):
+    def test_item_cap_limits_hauling_into_storage(self):
+        from game.sim import jobs as J
+        w = make_world(1)
+        mine = built_structure(w, "crusher")
+        cap = w.item_cap("concentrate")
+        w.lander.storage["concentrate"] = cap - 3
+        w.produced["concentrate"] = cap - 3
+        mine.outputs["concentrate"] = 10
+        w.produced["concentrate"] += 10
+        w.research.done.add("logistics_1")
+        h = w.spawn_unit("hauler", w.lander.x + 3, w.lander.y)
+        from game.sim import units as UN
+        job = J.best_job(w, h, UN.here_field(w, h))
+        self.assertIsNotNone(job)
+        self.assertEqual(job[4], 3)        # only up to the cap
+        w.lander.storage["concentrate"] = cap
+        self.assertIsNone(J.best_job(w, h, UN.here_field(w, h)))
+
+    def test_scrap_that_does_not_fit_is_sold(self):
+        w = make_world(1)
+        cap = w.item_cap("scrap")
+        w.lander.storage["scrap"] = cap - 1
+        credits = w.credits
+        w.unload_scrap(w.lander, 5)
+        self.assertEqual(w.lander.storage["scrap"], cap)
+        self.assertEqual(w.credits, credits + 4 * w.price("scrap"))
+        self.assertEqual(w.scrap_sold, 4)
+
+    def test_selling_reaches_depots_but_not_reserved_goods(self):
+        w = make_world(1)
+        depot = built_structure(w, "depot")
+        depot.storage["water"] = 12
+        depot.reserved_out["water"] = 5
+        w.produced["water"] = 12
+        credits = w.credits
+        self.assertEqual(w.sell("water", 50), 7)
+        self.assertEqual(depot.storage["water"], 5)
+        self.assertEqual(w.credits, credits + 7 * w.price("water"))
+        self.assertTrue(ledger_ok(w, "water")[0])
+
+    def test_gases_vent_instead_of_blocking(self):
+        w = make_world(1)
+        e = built_structure(w, "electrolyzer")
+        w.dirty_power = True
+        w.tick()
+        e.powered = True
+        e.outputs["oxygen"] = P.output_cap(e, "oxygen")
+        e.inputs["water"] = 1
+        w.produced["water"] = 1
+        w.produced["oxygen"] = e.outputs["oxygen"]
+        P.update(w, e)
+        self.assertEqual(e.status, P.WORKING)
+        for _ in range(int(P.cycle_time(e) * W.TICK_RATE) + 1):
+            P.update(w, e)
+        self.assertEqual(e.outputs["oxygen"], P.output_cap(e, "oxygen"))
+        self.assertEqual(e.vented, 1)
+        self.assertTrue(ledger_ok(w, "oxygen")[0])
+
+
+class SurveyPastCliffsTests(unittest.TestCase):
+    def test_fields_with_cliff_locked_parts_can_be_finished(self):
+        from game.sim import surveyor as SV
+        w = make_world(6)
+        reach = 3.0 + W.SURVEY_CELLS * 0.75
+        locked = 0
+        for f in w.fields:
+            edge = [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(f.boundary, f.boundary[1:])]
+            for x, y in f.sample_points(3.0) + edge:
+                node = w.grid.node_at(x, y)
+                if not (w.grid.open[node] and w.home_field.reachable(node)):
+                    locked += 1
+                    stand = SV.stand_point(w, x, y, reach)
+                    if stand is not None:
+                        self.assertLessEqual(((stand[0] - x) ** 2 + (stand[1] - y) ** 2) ** 0.5, reach + 1e-6)
+        self.assertGreater(locked, 0)
+        # The nearest field with locked ground gets finished by a survey rover.
+        target = min((f for f in w.fields if any(not w.grid.open[w.grid.node_at(x, y)]
+                                                  for x, y in f.sample_points(3.0))),
+                     key=lambda f: w.charge_field.dist[w.grid.node_at(f.cx, f.cy)])
+        w.hint_field(target)
+        w.research.done.add("field_survey")
+        w.spawn_unit("survey_rover", w.lander.x + 3, w.lander.y)
+        for _ in range(minutes(25)):
+            w.tick()
+            if target.survey_done:
+                break
+        self.assertTrue(target.survey_done)
+        self.assertTrue(target.confirmed)
+
+
+class StartTests(unittest.TestCase):
+    def test_quiet_start(self):
+        w = make_world(1)
+        for _ in range(int((C.FIRST_CONTRACT_S - 1) * W.TICK_RATE)):
+            w.tick()
+        self.assertEqual(w.contracts.open, [])
+        self.assertEqual(w.contracts.reputation, C.REPUTATION_START)

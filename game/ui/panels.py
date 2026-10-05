@@ -128,10 +128,15 @@ def _structure_lines(world, s):
     if grid:
         lines.append((f"GRID      {grid['supply']:.1f} KW SUPPLY  {grid['demand']:.1f} KW DEMAND", 1, D.COLOR_TEXT_DIM))
     if spec.get("storage"):
-        lines.append((f"STORAGE   {s.stored()}/{spec['storage']}", 1, D.COLOR_TEXT, ("bar", s.stored() / spec["storage"])))
+        lines.append((f"STORAGE   {s.stored()}/{spec['storage']}   COLONY {world.stored_total()}/{world.capacity()}",
+                      1, D.COLOR_TEXT, ("bar", s.stored() / spec["storage"])))
         held = [f"{ITEMS[k]['name'].upper()} {n}" for k, n in sorted(s.storage.items())]
         for i in range(0, len(held), 3):
             lines.append(("  " + "   ".join(held[i:i + 3]), 1, D.COLOR_TEXT_DIM))
+        capped = [ITEMS[k]["name"].upper() for k in sorted(ITEMS) if world.stock(k) >= world.item_cap(k)]
+        if capped:
+            lines.append(("AT COLONY CAP: " + ", ".join(capped), 1, D.COLOR_ALERT))
+        lines.append((f"EACH GOOD: UP TO {int(W.ITEM_CAP_FRACTION * 100)}% OF COLONY STORAGE", 1, D.COLOR_TEXT_DIM))
     if s.docks:
         used = sum(1 for u in s.dock_users if u is not None)
         what = "CHARGING DOCKS" if spec.get("charge_slots") else "UNLOADING DOCKS"
@@ -147,9 +152,9 @@ def _structure_lines(world, s):
         lines.append(("EXPORT BAY: CONTRACT GOODS SHIP FROM HERE", 1, D.COLOR_TEXT_DIM))
         if world.storage_full:
             lines.append(("STORAGE FULL - BUILD A DEPOT", 1, D.COLOR_ALERT))
-        price = ITEMS["scrap"]["sell_price"]
+        price = world.price("scrap")
         lines.append((f"X  SELL {D.SELL_BATCH} SCRAP FOR {D.SELL_BATCH * price} CR", 1, D.COLOR_FLOW))
-        lines.append(("SHIFT+X  SELL ALL SCRAP", 1, D.COLOR_FLOW))
+        lines.append(("SHIFT+X  ALL SCRAP    O: SELL OTHER GOODS", 1, D.COLOR_FLOW))
     if s.kind == "rover_bay":
         if s.building_unit:
             total = U.UNITS[s.building_unit]["bay_time_s"] * world.tick_rate
@@ -186,9 +191,18 @@ def _production_lines(world, s, r):
     for k in r["out"]:
         cap = P.output_cap(s, k)
         out.append((f"  OUT  {ITEMS[k]['name'].upper()}  {s.outputs.get(k, 0)}/{cap}", 1, D.COLOR_TEXT_DIM))
-    out.append((f"CYCLES    {s.cycles}", 1, D.COLOR_TEXT_DIM))
-    if s.status == P.BLOCKED and world.storage_full:
-        out.append(("STORAGE FULL - BUILD A DEPOT OR USE THE OUTPUT", 1, D.COLOR_ALERT))
+    out.append((f"CYCLES    {s.cycles}" + (f"   VENTED {s.vented}" if s.vented else ""), 1, D.COLOR_TEXT_DIM))
+    if s.status == P.BLOCKED:
+        capped = [ITEMS[k]["name"].upper() for k in r["out"] if world.stock(k) >= world.item_cap(k)]
+        if capped:
+            out.append(("COLONY HOLDS ITS CAP OF " + ", ".join(capped) + ": USE OR SELL (O)", 1, D.COLOR_ALERT))
+        elif world.storage_full:
+            out.append(("STORAGE FULL - BUILD A DEPOT OR SELL (O)", 1, D.COLOR_ALERT))
+        else:
+            out.append(("WAITING FOR A HAULER", 1, D.COLOR_ALERT))
+    vents = [ITEMS[k]["name"].upper() for k in r["out"] if ITEMS[k].get("vents")]
+    if vents:
+        out.append((", ".join(vents) + " VENTED WHEN ITS OUTPUT IS FULL", 1, D.COLOR_TEXT_DIM))
     if not any(u.kind == "hauler" for u in world.units.values()):
         out.append(("NO HAULERS: RESEARCH LOGISTICS I, BUILD AT A ROVER BAY", 1, D.COLOR_ALERT))
     return out

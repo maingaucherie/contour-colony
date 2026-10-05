@@ -180,7 +180,7 @@ POD_FALL_PX = 60                  # a pod starts this far above its landing spot
 PANEL_WIDTH = 340
 PANEL_GAP = 8                     # inspect panel sits this far under the contracts board
 MENU_WIDTH = 470                  # build menu, top left under the HUD
-MENU_TOP = 112
+MENU_TOP = 126
 MENU_COLUMNS = (22, 170)          # x offsets: name, cost
 RESEARCH_WIDTH = 790
 RESEARCH_COLUMNS = (6, 190, 415)  # x offsets: name, status, effect
@@ -188,6 +188,8 @@ COLOR_MENU_CURSOR = (5, 28, 32)   # highlighted menu row
 RESEARCH_TOP = 90
 NEW_SITE_CONFIRM_S = 3.0          # press N twice within this to abandon the site
 SELL_BATCH = 10                   # scrap sold per press of the sell key
+HAULERS_SHORT_LOADS = 3           # HUD asks for more haulers when this many loads wait and none are free
+MARKET_BATCH = 10                 # goods sold per choice in the orbit menu's market
 PANEL_BATTERY_BAR = (120, 8)
 
 # Event log.

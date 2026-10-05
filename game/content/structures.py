@@ -113,9 +113,11 @@ BUILD_MENU = ("solar", "pylon", "scanner", "charging_pad", "depot", "rover_bay",
               "ilmenite_mine", "ice_mine", "crusher", "ice_melter", "sinter_kiln",
               "electrolyzer", "reduction_furnace", "machine_shop")
 
-# Production buffers: inputs hold this many cycles' worth of each ingredient;
-# outputs hold OUTPUT_BUFFER of each product. A full output stops production.
+# Production buffers: inputs hold this many cycles' worth of each ingredient,
+# but at least INPUT_BUFFER_MIN (so a full hauler load fits); outputs hold
+# OUTPUT_BUFFER of each product. A full output stops production.
 INPUT_BUFFER_CYCLES = 3
+INPUT_BUFFER_MIN = 10
 OUTPUT_BUFFER = 10
 
 # Deconstruction: a constructor dismantles a marked structure in this fraction of

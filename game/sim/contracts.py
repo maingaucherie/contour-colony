@@ -97,7 +97,7 @@ class Contracts:
         # and sinter straight from production).
         hold = world.lander.storage
         for item in [k for k in hold if k not in BUILD_MATERIALS]:
-            n = self.receive(world, item, hold[item])
+            n = self.receive(world, item, hold[item] - world.lander.reserved_out.get(item, 0))
             if n:
                 hold[item] -= n
                 if not hold[item]:

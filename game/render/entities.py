@@ -78,7 +78,7 @@ def draw_fields(surface, world, camera, now_s):
         revealed = 0
         run = []
         for a, b in zip(f.boundary, f.boundary[1:]):
-            if level_at((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) >= 2:
+            if f.survey_done or level_at((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) >= 2:
                 if not run:
                     run.append(to_screen(*a))
                 run.append(to_screen(*b))

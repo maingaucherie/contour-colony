@@ -7,6 +7,7 @@ import pygame
 
 from game.content import contracts as C
 from game.content import display as D
+from game.content import world as W
 from game.content.items import ITEMS
 from game.render.hershey import draw_text, line_height
 from game.sim.orbit import Orbit
@@ -45,8 +46,9 @@ def draw_board(surface, world, now_s):
     draw_text(surface, f"FILLED {cs.filled}  EXPIRED {cs.expired}", (x + bw, y), 1, D.COLOR_TEXT_DIM, "right")
     y += lh + 2
     if not cs.open:
-        draw_text(surface, f"NO OPEN CONTRACTS - NEXT OFFER IN {clock(cs.next_offer_s - t)}", (x, y), 1,
-                  D.COLOR_TEXT_DIM)
+        first = cs.filled == 0 and cs.expired == 0
+        label = "FIRST CONTRACT IN" if first else "NO OPEN CONTRACTS - NEXT OFFER IN"
+        draw_text(surface, f"{label} {clock(cs.next_offer_s - t)}", (x, y), 1, D.COLOR_TEXT_DIM)
         y += lh
     for c in sorted(cs.open, key=lambda c: c.deadline_s):
         urgent = contract_urgent(world, c)
@@ -117,9 +119,12 @@ def draw_pass_timer(surface, world, x, y, bw):
 
 # Orbit menu ---------------------------------------------------------------------
 
-def orbit_entries():
-    """Rows of the orbit menu: every supply crate or unit, then the scan."""
-    return [("supply", i) for i in range(len(C.SUPPLY))] + [("scan", None)]
+def orbit_entries(world):
+    """Rows of the orbit menu: every supply crate or unit, the scan, then a
+    market row for every good in colony storage."""
+    held = sorted(k for k in ITEMS if world.stock(k) > 0)
+    return ([("supply", i) for i in range(len(C.SUPPLY))] + [("scan", None)]
+            + [("sell", k) for k in held])
 
 
 def draw_orbit_menu(surface, world, cursor=None):
@@ -127,7 +132,14 @@ def draw_orbit_menu(surface, world, cursor=None):
     over = Orbit.overhead(t)
     lines = []
     c1, c2 = D.ORBIT_COLUMNS
-    for kind, i in orbit_entries():
+    for kind, i in orbit_entries(world):
+        if kind == "sell":
+            n, cap = world.stock(i), world.item_cap(i)
+            batch = min(D.MARKET_BATCH, n)
+            note = f"{n} STORED, CAP {cap}" + ("  (AT CAP)" if n >= cap else "")
+            lines.append(([(0, f"SELL {batch} {ITEMS[i]['name'].upper()}"), (c1 + 60, f"+{batch * world.price(i)} CR"),
+                           (c2 + 90, note)], D.COLOR_ALERT if n >= cap else D.COLOR_TEXT))
+            continue
         if kind == "supply":
             e = C.SUPPLY[i]
             what = ", ".join(f"{n} {k.upper()}" for k, n in e.get("items", {}).items()) or "ONE UNIT, READY TO WORK"
@@ -145,6 +157,8 @@ def draw_orbit_menu(surface, world, cursor=None):
     lines.append(("", D.COLOR_TEXT_DIM))
     lines.append((f"CREDITS {world.credits}.  DROPS LAND NEAR THE LANDER DURING THE NEXT PASS.", D.COLOR_TEXT_DIM))
     lines.append(("ORDERING A DROP RESETS THE STANDING CONTRACT STREAK.   ESC: CLOSE", D.COLOR_TEXT_DIM))
+    lines.append((f"MARKET: GOODS SELL FOR {int(W.SPOT_PRICE_FRACTION * 100)}% OF CONTRACT VALUE, FROM ANY STORAGE.",
+                  D.COLOR_TEXT_DIM))
     w = D.ORBIT_MENU_WIDTH
     return _panel(surface, (surface.get_width() - w) // 2, D.RESEARCH_TOP, w, lines, "ORBIT", cursor, n)
 

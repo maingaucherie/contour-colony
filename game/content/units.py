@@ -52,12 +52,12 @@ UNITS = {
     "hauler": {
         "name": "hauler",
         "start_count": 0,
-        "base_speed_cells_per_s": 2.8,
+        "base_speed_cells_per_s": 3.4,
         "battery": 100.0,
-        "drain_per_cost_cell": 0.4,
+        "drain_per_cost_cell": 0.35,
         "cargo": 10,                 # items of one type
         "sight_cells": 2.5,
-        "load_s": 1.5,
+        "load_s": 0.8,
         "launch_stagger_s": 0.0,
         "bay_cost": {"scrap": 12, "parts": 4}, "bay_time_s": 20.0, "unlocked_by": "logistics_1",
     },
@@ -76,7 +76,7 @@ SLOPE_DIVISOR_DEG = 5.0              # speed = base / (1 + slope / SLOPE_DIVISOR
 LOW_BATTERY_FRACTION = 0.2           # below this, drop the job and go charge
 TOP_UP_BELOW_FRACTION = 0.6          # when docked below this, charge to full before the next job
 TRIP_SAFETY_FACTOR = 1.25            # planned energy is multiplied by this before checking range
-RELAY_PLANNING_FRACTION = 0.9        # a far job is taken via a charger near it if it fits in this much of a full battery
+RELAY_PLANNING_FRACTION = 1.0        # a far job is taken via a charger near it if it fits in a full battery
 IDLE_RETHINK_S = 2.0                 # idle units look for work this often
 # Units with nothing to unload prefer a charging pad over a storage dock (the
 # lander) up to this much extra drive (cost-cells), and move off a storage dock

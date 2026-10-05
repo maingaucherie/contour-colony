@@ -10,6 +10,7 @@ from game.content import display as D
 from game.content import terrain as T
 from game.content import world as W
 from game.content.research import RESEARCH, RESEARCH_MENU
+from game.content.items import ITEMS
 from game.content.structures import BUILD_MENU, STRUCTURES
 from game.content.units import BAY_MENU
 from game.audio.player import Audio
@@ -19,6 +20,7 @@ from game.render.glow import Glow
 from game.render.surfaces import new_surface
 from game.sim.terrain import generate_terrain
 from game.sim.world import build_world
+from game.sim import jobs
 from game.sim import structures as ST
 from game.content import contracts as CT
 from game.sim.orbit import Orbit
@@ -219,7 +221,7 @@ class App:
 
     def _menu_entries(self):
         if self.menu == "orbit":
-            return board.orbit_entries()
+            return board.orbit_entries(self.world)
         return BUILD_MENU if self.menu == "build" else RESEARCH_MENU
 
     def _menu_choose(self, i):
@@ -229,7 +231,13 @@ class App:
             return
         if self.menu == "orbit":
             kind, index = entries[i]
-            if kind == "supply":
+            if kind == "sell":
+                n = world.sell(index, D.MARKET_BATCH)
+                self.audio.play("sell" if n else "error")
+                if n:
+                    world.event(f"SOLD {n} {ITEMS[index]['name'].upper()} FOR {n * world.price(index)} CR")
+                self.menu_cursor = min(self.menu_cursor, len(self._menu_entries()) - 1)
+            elif kind == "supply":
                 ok, reason = world.order_supply(index)
                 self.audio.play("confirm" if ok else "error")
                 if not ok:
@@ -422,6 +430,7 @@ class App:
             "frame_ms": self.frame_ms, "segments": self.segments, "glow": self.glow_on,
             "credits": world.credits, "scrap": world.stock("scrap"), "parts": world.stock("parts"),
             "sinter": world.stock("sinter"), "reputation": world.contracts.reputation,
+            "storage": (world.stored_total(), world.capacity()), "haulers": self._hauler_summary(),
             "power": self._power_summary(), "time_s": world.time_s(),
             "paused": self.paused, "speed": W.SIM_SPEEDS[self.speed_index], "actual_speed": self.actual_speed,
             "research": (RESEARCH[world.research.current]["name"], world.research.progress())
@@ -480,6 +489,13 @@ class App:
                 best = name
         if best:
             self.audio.play(best)
+
+    def _hauler_summary(self):
+        """(haulers, idle ones, production loads waiting for one)."""
+        haulers = [u for u in self.world.units.values() if u.kind == "hauler"]
+        idle = sum(1 for u in haulers if u.haul is None and not u.cargo_total())
+        waiting = sum(1 for o in jobs.offers(self.world) if o[3] == "production")
+        return len(haulers), idle, waiting
 
     def _power_summary(self):
         grid = self.world.power_grids.get(self.world.lander.grid)

@@ -45,6 +45,7 @@ class Structure:
     reserved_out: dict = field(default_factory=dict)  # items haulers will collect
     cycle_left_s: float = 0.0
     cycles: int = 0
+    vented: int = 0
     status: str = "idle"
     richness: float = 1.0
     deconstruct: bool = False                       # marked for a constructor to dismantle

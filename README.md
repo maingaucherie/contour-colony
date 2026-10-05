@@ -31,13 +31,13 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | --- | --- |
 | B | Build menu: Up/Down (or W/S) + Enter, click a row, or press 1-0; then click to place (Shift+click places more), right click or Esc cancels |
 | R | Research panel: Up/Down + Enter or click a row to start a project |
-| O | Orbit: order supply drops (crates or ready-built units, land during the next pass) or, while the ship is overhead, aim the free orbital scan |
+| O | Orbit and market: order supply drops (crates or ready-built units, land during the next pass), aim the free orbital scan while the ship is overhead, or sell 10 of any stored good |
 | Left click | Select a unit or structure (inspect panel) |
 | Right click | Order the selected unit: go there, or for a survey rover, survey there |
 | 1-4 with a rover bay selected | Build a scavenger, constructor, survey rover or hauler |
 | P | Cycle the selected structure's power priority |
 | Del | Cancel the selected construction site (materials refunded), or mark a finished structure for a constructor to dismantle (75% back); Del again keeps it |
-| X / Shift+X | Sell 10 scrap / all scrap from the lander |
+| X / Shift+X | Sell 10 scrap / all scrap (from any storage) |
 | C | Centre on the selection |
 | WASD / arrows / drag | Pan |
 | Mouse wheel, Q / E | Zoom |
@@ -62,8 +62,15 @@ From there: crusher, ice mine and melter, sinter kiln (sinter builds tier 2),
 electrolyzer, reduction furnace and machine shop. Fields far from the lander
 need a charging pad (and pylons) nearer to them: rovers top up on the way.
 Red, blinking structures are starved or blocked; the thin bars beside them
-are their input (left) and output (right) buffers. Build depots before the
-lander's hold fills up.
+are their input (left) and output (right) buffers.
+
+Storage is one colony-wide pool: the lander plus every depot. No single good
+may fill more than 30% of it (scrap 60%), so a surplus backs up at its
+producer instead of clogging the colony; sell surplus from the orbit menu.
+Scrap that doesn't fit is sold on arrival, and hydrogen and oxygen are vented
+when nothing takes them. The HUD shows colony storage and whether loads are
+waiting for haulers. The first contract arrives five minutes in, and
+reputation only starts draining after fifteen.
 
 If the game crashes at startup, try `python main.py --no-scale` (a plain
 960x540 window without SDL's SCALED mode), then run
