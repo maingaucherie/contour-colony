@@ -115,8 +115,14 @@ def here_field(world, unit):
 
 
 def back_cost(world, x, y):
-    """Cost-cells from (x, y) to the nearest working charger."""
-    return world.charge_field.dist[world.grid.node_at(x, y)]
+    """Cost-cells from (x, y) to the nearest working charger. A spot on a
+    blocked node (beside a cliff) counts from the drivable node next to it."""
+    grid, cf = world.grid, world.charge_field
+    node = grid.node_at(x, y)
+    if cf.reachable(node):
+        return cf.dist[node]
+    near = grid.nearest_reachable(node, cf)
+    return cf.dist[near] + grid.node_cells if near != cf.source or cf.reachable(near) else math.inf
 
 
 def path_to(world, unit, goal, from_field=None):
@@ -127,7 +133,12 @@ def path_to(world, unit, goal, from_field=None):
     f = from_field or here_field(world, unit)
     node = grid.node_at(*goal)
     if not f.reachable(node):
-        return None
+        # A goal just off drivable ground (a dock beside a cliff): route to the
+        # drivable node next to it, then the short last step.
+        near = grid.nearest_reachable(node, f)
+        if near == node or not f.reachable(near) or near == f.source and node not in dict(grid.neighbours(near)):
+            return None
+        node = near
     points = grid.waypoints((unit.x, unit.y), f.nodes_from_source(node), goal)
     return avoid_structures(world, (unit.x, unit.y), points)
 
@@ -223,7 +234,9 @@ def dock_roles(world, unit):
 def go_dock(world, unit, role, only=None):
     """Head for the nearest structure that can charge / store (or for `only`),
     reserving a dock slot if one is free (otherwise drive to it and wait).
-    False if none reachable."""
+    Never a charger the battery can't reach while one it can is around; a
+    busy one counts as a little further away, since waiting in line beats a
+    long drive. False if none reachable."""
     f = here_field(world, unit)
     grid = world.grid
     best = None
@@ -238,9 +251,13 @@ def go_dock(world, unit, role, only=None):
         if d == math.inf:
             continue
         free = None in s.dock_users or (unit.dock == s.id)
+        reachable = trip_energy(unit, d) <= unit.battery
+        cost = d
         if role == "charge" and s.stores() and not unit.cargo_total():
-            d += U.PARK_AWAY_FROM_STORAGE_COST  # leave storage docks to units with cargo
-        key = (not free, d)
+            cost += U.PARK_AWAY_FROM_STORAGE_COST  # leave storage docks to units with cargo
+        if not free:
+            cost += U.BUSY_DOCK_COST
+        key = (not reachable, cost)
         if best is None or key < best[0]:
             best = (key, s)
     if best is None:

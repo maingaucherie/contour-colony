@@ -98,14 +98,35 @@ class Structure:
         return min(1.0, got / total / 3 + assembly * 2 / 3)
 
 
-def make_docks(s):
+def make_docks(s, world=None):
+    """Dock points in a ring around the structure. With the world, each one
+    is turned (or pulled in) until it sits on ground rovers can drive to,
+    never on a cliff beside the structure."""
     spec = s.spec
     slots = spec.get("charge_slots", 0) or spec.get("dock_slots", 0)
     s.docks, s.dock_users = [], []
     r = spec.get("dock_radius_cells", 0.0)
+
+    def drivable(x, y):
+        if world is None:
+            return True
+        node = world.grid.node_at(x, y)
+        return world.grid.open[node] and world.home_field.reachable(node)
+
     for k in range(slots):
-        a = math.pi / 4 + k * 2 * math.pi / slots
-        s.docks.append((s.x + r * math.cos(a), s.y + r * math.sin(a)))
+        a0 = math.pi / 4 + k * 2 * math.pi / slots
+        spot = (s.x, s.y)  # fallback: the structure's own (always drivable) centre
+        for radius in (r, r * 0.6):
+            for turn in (0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6):
+                a = a0 + turn * math.pi / 12
+                x, y = s.x + radius * math.cos(a), s.y + radius * math.sin(a)
+                if drivable(x, y):
+                    spot = (x, y)
+                    break
+            else:
+                continue
+            break
+        s.docks.append(spot)
         s.dock_users.append(None)
 
 
@@ -250,7 +271,7 @@ def complete(world, s):
         if n:
             refund_items(world, {"regolith": n})
             world.produced["regolith"] = world.produced.get("regolith", 0) + n
-    make_docks(s)
+    make_docks(s, world)
     world.structures_changed()
     world.event(f"{s.spec['name'].upper()} COMPLETE")
 

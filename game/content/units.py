@@ -85,6 +85,7 @@ IDLE_RETHINK_S = 2.0                 # idle units look for work this often
 # to a free pad within it, so docks stay open for units bringing cargo.
 PARK_AWAY_FROM_STORAGE_COST = 40.0
 TOP_UP_IDLE_FRACTION = 0.9           # an idle unit away from a charger goes to charge below this
+BUSY_DOCK_COST = 30.0                # a charger with no free dock counts as this much further away (cost-cells)
 PARK_OFFSET_CELLS = 1.2              # a charged, idle unit gives up its dock and waits this far further out
 TRAIL_POINTS = 40                    # trail history kept per unit, one point per tick
 

@@ -490,10 +490,10 @@ def build_world(seed, heightmap, mode=CT.DEFAULT_MODE):
     lander = structures.Structure(world.new_id(), "lander", lx, ly)
     lander.output_kw = STRUCTURES["lander"]["power_kw"]
     lander.storage = dict(W.START_STORAGE)
-    structures.make_docks(lander)
     world.structures[lander.id] = lander
     world.lander = lander
     world.home_field = home
+    structures.make_docks(lander, world)
     yield 0.55
 
     world.fields = fields.generate(world, world.rng)
