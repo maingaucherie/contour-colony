@@ -156,6 +156,8 @@ SLOPE_MARK_RADIUS_CELLS = 10      # placement mode
 SLOPE_MARK_MAX = 1400             # survey view: marks per frame at most (sets the spacing)
 COLOR_BUILDABLE = (70, 200, 100)
 COLOR_TOO_STEEP = (170, 50, 45)
+FEED_DOT_SPEED = 0.8              # direct-feed link dots: trips along the link per second
+COLOR_GRADABLE = (200, 140, 40)   # buildable after grading (costs credits and time)
 
 # Line styles that back up colour meaning.
 DASH_PX = 6

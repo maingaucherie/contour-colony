@@ -28,6 +28,19 @@ class Field:
     confirmed: bool = False
     signal_passes: int = 0  # scanner beam passes over it
     survey_done: bool = False  # every reachable part surveyed in detail (cliffs may hide the rest)
+    mined: int = 0             # mine cycles taken from it
+
+    def reserve(self):
+        return W.FIELD_RESERVE_CYCLES * self.richness * (self.radius / 5.0) ** 2
+
+    def reserves_left(self):
+        """Fraction of the reserve not yet mined, 0..1."""
+        return max(0.0, 1.0 - self.mined / self.reserve())
+
+    def yield_factor(self):
+        """Mine speed multiplier: richness, falling to a floor as it runs out."""
+        floor = W.FIELD_DEPLETED_FLOOR
+        return self.richness * (floor + (1 - floor) * self.reserves_left())
     boundary: list = field(default_factory=list)  # closed polyline [(x, y), ...]
 
     def edge(self, theta):

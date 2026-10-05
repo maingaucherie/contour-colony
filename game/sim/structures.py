@@ -46,8 +46,14 @@ class Structure:
     cycle_left_s: float = 0.0
     cycles: int = 0
     vented: int = 0
+    fed: int = 0                                    # items received by direct feed
     status: str = "idle"
     richness: float = 1.0
+    field_id: int | None = None                     # mines: the field they work
+    heat: float = 0.0                               # 0..1, structures with a "heat" spec
+    grade_deg: float = 0.0                          # degrees of grading the site needs
+    grade_cr: int = 0                               # credits paid for grading (refunded on cancel)
+    warm: bool = False                              # getting waste heat from a neighbour
     deconstruct: bool = False                       # marked for a constructor to dismantle
     teardown_s: float = 0.0                         # dismantling seconds done
 
@@ -74,6 +80,10 @@ class Structure:
         cost = self.spec.get("build_cost", {})
         return all(self.delivered.get(k, 0) >= n for k, n in cost.items())
 
+    def build_time(self):
+        """Assembly seconds, plus grading if the ground needs it."""
+        return self.spec.get("build_time_s", 1.0) + grade_seconds(self.spec, self.grade_deg)
+
     def teardown_progress(self):
         return self.teardown_s / (self.spec.get("build_time_s", 1.0) * S.DECONSTRUCT_TIME_FRACTION)
 
@@ -84,7 +94,7 @@ class Structure:
         cost = self.spec.get("build_cost", {})
         total = sum(cost.values()) or 1
         got = sum(min(self.delivered.get(k, 0), n) for k, n in cost.items())
-        assembly = self.work_done_s / self.spec.get("build_time_s", 1.0)
+        assembly = self.work_done_s / self.build_time()
         return min(1.0, got / total / 3 + assembly * 2 / 3)
 
 
@@ -99,8 +109,87 @@ def make_docks(s):
         s.dock_users.append(None)
 
 
+def grade_credits(spec, deg):
+    return int(round(S.GRADE_CREDITS_PER_DEG * deg * spec["footprint_cells"] ** 2))
+
+
+def grade_seconds(spec, deg):
+    return S.GRADE_SECONDS_PER_DEG * deg * spec["footprint_cells"] ** 2
+
+
+def steepest_under(world, x, y, r):
+    size = world.heightmap.size
+    steepest = 0.0
+    for cy in range(int(y - r), int(y + r) + 2):
+        for cx in range(int(x - r), int(x + r) + 2):
+            if 0 <= cx < size and 0 <= cy < size and math.hypot(cx - x, cy - y) <= r + 0.5:
+                steepest = max(steepest, world.slopes[cy * size + cx])
+    return steepest
+
+
+def grading_needed(world, kind, x, y):
+    """Degrees of grading the ground under kind at (x, y) would need (0 if none)."""
+    spec = STRUCTURES[kind]
+    return max(0.0, steepest_under(world, x, y, spec["footprint_cells"]) - spec["max_slope_deg"])
+
+
+def _snaps(a_kind, ax, ay, b_kind, bx, by):
+    """True if two snapping structures sit edge to edge on their lattice (no gap needed)."""
+    snap = STRUCTURES[a_kind].get("snap")
+    if not snap or a_kind != b_kind:
+        return False
+    cw, ch = snap["cell"]
+    return abs(ax - bx) >= cw - 1e-3 or abs(ay - by) >= ch - 1e-3
+
+
+def snap_position(world, kind, x, y):
+    """Where a snapping structure placed near (x, y) clicks into place: the
+    nearest free lattice slot beside one of its kind, else (x, y) unchanged."""
+    snap = STRUCTURES[kind].get("snap")
+    if not snap:
+        return x, y
+    cw, ch = snap["cell"]
+    best = None
+    for o in world.structures.values():
+        if o.kind != kind or math.hypot(o.x - x, o.y - y) > S.SNAP_RADIUS_CELLS:
+            continue
+        for dx, dy in ((cw, 0), (-cw, 0), (0, ch), (0, -ch)):
+            px, py = o.x + dx, o.y + dy
+            d = math.hypot(px - x, py - y)
+            if (best is None or d < best[0]) and check_placement(world, kind, px, py)[0]:
+                best = (d, px, py)
+    return (best[1], best[2]) if best else (x, y)
+
+
+def farm_neighbours(world, s):
+    snap = s.spec.get("snap")
+    if not snap:
+        return 0
+    cw, ch = snap["cell"]
+    n = 0
+    for o in world.structures.values():
+        if o is not s and o.kind == s.kind and o.built:
+            dx, dy = abs(o.x - s.x), abs(o.y - s.y)
+            if (abs(dx - cw) < 0.05 and dy < 0.05) or (abs(dy - ch) < 0.05 and dx < 0.05):
+                n += 1
+    return n
+
+
+def refresh_output(world):
+    """Power output of every generator (solar: sunlight, plus the farm bonus)."""
+    for s in world.structures.values():
+        if not s.built:
+            continue
+        if s.kind == "solar":
+            bonus = 1.0 + s.spec["snap"]["farm_bonus"] * farm_neighbours(world, s)
+            s.output_kw = s.spec["power_kw"] * world.illumination_at(s.x, s.y) * bonus
+        else:
+            s.output_kw = s.spec.get("power_kw", 0.0)
+
+
 def check_placement(world, kind, x, y):
-    """(ok, reason) for placing kind with its centre at (x, y)."""
+    """(ok, reason) for placing kind with its centre at (x, y). Ground a little
+    too steep is fine if the colony can pay for grading it."""
     spec = STRUCTURES[kind]
     if not world.research.unlocked(spec.get("unlocked_by")):
         return False, "NOT RESEARCHED"
@@ -111,14 +200,16 @@ def check_placement(world, kind, x, y):
     node = world.grid.node_at(x, y)
     if not world.grid.open[node] or not world.home_field.reachable(node):
         return False, "UNREACHABLE FOR ROVERS"
-    steepest = 0.0
-    for cy in range(int(y - r), int(y + r) + 2):
-        for cx in range(int(x - r), int(x + r) + 2):
-            if 0 <= cx < size and 0 <= cy < size and math.hypot(cx - x, cy - y) <= r + 0.5:
-                steepest = max(steepest, world.slopes[cy * size + cx])
+    steepest = steepest_under(world, x, y, r)
+    if steepest > S.GRADE_MAX_DEG:
+        return False, f"TOO STEEP ({steepest:.1f} DEG, GRADING MAX {S.GRADE_MAX_DEG:.0f})"
     if steepest > spec["max_slope_deg"]:
-        return False, f"TOO STEEP ({steepest:.1f} DEG, MAX {spec['max_slope_deg']:.0f})"
+        cost = grade_credits(spec, steepest - spec["max_slope_deg"])
+        if world.credits < cost:
+            return False, f"GRADING NEEDS {cost} CR"
     for other in world.structures.values():
+        if _snaps(kind, x, y, other.kind, other.x, other.y):
+            continue
         if math.hypot(other.x - x, other.y - y) < r + other.spec["footprint_cells"] + S.PLACEMENT_GAP_CELLS:
             return False, "OVERLAPS " + other.spec["name"].upper()
     need = spec.get("requires_field")
@@ -134,6 +225,10 @@ def place_site(world, kind, x, y):
     if not ok:
         return None, reason
     s = Structure(world.new_id(), kind, x, y, built=False, created_tick=world.tick_count)
+    s.grade_deg = grading_needed(world, kind, x, y)
+    if s.grade_deg > 0:
+        s.grade_cr = grade_credits(s.spec, s.grade_deg)
+        world.credits -= s.grade_cr
     world.structures[s.id] = s
     world.dirty_power = True
     return s, ""
@@ -149,10 +244,12 @@ def complete(world, s):
     if need:
         f = F.field_at(world.fields, s.x, s.y, need)
         s.richness = f.richness if f else 1.0
-    if s.kind == "solar":
-        s.output_kw = s.spec["power_kw"] * world.illumination_at(s.x, s.y)
-    else:
-        s.output_kw = s.spec.get("power_kw", 0.0)
+        s.field_id = f.id if f else None
+    if s.grade_deg > 0:  # grading turned up regolith
+        n = int(S.GRADE_REGOLITH_PER_DEG * s.grade_deg * s.spec["footprint_cells"] ** 2)
+        if n:
+            refund_items(world, {"regolith": n})
+            world.produced["regolith"] = world.produced.get("regolith", 0) + n
     make_docks(s)
     world.structures_changed()
     world.event(f"{s.spec['name'].upper()} COMPLETE")
@@ -162,6 +259,7 @@ def cancel_site(world, s):
     """Remove an unfinished site; delivered materials go back to the lander."""
     for item, n in s.delivered.items():
         world.lander.storage[item] = world.lander.storage.get(item, 0) + n
+    world.credits += s.grade_cr
     for unit in world.units.values():
         if unit.target == s.id:
             unit.target = None

@@ -108,6 +108,9 @@ def _structure_lines(world, s):
             lines.append(("NO CONSTRUCTOR ON SITE", 1, D.COLOR_ALERT))
         elif not US.in_charger_range(world, builders[0], s.x, s.y):
             lines.append(("OUT OF ROVER RANGE - BUILD A CHARGING PAD NEARER", 1, D.COLOR_ALERT))
+        if s.grade_deg > 0:
+            lines.append((f"GRADING   {s.grade_deg:.1f} DEG ({s.grade_cr} CR PAID, +{s.build_time() - spec['build_time_s']:.0f} S)",
+                          1, D.COLOR_TEXT_DIM))
         lines.append(("DEL: CANCEL (REFUNDS MATERIALS)", 1, D.COLOR_FLOW))
         return lines
 
@@ -133,7 +136,8 @@ def _structure_lines(world, s):
         held = [f"{ITEMS[k]['name'].upper()} {n}" for k, n in sorted(s.storage.items())]
         for i in range(0, len(held), 3):
             lines.append(("  " + "   ".join(held[i:i + 3]), 1, D.COLOR_TEXT_DIM))
-        capped = [ITEMS[k]["name"].upper() for k in sorted(ITEMS) if world.stock(k) >= world.item_cap(k)]
+        capped = [ITEMS[k]["name"].upper() for k in sorted(ITEMS)
+                  if k != "scrap" and world.stock(k) >= world.item_cap(k)]   # surplus scrap sells itself
         if capped:
             lines.append(("AT COLONY CAP: " + ", ".join(capped), 1, D.COLOR_ALERT))
         lines.append((f"EACH GOOD: UP TO {int(W.ITEM_CAP_FRACTION * 100)}% OF COLONY STORAGE", 1, D.COLOR_TEXT_DIM))
@@ -174,24 +178,58 @@ def _amounts(d):
     return " + ".join(f"{n} {ITEMS[k]['name'].upper()}" for k, n in d.items()) or "NOTHING"
 
 
+def _speed_lines(world, s):
+    """Why this building runs at the speed it does: one line per rule."""
+    spec, lines = s.spec, []
+    if spec.get("requires_field"):
+        f = P.field_of(world, s)
+        if f is not None:
+            left = f.reserves_left()
+            lines.append((f"FIELD     RICHNESS {f.richness:.1f}X, RESERVES {left * 100:.0f}%"
+                          + ("  (DEPLETED: TRY A FRESH FIELD)" if left <= 0 else ""), 1,
+                          D.COLOR_ALERT if left < 0.2 else D.COLOR_TEXT_DIM))
+    if "sun_speed" in spec:
+        light = world.illumination_at(s.x, s.y)
+        lines.append((f"SUNLIGHT  {light * 100:.0f}%  (SOLAR KILN: FASTER IN SUN)", 1, D.COLOR_TEXT_DIM))
+    if "heat" in spec:
+        cold = s.heat < 0.999
+        lines.append((f"HEAT      {s.heat * 100:.0f}%" + ("  WARMING UP - KEEP IT FED" if cold else "  AT TEMPERATURE"), 1,
+                      D.COLOR_POWER if cold else D.COLOR_TEXT_DIM, ("bar", s.heat)))
+    if "waste_heat" in spec:
+        if s.warm:
+            lines.append((f"WARMED BY A NEIGHBOUR: {spec['waste_heat']['speed']:.0f}X SPEED", 1, D.COLOR_FLOW))
+        else:
+            lines.append((f"BESIDE A WORKING KILN OR FURNACE: {spec['waste_heat']['speed']:.0f}X SPEED", 1,
+                          D.COLOR_TEXT_DIM))
+    return lines
+
+
 def _production_lines(world, s, r):
     label, color = STATUS_LABELS.get(s.status, (s.status.upper(), D.COLOR_TEXT))
     if s.status == P.STARVED:
         short = [ITEMS[k]["name"].upper() for k, n in r["in"].items() if s.inputs.get(k, 0) < n]
         label = "STARVED - NEEDS " + ", ".join(short)
     out = [
-        (f"RECIPE    {_amounts(r['in'])} > {_amounts(r['out'])}", 1, D.COLOR_TEXT_DIM),
-        (f"          EVERY {P.cycle_time(s):.1f} S" + (f"  (FIELD RICHNESS {s.richness:.1f}X)"
-                                                        if s.spec.get("requires_field") else ""), 1, D.COLOR_TEXT_DIM),
+        (f"RECIPE    {_amounts(r['in'])} > {_amounts(r['out'])}" if r["in"] else f"RECIPE    DIGS {_amounts(r['out'])}",
+         1, D.COLOR_TEXT_DIM),
+        (f"          EVERY {P.cycle_time(world, s):.1f} S  (SPEED {P.speed(world, s):.2f}X)", 1, D.COLOR_TEXT_DIM),
         (f"STATUS    {label}", 1, color, ("bar", P.progress(s))),
     ]
+    out.extend(_speed_lines(world, s))
     for k, n in r["in"].items():
         cap = P.input_cap(s, k)
         out.append((f"  IN   {ITEMS[k]['name'].upper()}  {s.inputs.get(k, 0)}/{cap}", 1, D.COLOR_TEXT_DIM))
     for k in r["out"]:
         cap = P.output_cap(s, k)
         out.append((f"  OUT  {ITEMS[k]['name'].upper()}  {s.outputs.get(k, 0)}/{cap}", 1, D.COLOR_TEXT_DIM))
-    out.append((f"CYCLES    {s.cycles}" + (f"   VENTED {s.vented}" if s.vented else ""), 1, D.COLOR_TEXT_DIM))
+    out.append((f"CYCLES    {s.cycles}" + (f"   VENTED {s.vented}" if s.vented else "")
+                + (f"   FED DIRECTLY {s.fed}" if s.fed else ""), 1, D.COLOR_TEXT_DIM))
+    links = [(a, b, k) for a, b, k in world.feed_links() if s in (a, b)]
+    for a, b, k in links:
+        other = b if a is s else a
+        verb = "FEEDS" if a is s else "FED BY"
+        out.append((f"{verb}  {other.spec['name'].upper()} ({ITEMS[k]['name'].upper()}), NO HAULER NEEDED", 1,
+                    D.COLOR_FLOW))
     if s.status == P.BLOCKED:
         capped = [ITEMS[k]["name"].upper() for k in r["out"] if world.stock(k) >= world.item_cap(k)]
         if capped:

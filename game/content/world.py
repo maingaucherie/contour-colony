@@ -69,6 +69,11 @@ ICE_FIRST_PATH_COST = (40.0, 130.0)        # ... a drive of about this (cost-cel
 ICE_FLOOR_RING = (0.2, 1.5)                # searched band around a crater's centre, in crater radii (floor, wall foot, rim)
 ICE_FLOOR_SAMPLES = 80
 FIELD_RICHNESS = (0.6, 1.5)
+# Field reserves: mine cycles a field yields at full richness, scaled by
+# richness and area (radius / 5 cells, squared). Past that a mine keeps
+# working at FIELD_DEPLETED_FLOOR of its speed, so moving to a fresh field pays.
+FIELD_RESERVE_CYCLES = 500
+FIELD_DEPLETED_FLOOR = 0.35
 FIELD_EDGE_WOBBLE = 0.25                   # boundary irregularity, fraction of radius
 FIELD_MAX_SLOPE_DEG = 5.0                  # a field's centre must be buildable ...
 FIELD_FLAT_RADIUS_CELLS = 1.3             # ... over this radius, so a mine fits there

@@ -68,6 +68,14 @@ need a charging pad (and pylons) nearer to them: rovers top up on the way.
 Red, blinking structures are starved or blocked; the thin bars beside them
 are their input (left) and output (right) buffers.
 
+Buildings have their own quirks: mines slow as a field runs out, the sinter
+kiln likes sunlight, the reduction furnace needs to warm up (keep it fed), and
+an ice melter beside a working kiln or furnace runs twice as fast. Place a
+building touching the one it supplies and it feeds it directly, no hauler
+needed; solar arrays click together into farms. Slightly steep ground can be
+graded for credits (amber marks while placing). Outposts give far fields
+their own power, charging and storage.
+
 Storage is one colony-wide pool: the lander plus every depot. No single good
 may fill more than 30% of it (scrap 60%), so a surplus backs up at its
 producer instead of clogging the colony; sell surplus from the orbit menu.

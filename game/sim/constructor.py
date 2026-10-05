@@ -97,7 +97,7 @@ def think(world, unit):
             UN.set_path(unit, UN.path_to(world, unit, (store.x, store.y), f), "to_storage", store.id)
             return
         if site.fully_delivered():
-            remaining = site.spec["build_time_s"] - site.work_done_s
+            remaining = site.build_time() - site.work_done_s
             energy = remaining / unit.spec["build_rate"] * unit.spec["build_drain_per_s"]
             if not UN.can_afford(world, unit, f.dist[site_node] + back, energy):
                 r = UN.relay(world, unit, site.x, site.y, back, energy)
@@ -182,7 +182,7 @@ def work_tick(world, unit):
     dt = 1.0 / world.tick_rate
     site.work_done_s += dt * unit.spec["build_rate"]
     unit.battery = max(0.0, unit.battery - dt * unit.spec["build_drain_per_s"])
-    if site.work_done_s >= site.spec["build_time_s"]:
+    if site.work_done_s >= site.build_time():
         ST.complete(world, site)
         unit.timer = 0
     elif unit.battery < UN.reserve(world, unit):

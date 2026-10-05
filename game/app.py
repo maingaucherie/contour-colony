@@ -11,6 +11,7 @@ from game.content import terrain as T
 from game.content import world as W
 from game.content.research import RESEARCH, RESEARCH_MENU
 from game.content.items import ITEMS
+from game.content import structures as STRUCTURE_RULES
 from game.content.structures import BUILD_MENU, STRUCTURES
 from game.content.units import BAY_MENU
 from game.audio.player import Audio
@@ -373,7 +374,7 @@ class App:
             return
         if self.placing:
             if inp.click is not None:
-                x, y = self.camera.screen_to_world(*inp.click)
+                x, y = ST.snap_position(world, self.placing, *self.camera.screen_to_world(*inp.click))
                 site, reason = world.place(self.placing, x, y)
                 self.audio.play("place" if site is not None else "error")
                 if site is None:
@@ -450,8 +451,8 @@ class App:
         ghost = None
         if self.placing and self.input.mouse_inside:
             draw.draw_slope_marks(self.screen, world, cam, STRUCTURES[self.placing]["max_slope_deg"],
-                                  self._mouse_world(), D.SLOPE_MARK_RADIUS_CELLS)
-            x, y = self._mouse_world()
+                                  self._mouse_world(), D.SLOPE_MARK_RADIUS_CELLS, gradable=STRUCTURE_RULES.GRADE_MAX_DEG)
+            x, y = ST.snap_position(world, self.placing, *self._mouse_world())
             ok, reason = ST.check_placement(world, self.placing, x, y)
             ghost = (self.placing, x, y, ok, reason, STRUCTURES[self.placing])
         now = time.perf_counter()

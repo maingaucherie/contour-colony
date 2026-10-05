@@ -184,10 +184,12 @@ def draw_site_border(surface, camera):
     pygame.draw.lines(surface, D.COLOR_SITE_BORDER, True, corners)
 
 
-def draw_slope_marks(surface, world, camera, max_slope, centre=None, radius=None, impassable_only=False):
+def draw_slope_marks(surface, world, camera, max_slope, centre=None, radius=None, impassable_only=False,
+                     gradable=None):
     """Mark ground by slope: a green dot where something with max_slope can be
-    built, a red cross where it's too steep. Around centre within radius (cells),
-    or across the whole view at a spacing that keeps the count bounded. With
+    built, an amber dot where it can be built after grading (up to gradable),
+    a red cross where it's too steep. Around centre within radius (cells), or
+    across the whole view at a spacing that keeps the count bounded. With
     impassable_only, crosses mark only ground rovers can't cross at all."""
     hm = world.heightmap
     n = hm.size
@@ -207,7 +209,7 @@ def draw_slope_marks(surface, world, camera, max_slope, centre=None, radius=None
     x1, y1 = min(n - 1, x1), min(n - 1, y1)
     ox, oy = camera.offset()
     arm = max(1.5, min(3.0, z * 0.12))
-    blocked = W.SLOPE_IMPASSABLE_DEG if impassable_only else max_slope
+    blocked = W.SLOPE_IMPASSABLE_DEG if impassable_only else max(max_slope, gradable or 0.0)
     for y in range(y0, y1 + 1, step):
         row = y * n
         for x in range(x0, x1 + 1, step):
@@ -222,6 +224,9 @@ def draw_slope_marks(surface, world, camera, max_slope, centre=None, radius=None
             s = slopes[row + x]
             if s <= max_slope:
                 c = tuple(int(v * (0.35 + 0.65 * k)) for v in D.COLOR_BUILDABLE)
+                surface.set_at((int(sx), int(sy)), c)
+            elif gradable is not None and s <= gradable:
+                c = tuple(int(v * (0.35 + 0.65 * k)) for v in D.COLOR_GRADABLE)
                 surface.set_at((int(sx), int(sy)), c)
             elif s > blocked:
                 c = tuple(int(v * (0.35 + 0.65 * k)) for v in D.COLOR_TOO_STEEP)

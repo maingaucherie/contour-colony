@@ -12,8 +12,15 @@ storage          items held (any type); docks units can unload at
 charge_slots     units charged at once, at charge_per_s battery units per second each
 dock_slots       unload-only docks (storage without charging)
 requires_field   only on a confirmed (survey level 2) field of this kind; mines
-                 run their recipe faster on richer fields (time / richness)
+                 run their recipe faster on richer fields (time / richness), and
+                 slow down as the field's reserves run out (see world.py)
 recipe           per cycle: consume "in", after time_s produce "out"
+sun_speed        recipe speed from the darkest to the brightest ground (a solar concentrator)
+heat             warms up while working and cools when idle; runs at heat x
+                 speed, never slower than cold_speed
+waste_heat       runs `speed` times faster within gap_cells of a working one of `from`
+snap             tiles edge to edge with others of its kind on a (dx, dy) lattice
+                 instead of keeping a gap; farm_bonus per touching neighbour
 unlocked_by      research node, or None when available from the start
 """
 
@@ -30,6 +37,7 @@ STRUCTURES = {
         "name": "solar array", "footprint_cells": 1.0, "max_slope_deg": 5.0,
         "build_cost": {"scrap": 10, "parts": 2}, "build_time_s": 12.0,
         "power_kw": 10.0, "grid_reach_cells": 4.0, "unlocked_by": None,
+        "snap": {"cell": (1.9, 1.1), "farm_bonus": 0.05},
     },
     "pylon": {
         "name": "power pylon", "footprint_cells": 0.4, "max_slope_deg": 15.0,
@@ -52,6 +60,15 @@ STRUCTURES = {
         "build_cost": {"scrap": 15}, "build_time_s": 12.0,
         "draw_kw": 1.0, "storage": 100, "dock_slots": 2, "dock_radius_cells": 1.8,
         "unlocked_by": "logistics_1",
+    },
+    "outpost": {
+        # A forward base: its own small power plant (no grid needed), two
+        # charging docks and a little storage, so the colony can spread out.
+        "name": "outpost", "footprint_cells": 1.3, "max_slope_deg": 5.0,
+        "build_cost": {"scrap": 30, "parts": 6}, "build_time_s": 25.0,
+        "power_kw": 8.0, "grid_reach_cells": 5.0,
+        "charge_slots": 2, "charge_per_s": 5.0, "dock_radius_cells": 1.9, "storage": 40,
+        "sight_cells": 5.0, "unlocked_by": "logistics_1",
     },
     "rover_bay": {
         "name": "rover bay", "footprint_cells": 1.3, "max_slope_deg": 5.0,
@@ -81,12 +98,14 @@ STRUCTURES = {
         "build_cost": {"scrap": 10, "parts": 2}, "build_time_s": 12.0,
         "draw_kw": 5.0, "unlocked_by": "extraction",
         "recipe": {"in": {"ice": 1}, "out": {"water": 1}, "time_s": 3.0},
+        "waste_heat": {"from": ("reduction_furnace", "sinter_kiln"), "gap_cells": 1.5, "speed": 2.0},
     },
     "sinter_kiln": {
         "name": "sinter kiln", "footprint_cells": 1.1, "max_slope_deg": 5.0,
         "build_cost": {"scrap": 15, "parts": 3}, "build_time_s": 15.0,
         "draw_kw": 10.0, "unlocked_by": "sintering",
         "recipe": {"in": {"regolith": 3}, "out": {"sinter": 1}, "time_s": 5.0},
+        "sun_speed": (0.5, 1.4),
     },
     "electrolyzer": {
         "name": "electrolyzer", "footprint_cells": 1.2, "max_slope_deg": 5.0,
@@ -99,6 +118,7 @@ STRUCTURES = {
         "build_cost": {"sinter": 30, "parts": 8}, "build_time_s": 30.0,
         "draw_kw": 16.0, "unlocked_by": "reduction",
         "recipe": {"in": {"concentrate": 2, "hydrogen": 2}, "out": {"iron": 1, "titania": 1, "water": 1}, "time_s": 6.0},
+        "heat": {"warm_up_s": 60.0, "cool_s": 90.0, "cold_speed": 0.25},
     },
     "machine_shop": {
         "name": "machine shop", "footprint_cells": 1.2, "max_slope_deg": 5.0,
@@ -109,7 +129,7 @@ STRUCTURES = {
 }
 
 # Order of the build menu.
-BUILD_MENU = ("solar", "pylon", "scanner", "charging_pad", "depot", "rover_bay",
+BUILD_MENU = ("solar", "pylon", "scanner", "charging_pad", "depot", "outpost", "rover_bay",
               "ilmenite_mine", "ice_mine", "crusher", "ice_melter", "sinter_kiln",
               "electrolyzer", "reduction_furnace", "machine_shop")
 
@@ -127,3 +147,18 @@ DECONSTRUCT_REFUND = 0.75
 
 # Minimum clear gap between footprints, in cells.
 PLACEMENT_GAP_CELLS = 0.4
+SNAP_RADIUS_CELLS = 3.0              # a snapping structure this close to one of its kind clicks onto it
+
+# Direct feed: a producer touching (within FEED_REACH_CELLS of footprint
+# edges) a building that consumes one of its outputs hands it over directly,
+# FEED_ITEMS_PER_S, with no hauler.
+FEED_REACH_CELLS = 0.9
+FEED_ITEMS_PER_S = 1.0
+
+# Grading: ground steeper than a structure allows, up to GRADE_MAX_DEG, can be
+# graded for credits and extra build time, per degree over the limit and per
+# cell of footprint radius squared. Grading turns up regolith.
+GRADE_MAX_DEG = 15.0
+GRADE_CREDITS_PER_DEG = 3.0
+GRADE_SECONDS_PER_DEG = 2.0
+GRADE_REGOLITH_PER_DEG = 1.0

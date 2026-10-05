@@ -10,7 +10,9 @@ from game.render import glyphs as G
 from game.render import symbols as SYM
 from game.render.hershey import draw_text
 from game.content import contracts as CT
+from game.sim import feeds as FEEDS
 from game.sim import production as P
+from game.sim import structures as ST
 from game.sim import units as US
 
 _facing = {}  # unit id -> +1 / -1, with a deadband so rovers don't flip-flop
@@ -102,7 +104,9 @@ def draw_fields(surface, world, camera, now_s):
                           additive=True)
         if f.confirmed or show_richness_at_1:
             sx, sy = to_screen(f.cx, f.cy)
-            label = f"{f.kind.upper()} {f.richness:.1f}X" if (f.confirmed or show_richness_at_1) else f.kind.upper()
+            label = f"{f.kind.upper()} {f.richness:.1f}X"
+            if f.mined:
+                label += f"  {f.reserves_left() * 100:.0f}% LEFT"
             draw_text(surface, label, (sx, sy - 6), 1, color, "center", additive=True)
 
 
@@ -135,6 +139,27 @@ def draw_tracks(surface, world, camera):
         else:
             pygame.draw.line(surface, color, (sx - dx, sy - dy), (sx + dx, sy + dy))
             n += 1
+    return n
+
+
+def draw_feed_links(surface, world, camera, now_s):
+    """Direct feeds: a short cyan link between touching buildings, with a dot
+    running along it in the direction the items go."""
+    n = 0
+    for a, b, item in world.feed_links():
+        ax, ay = camera.world_to_screen(a.x, a.y)
+        bx, by = camera.world_to_screen(b.x, b.y)
+        d = math.hypot(bx - ax, by - ay) or 1.0
+        ra = structure_half_px(a.spec, camera.zoom, False) * 0.8
+        rb = structure_half_px(b.spec, camera.zoom, False) * 0.8
+        if d <= ra + rb:
+            continue
+        ux, uy = (bx - ax) / d, (by - ay) / d
+        p0, p1 = (ax + ux * ra, ay + uy * ra), (bx - ux * rb, by - uy * rb)
+        pygame.draw.aaline(surface, _scale(D.COLOR_FLOW, 0.6), p0, p1)
+        k = (now_s * D.FEED_DOT_SPEED) % 1.0
+        pygame.draw.circle(surface, D.COLOR_FLOW, (int(p0[0] + (p1[0] - p0[0]) * k), int(p0[1] + (p1[1] - p0[1]) * k)), 1)
+        n += 2
     return n
 
 
@@ -269,6 +294,7 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
     segments += draw_tracks(surface, world, camera)
     draw_fields(surface, world, camera, now_s)
     draw_grid_links(surface, world, camera)
+    segments += draw_feed_links(surface, world, camera, now_s)
 
     size = max(D.DEBRIS_SIZE_CELLS * z, D.DEBRIS_MIN_PX) / 2
     for piece in world.debris.values():
@@ -379,8 +405,31 @@ def draw_ghost(surface, world, camera, ghost):
     if best:
         G.dotted(surface, D.COLOR_POWER, (sx, sy), camera.world_to_screen(best[1].x, best[1].y), D.DOT_SPACING_PX)
     note = reason if not ok else ("ON GRID" if best else "NO POWER HERE")
+    if ok:
+        grade = ST.grading_needed(world, kind, x, y)
+        if grade > 0:
+            note = f"GRADING {ST.grade_credits(spec, grade)} CR +{ST.grade_seconds(spec, grade):.0f} S  " + note
+        feeds_to, fed_by = FEEDS.partners(world, kind, x, y)
+        if feeds_to:
+            note += "  FEEDS " + ", ".join(n.upper() for n in feeds_to)
+        if fed_by:
+            note += "  FED BY " + ", ".join(n.upper() for n in fed_by)
+        if spec.get("snap"):
+            n = sum(1 for o in world.structures.values() if o.kind == kind
+                    and ((abs(abs(o.x - x) - spec["snap"]["cell"][0]) < 0.05 and abs(o.y - y) < 0.05)
+                         or (abs(abs(o.y - y) - spec["snap"]["cell"][1]) < 0.05 and abs(o.x - x) < 0.05)))
+            if n:
+                note += f"  FARM +{n * spec['snap']['farm_bonus'] * 100:.0f}%"
     if ok and kind == "solar":
         note = f"+{spec['power_kw'] * world.illumination_at(x, y):.1f} KW  " + note
+    if ok and "sun_speed" in spec:
+        note = f"SUN {world.illumination_at(x, y) * 100:.0f}%  " + note
+    if ok and "waste_heat" in spec:
+        wh = spec["waste_heat"]
+        warm = any(o.kind in wh["from"] and o.built and math.hypot(o.x - x, o.y - y)
+                   <= spec["footprint_cells"] + o.spec["footprint_cells"] + wh["gap_cells"]
+                   for o in world.structures.values())
+        note = (f"WASTE HEAT {wh['speed']:.0f}X  " if warm else "") + note
     draw_text(surface, f"{spec['name'].upper()}  {note}", (sx, sy + half + 6), 1,
               color if not ok else D.COLOR_TEXT, "center")
     return segs

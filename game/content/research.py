@@ -12,7 +12,7 @@ RESEARCH = {
     "sintering": {"name": "sintering", "requires": ("extraction",), "cost": 80, "time_s": 45,
                   "unlocks": ("sinter_kiln",)},
     "logistics_1": {"name": "logistics i", "requires": (), "cost": 60, "time_s": 40,
-                    "unlocks": ("depot", "hauler")},
+                    "unlocks": ("depot", "outpost", "hauler")},
     "electrolysis": {"name": "electrolysis", "requires": ("sintering",), "cost": 150, "time_s": 60,
                      "unlocks": ("electrolyzer",)},
     "reduction": {"name": "reduction", "requires": ("electrolysis",), "cost": 200, "time_s": 75,

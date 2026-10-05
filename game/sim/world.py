@@ -20,7 +20,7 @@ from game.content.research import RESEARCH
 from game.content.structures import STRUCTURES
 from game.content.terrain import CONTOUR_CHUNK_CELLS
 from game.content import contracts as CT
-from game.sim import debris, fields, power, production, structures, units
+from game.sim import debris, feeds, fields, power, production, structures, units
 from game.sim.contracts import Contracts
 from game.sim.orbit import Orbit
 from game.sim.pathing import PathGrid
@@ -54,6 +54,7 @@ class World:
         self.orbit = Orbit()
         self.outcome = None           # None, "won" or "lost"
         self.storage_full = False
+        self._feeds = None
         self.autosold = 0             # scrap sold on arrival since the last report
         self.outcome_text = ""
         self.end_s = None
@@ -332,6 +333,14 @@ class World:
 
     def structures_changed(self):
         self.dirty_power = True
+        self._feeds = None
+        structures.refresh_output(self)
+
+    def feed_links(self):
+        """Direct-feed links between touching buildings, cached until structures change."""
+        if self._feeds is None:
+            self._feeds = feeds.links(self)
+        return self._feeds
 
     def _refresh_chargers(self):
         """Recompute the nearest-charger field and debris spawn area when chargers change."""
@@ -409,6 +418,7 @@ class World:
                 structures.update_scanner(self, s)
             elif s.built:
                 production.update(self, s)
+        feeds.update(self)
         self.orbit.update(self)
         # Environment and units.
         debris.update(self)

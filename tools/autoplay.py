@@ -28,6 +28,8 @@ FACTORY = ("crusher", "ice_melter", "sinter_kiln", "electrolyzer", "reduction_fu
 UNIT_GOALS = (("survey_rover", 1, None), ("hauler", 2, None), ("scavenger", 3, None), ("hauler", 3, "crusher"),
               ("constructor", 2, "sinter_kiln"), ("hauler", 4, "electrolyzer"), ("hauler", 5, "reduction_furnace"))
 UNIT_PARTS_RESERVE = 4     # keep this many parts spare after ordering a unit
+OUTPOST_PARTS_SPARE = 20   # build outposts (rather than pads) only with this many parts in stock
+HAULER_DROP_LIMIT = 6      # buy haulers by supply drop up to this many when loads pile up
 POWER_MARGIN_KW = 2.0
 OUTPOST_RANGE = 70.0       # flagged fields further than this (cost-cells) get a charging pad on the way
 OUTPOST_STEP = 55.0
@@ -187,7 +189,9 @@ class Bot:
         """Extend the charging network toward the nearest flagged field of a kind
         when it is beyond comfortable rover range. True if something was placed."""
         w = self.w
-        if any(s.kind == "charging_pad" and not s.built for s in w.structures.values()):
+        # Outposts cost parts, which are scarce early: cheap pads until there are parts to spare.
+        kind = "outpost" if w.unlocked("outpost") and w.stock("parts") >= OUTPOST_PARTS_SPARE else "charging_pad"
+        if any(s.kind in ("charging_pad", "outpost") and not s.built for s in w.structures.values()):
             return False
         cf = w.charge_field
         flagged = [f for f in w.fields if f.kind == field_kind and f.hinted]
@@ -199,10 +203,11 @@ class Bot:
             return False
         chain = cf.nodes_from_source(goal)
         node = max((n for n in chain if cf.dist[n] <= OUTPOST_STEP), key=lambda n: cf.dist[n])
-        at = self.spot("charging_pad", w.grid.node_centre(node), 0.0, 6.0)
-        if at is None or self.place("charging_pad", at) is None:
+        at = self.spot(kind, w.grid.node_centre(node), 0.0, 6.0)
+        if at is None or self.place(kind, at) is None:
             return False
-        self.connect(*at)
+        if kind == "charging_pad":
+            self.connect(*at)   # an outpost has its own power
         return True
 
     def mine(self, kind, field_kind):
@@ -245,9 +250,21 @@ class Bot:
                 self.log(f"order {kind}")
                 return
 
+    def loads_waiting(self):
+        from game.sim import jobs
+        return sum(1 for o in jobs.offers(self.w) if o[3] == "production")
+
     def supply(self):
         w = self.w
-        if any(c.standing for c in w.contracts.open):
+        # Haulers falling behind: drop one in (before the standing contract only).
+        standing = any(c.standing for c in w.contracts.open)
+        if (not standing and self.loads_waiting() >= 3 and self.units("hauler") < HAULER_DROP_LIMIT
+                and w.credits >= CT.SUPPLY[supply_index("hauler")]["cost"] + 50
+                and not any(e.get("unit") == "hauler" for e in w.orbit.pending)):
+            w.order_supply(supply_index("hauler"))
+            self.log("order hauler drop")
+            return
+        if standing:
             return  # self-sufficiency is the point now
         need = self.missing()
         reserve = 0
@@ -280,14 +297,27 @@ class Bot:
         if best:
             w.orbital_scan(*best)
 
+    def makes(self, good):
+        """True once a built structure produces the good."""
+        return any(s.built and good in s.spec.get("recipe", {}).get("out", {}) for s in self.w.structures.values())
+
     def contracts(self):
-        """Calm mode: take every offer while there's room (the bot isn't picky)."""
+        """Calm mode: take offers for goods the site already makes."""
         for c in list(self.w.contracts.offers):
-            if self.w.accept_contract(c.id)[0]:
+            if self.makes(c.good) and self.w.accept_contract(c.id)[0]:
                 self.log(f"accept {c.qty} {c.good}")
+
+    def raise_cash(self):
+        """Short of parts and credits: sell scrap toward a parts crate."""
+        w = self.w
+        if self.missing().get("parts", 0) > 0 and w.credits < 100 and w.stock("scrap") > 30:
+            n = w.sell("scrap", w.stock("scrap") - 30)
+            if n:
+                self.log(f"sell {n} scrap")
 
     def step(self):
         self.contracts()
+        self.raise_cash()
         self.research()
         self.build()
         self.units_order()

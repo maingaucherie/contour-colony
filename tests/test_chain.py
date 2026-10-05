@@ -50,7 +50,7 @@ class ProductionTests(unittest.TestCase):
         P.update(w, crusher)
         self.assertEqual(crusher.status, P.WORKING)
         self.assertEqual(crusher.inputs["ilmenite"], 4)
-        for _ in range(int(P.cycle_time(crusher) * W.TICK_RATE) + 1):
+        for _ in range(int(P.cycle_time(w, crusher) * W.TICK_RATE) + 1):
             P.update(w, crusher)
         self.assertEqual(crusher.outputs.get("concentrate"), 1)
         # A full output buffer blocks the next cycle.
@@ -303,7 +303,7 @@ class ColonyStorageTests(unittest.TestCase):
         w.produced["oxygen"] = e.outputs["oxygen"]
         P.update(w, e)
         self.assertEqual(e.status, P.WORKING)
-        for _ in range(int(P.cycle_time(e) * W.TICK_RATE) + 1):
+        for _ in range(int(P.cycle_time(w, e) * W.TICK_RATE) + 1):
             P.update(w, e)
         self.assertEqual(e.outputs["oxygen"], P.output_cap(e, "oxygen"))
         self.assertEqual(e.vented, 1)
