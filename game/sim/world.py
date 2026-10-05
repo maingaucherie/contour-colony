@@ -58,6 +58,8 @@ class World:
         self.storage_full = False
         self._feeds = None
         self.autosold = 0             # scrap sold on arrival since the last report
+        self.rates = {}               # structure id -> cycles (conveyors: items) per minute, recently
+        self._rate_log = deque(maxlen=W.RATE_WINDOW_S // W.RATE_SAMPLE_S + 1)
         self.outcome_text = ""
         self.end_s = None
         self.debris_timer = round(W.DEBRIS_SPAWN_INTERVAL_S * W.TICK_RATE)
@@ -380,6 +382,16 @@ class World:
         max_round_trip = usable / (scav["drain_per_cost_cell"] * U.TRIP_SAFETY_FACTOR)
         self.spawn_map.update(self.charge_field, [(s.x, s.y) for s in chargers], max_round_trip)
 
+    def _sample_rates(self):
+        """Recent cycles per minute of each production building (items per
+        minute for conveyors), for the flow view. Display only."""
+        counts = {s.id: s.moved if s.kind == "conveyor" else s.cycles for s in self.structures.values()
+                  if s.built and (s.kind == "conveyor" or production.recipe(s))}
+        self._rate_log.append(counts)
+        oldest = self._rate_log[0]
+        span_min = (len(self._rate_log) - 1) * W.RATE_SAMPLE_S / 60.0
+        self.rates = {k: (n - oldest.get(k, n)) / span_min for k, n in counts.items()} if span_min else {}
+
     def _check_storage(self):
         if self.autosold >= W.SELL_EVENT_EVERY:
             self.event(f"SURPLUS SCRAP SOLD: {self.autosold} FOR {self.autosold * self.price('scrap')} CR")
@@ -460,6 +472,8 @@ class World:
         self.contracts.update(self)
         if self.tick_count % (W.STORAGE_CHECK_S * W.TICK_RATE) == 0:
             self._check_storage()
+        if self.tick_count % (W.RATE_SAMPLE_S * W.TICK_RATE) == 0:
+            self._sample_rates()
 
     def digest(self):
         """Compact full-state snapshot for determinism checks."""

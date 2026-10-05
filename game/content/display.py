@@ -168,6 +168,21 @@ CONVEYOR_WIDTH_MIN_PX = 3
 CONVEYOR_DOT_SPACING_CELLS = 1.0  # items on a working belt, this far apart
 CONVEYOR_PICK_PX = 6              # clicks this close to a belt select it
 COLOR_ROAD = (120, 130, 120)      # graded road edges
+
+# Views, cycled with Tab: the normal operations view, the survey view (height
+# colours, slope marks) and three overlays that recolour what is already
+# drawn: power (powered amber, unpowered red, grid links solid), flow (working
+# buildings cyan with items per minute, hauler routes dashed) and wear
+# (green to red, with the percentage). Contours dim under an overlay.
+VIEWS = ("operations", "survey", "power", "flow", "wear")
+OVERLAY_CONTOUR_DIM = 0.45
+OVERLAY_DIM = 0.35                # brightness of things an overlay isn't about
+OVERLAY_LABEL_MIN_HALF_PX = 9     # structures smaller than this on screen get no overlay label
+VIEW_LEGENDS = {
+    "power": "POWER VIEW:  AMBER POWERED  RED UNPOWERED  WHITE GENERATING  CIRCLES: GRID REACH",
+    "flow": "FLOW VIEW:  CYAN WORKING, WITH OUTPUT PER MINUTE  DASHES: HAULER ROUTES",
+    "wear": "WEAR VIEW:  GREEN FRESH  AMBER DUE FOR REPAIR  RED WORN OUT",
+}
 COLOR_GRADABLE = (200, 140, 40)   # buildable after grading (costs credits and time)
 
 # Line styles that back up colour meaning.

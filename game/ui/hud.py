@@ -101,7 +101,7 @@ def draw_running(surface, info):
     draw_text(surface, text, (px, y + lh), 1, D.COLOR_ALERT if spare < 0 else D.COLOR_POWER)
     research = info.get("research")
     rtext = f"RESEARCH {research[0].upper()} {research[1] * 100:3.0f}%" if research else "RESEARCH IDLE (R)"
-    view = "SURVEY VIEW" if info["view"] == "survey" else "OPERATIONS VIEW"
+    view = info["view"].upper() + " VIEW"
     draw_text(surface, f"{rtext}   {view}", (M + 6, y + 2 * lh), 1, D.COLOR_TEXT_DIM)
     haulers, idle, waiting = info["haulers"]
     if haulers or waiting:

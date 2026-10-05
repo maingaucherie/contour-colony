@@ -67,7 +67,7 @@ def palette_color(stops, t):
 
 
 def contour_colors(contours, min_h, max_h, view):
-    """Colour per level k for the given view ('operations' or 'survey')."""
+    """Colour per level k for the given view (see D.VIEWS)."""
     colors = {}
     span = max(max_h - min_h, 1e-6)
     for k in range(contours.k_min, contours.k_max + 1):
@@ -78,6 +78,8 @@ def contour_colors(contours, min_h, max_h, view):
             full = tuple(int(c * gain) for c in base)
         else:
             full = D.COLOR_CONTOUR_OPS_INDEX if index else D.COLOR_CONTOUR_OPS
+            if view != "operations":   # an overlay: contours step back
+                full = tuple(int(c * D.OVERLAY_CONTOUR_DIM) for c in full)
         # A ramp of faded versions, so fading lines need no per-frame colour maths.
         steps = D.CONTOUR_FADE_STEPS
         colors[k] = [tuple(int(c * q / steps) for c in full) for q in range(steps + 1)]

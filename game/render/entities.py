@@ -22,6 +22,7 @@ from game.sim import units as US
 _facing = {}  # unit id -> +1 / -1, with a deadband so rovers don't flip-flop
 style = D.ICON_STYLES[0]  # set by the app
 lander_lift = 0.0         # pixels above its spot, while it lands in the intro (set by the app)
+view = "operations"       # the current view (D.VIEWS), set by the app
 
 
 def interp(unit, alpha):
@@ -168,11 +169,51 @@ def draw_feed_links(surface, world, camera, now_s):
 
 
 def draw_grid_links(surface, world, camera):
+    """Power links, dotted; in the power view solid, with each pylon's reach."""
     to_screen = camera.world_to_screen
     for s in world.structures.values():
         if s.built and s.grid_parent is not None and s.grid_parent in world.structures and not s.is_line():
             p = world.structures[s.grid_parent]
-            G.dotted(surface, D.COLOR_GRID_LINK, to_screen(s.x, s.y), to_screen(p.x, p.y), D.DOT_SPACING_PX)
+            if view == "power":
+                pygame.draw.aaline(surface, D.COLOR_POWER, to_screen(s.x, s.y), to_screen(p.x, p.y))
+            else:
+                G.dotted(surface, D.COLOR_GRID_LINK, to_screen(s.x, s.y), to_screen(p.x, p.y), D.DOT_SPACING_PX)
+        reach = s.spec.get("grid_reach_cells", 0)
+        if view == "power" and reach and s.built:
+            sx, sy = to_screen(s.x, s.y)
+            G.dotted_circle(surface, D.COLOR_GRID_LINK, sx, sy, reach * camera.zoom, D.DOT_SPACING_PX * 2)
+
+
+def wear_color(wear):
+    """Green when fresh, amber at the repair mark, red when worn out."""
+    if wear < 0.5:
+        a, b, k = D.COLOR_FIELD, D.COLOR_POWER, wear / 0.5
+    else:
+        a, b, k = D.COLOR_POWER, D.COLOR_ALERT, (wear - 0.5) / 0.5
+    return tuple(int(x + (y - x) * min(1.0, k)) for x, y in zip(a, b))
+
+
+def overlay_look(world, s):
+    """(colour, label or None) for a structure in the power, flow or wear view."""
+    dim = _scale(D.COLOR_STRUCTURE, D.OVERLAY_DIM)
+    r = P.recipe(s)
+    if view == "power":
+        if s.output_kw > 0:
+            return D.COLOR_SELECT, f"+{s.output_kw:.0f} KW"
+        if s.draw_kw() > 0:
+            return (D.COLOR_POWER, None) if s.powered else (D.COLOR_ALERT, "UNPOWERED")
+        return dim, None
+    if view == "wear":
+        if not r:
+            return dim, None
+        return wear_color(s.wear), f"{s.wear * 100:.0f}%"
+    if view == "flow":
+        if not r:
+            return (D.COLOR_FLOW if s.stores() else dim), None
+        rate = world.rates.get(s.id, 0.0) * next(iter(r["out"].values()), 1)
+        label = f"{rate:.0f}/MIN" if rate >= 0.5 else s.status.upper()
+        return (D.COLOR_FLOW if s.status == P.WORKING else _scale(D.COLOR_FLOW, 0.45)), label
+    return None, None
 
 
 def _draw_structure(surface, world, s, camera, now_s, selected):
@@ -192,6 +233,11 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
         color = _scale(D.COLOR_STARVED, 0.6 + 0.4 * (int(now_s * 2) % 2))
     if not s.powered:
         color = _scale(color, _flicker(now_s, s.id))
+    label = None
+    if view in ("power", "flow", "wear"):
+        color, label = overlay_look(world, s)
+        if label and half >= D.OVERLAY_LABEL_MIN_HALF_PX:
+            draw_text(surface, label, (sx, sy + half + 4), 1, color, "center")
     if s.deconstruct:
         color = _scale(D.COLOR_ALERT, 0.5 + 0.5 * (int(now_s * 2) % 2))
         segs = G.draw_shape(surface, color, shape, sx, sy, half, 1.0 - min(1.0, s.teardown_progress()))
@@ -275,6 +321,9 @@ def draw_conveyor(surface, world, c, camera, now_s, selected=None, color=None):
         return 2
     for p, q in (left, right):
         pygame.draw.aaline(surface, color, p, q)
+    if view == "flow":
+        rate = world.rates.get(c.id, 0.0)
+        draw_text(surface, f"{rate:.0f}/MIN", ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 6), 1, color, "center")
     if c.status == P.WORKING:
         spacing = max(D.CONVEYOR_DOT_SPACING_CELLS * camera.zoom, 6.0)
         speed = S.CONVEYOR_ITEMS_PER_S * spacing   # one item arrives per second
@@ -439,6 +488,11 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
         elif frac < D.LOW_BATTERY_FLICKER_BELOW:
             wave = (math.sin(now_s * D.LOW_BATTERY_FLICKER_RATE + unit.id) + 1) / 2
             color = _scale(color, D.LOW_BATTERY_FLICKER_MIN + (1 - D.LOW_BATTERY_FLICKER_MIN) * wave)
+        if view == "flow" and unit.kind == "hauler" and unit.path:
+            G.dashed(surface, _scale(D.COLOR_FLOW, 0.5), [(sx, sy)] + [to_screen(x, y) for x, y in unit.path],
+                     D.DASH_PX, D.GAP_PX)
+        elif view in ("power", "flow") or (view == "wear" and unit.kind not in ("maintenance_drone", "constructor")):
+            color = _scale(color, D.OVERLAY_DIM)
         if unit.state == US.CHARGING and unit.dock in world.structures:
             dock = world.structures[unit.dock]
             G.dotted(surface, D.COLOR_POWER, (sx, sy), to_screen(dock.x, dock.y), D.DOT_SPACING_PX)

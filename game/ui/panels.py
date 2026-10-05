@@ -286,6 +286,9 @@ def _production_lines(world, s, r):
         (f"          EVERY {P.cycle_time(world, s):.1f} S  (SPEED {P.speed(world, s):.2f}X)", 1, D.COLOR_TEXT_DIM),
         (f"STATUS    {label}", 1, color, ("bar", P.progress(s))),
     ]
+    if s.id in world.rates:
+        made = ", ".join(f"{world.rates[s.id] * n:.0f} {ITEMS[k]['name'].upper()}" for k, n in r["out"].items())
+        out.append((f"LATELY    {made} PER MINUTE", 1, D.COLOR_TEXT_DIM))
     out.extend(_speed_lines(world, s))
     out.extend(_wear_lines(world, s))
     for k, n in r["in"].items():

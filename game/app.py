@@ -178,7 +178,7 @@ class App:
         self.contours = yield from build_contours(self.heightmap)
         hm = self.heightmap
         self.colors = {view: draw.contour_colors(self.contours, hm.min_h, hm.max_h, view)
-                       for view in ("operations", "survey")}
+                       for view in D.VIEWS}
         self.stage = 4
         self.scenery = yield from build_scenery(hm, self.contours.interval, self.seed)
         self.stage = 5
@@ -318,7 +318,7 @@ class App:
             self.show_stats = not self.show_stats
             self._save_settings()
         elif action == "toggle_view":
-            self.view = "survey" if self.view == "operations" else "operations"
+            self.view = D.VIEWS[(D.VIEWS.index(self.view) + 1) % len(D.VIEWS)]
         elif action == "new_site":
             now = time.perf_counter()
             if self.world is None or self.world.outcome is not None or now < self.confirm_new_until:
@@ -666,6 +666,7 @@ class App:
             ghost = (self.placing, x, y, ok, reason, STRUCTURES[self.placing])
         now = time.perf_counter()
         entities.lander_lift = self.intro.lift_px(now) if self.intro else 0.0
+        entities.view = self.view
         self.segments += entities.draw_world(self.screen, world, cam, self._alpha(),
                                              now, self.selected, ghost)
         if self.intro is not None:
@@ -810,6 +811,8 @@ class App:
     def _hint(self):
         if self.targeting:
             return "ORBITAL SCAN:  CLICK THE MAP TO SCAN THERE  RIGHT CLICK/ESC CANCEL"
+        if self.view in D.VIEW_LEGENDS and not self.placing:
+            return D.VIEW_LEGENDS[self.view] + "   TAB: NEXT VIEW"
         if self.placing == "conveyor":
             step = "CLICK WHERE TO SEND" if self.line_from is not None else "CLICK A BUILDING TO SEND FROM"
             return f"CONVEYOR:  {step}  SHIFT: LAY SEVERAL  RIGHT CLICK/ESC BACK"

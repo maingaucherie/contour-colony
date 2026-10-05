@@ -120,6 +120,11 @@ TRACK_FORGET = 5.0
 # Saves: a save from another version is refused (no conversion until the game is finished).
 SAVE_VERSION = 1
 
+# Throughput shown in the flow view and inspect panel: counted every
+# RATE_SAMPLE_S over the last RATE_WINDOW_S.
+RATE_SAMPLE_S = 10
+RATE_WINDOW_S = 60
+
 # Storage warning: checked every STORAGE_CHECK_S; warns once it passes this fraction.
 STORAGE_CHECK_S = 5
 STORAGE_FULL_FRACTION = 0.95
