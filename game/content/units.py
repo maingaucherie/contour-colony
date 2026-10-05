@@ -31,6 +31,7 @@ UNITS = {
         "load_s": 1.5,
         "build_rate": 1.0,           # seconds of build_time done per second of work
         "build_drain_per_s": 0.3,
+        "repair_rate": 0.5,          # repairs at half a maintenance drone's speed
         "launch_stagger_s": 0.5,
         "bay_cost": {"scrap": 12, "parts": 6}, "bay_time_s": 25.0, "unlocked_by": None,
     },
@@ -63,13 +64,31 @@ UNITS = {
     },
 }
 
+UNITS["maintenance_drone"] = {
+    # Flies straight over everything (no slope, no pathing) to repair worn structures.
+    "name": "maintenance drone",
+    "start_count": 0,
+    "base_speed_cells_per_s": 4.5,
+    "battery": 100.0,
+    "drain_per_cost_cell": 0.3,      # per cell flown
+    "cargo": 6,                      # machine parts
+    "flies": True,
+    "docks_at": ("maintenance_hangar", "lander"),
+    "sight_cells": 2.5,
+    "load_s": 1.0,
+    "repair_rate": 1.0,
+    "repair_drain_per_s": 0.2,
+    "launch_stagger_s": 0.0,
+    "bay_cost": {"sinter": 8, "parts": 6}, "bay_time_s": 20.0, "unlocked_by": "maintenance",
+}
+
 # Scavengers with no known debris search: they drive to a random reachable
 # spot this far away (cells) and look around on the way.
 SEARCH_DISTANCE_CELLS = (6.0, 18.0)
 SEARCH_ATTEMPTS = 12
 
 # Order of the rover bay's build list.
-BAY_MENU = ("scavenger", "constructor", "survey_rover", "hauler")
+BAY_MENU = ("scavenger", "constructor", "survey_rover", "hauler", "maintenance_drone")
 
 # Shared unit rules.
 SLOPE_DIVISOR_DEG = 5.0              # speed = base / (1 + slope / SLOPE_DIVISOR_DEG)

@@ -51,6 +51,9 @@ class Structure:
     richness: float = 1.0
     field_id: int | None = None                     # mines: the field they work
     heat: float = 0.0                               # 0..1, structures with a "heat" spec
+    clock: float = 1.0                              # recipe speed setting (see CLOCKS)
+    wear: float = 0.0                               # 0..1 (see wear.py)
+    repairer: int | None = None                     # unit repairing it
     grade_deg: float = 0.0                          # degrees of grading the site needs
     grade_cr: int = 0                               # credits paid for grading (refunded on cancel)
     warm: bool = False                              # getting waste heat from a neighbour
@@ -70,6 +73,11 @@ class Structure:
     def stores(self):
         return self.built and self.spec.get("storage", 0) > 0
 
+    def accepts(self, item):
+        """Storage that keeps only some items (a hangar keeps parts) says so."""
+        allowed = self.spec.get("accepts")
+        return allowed is None or item in allowed
+
     def materials_needed(self):
         """Items still to bring: cost - delivered - incoming (never negative)."""
         cost = self.spec.get("build_cost", {})
@@ -79,6 +87,10 @@ class Structure:
     def fully_delivered(self):
         cost = self.spec.get("build_cost", {})
         return all(self.delivered.get(k, 0) >= n for k, n in cost.items())
+
+    def draw_kw(self):
+        """Power drawn while working, at this clock speed."""
+        return self.spec.get("draw_kw", 0.0) * clock_spec(self.clock)["power"]
 
     def build_time(self):
         """Assembly seconds, plus grading if the ground needs it."""
@@ -128,6 +140,25 @@ def make_docks(s, world=None):
             break
         s.docks.append(spot)
         s.dock_users.append(None)
+
+
+def clock_spec(clock):
+    for value, spec in S.CLOCKS:
+        if abs(value - clock) < 1e-6:
+            return spec
+    return S.CLOCKS[0][1]
+
+
+def next_clock(world, s):
+    """The clock speed after s's current one that the colony may use."""
+    values = [v for v, spec in S.CLOCKS if not spec.get("research") or world.research.effect(spec["research"], False)]
+    current = [v for v, _ in S.CLOCKS]
+    i = current.index(s.clock) if s.clock in current else 0
+    for step in range(1, len(current) + 1):
+        v = current[(i + step) % len(current)]
+        if v in values:
+            return v
+    return 1.0
 
 
 def grade_credits(spec, deg):

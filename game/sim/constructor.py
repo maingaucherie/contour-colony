@@ -8,6 +8,7 @@ constructors never bring the same items.
 """
 
 from game.sim import structures as ST
+from game.sim import wear
 from game.sim import units as UN
 
 
@@ -121,11 +122,51 @@ def think(world, unit):
         goal = (s.x + s.spec["footprint_cells"] + 0.5, s.y)
         UN.set_path(unit, UN.path_to(world, unit, goal, f) or [goal], "to_teardown", s.id)
         return
+    if _try_repair(world, unit, f):
+        return
     unit.job = None
     UN.head_home(world, unit)
 
 
+def _repair_spot(s):
+    return s.x + s.spec["footprint_cells"] + 0.5, s.y
+
+
+def _try_repair(world, unit, f):
+    """Nothing to build: fetch machine parts and repair the most worn structure in range."""
+    grid = world.grid
+    for s in wear.jobs(world, unit):
+        store, free = wear.parts_store(world, unit, (unit.x, unit.y))
+        if store is None:
+            return False
+        n = min(wear.parts_needed(s), unit.spec["cargo"], free)
+        spot = _repair_spot(s)
+        leg = grid.field(grid.node_at(store.x, store.y)).dist[grid.node_at(s.x, s.y)]
+        energy = n * wear.W_["seconds_per_step"] / unit.spec["repair_rate"] * unit.spec["build_drain_per_s"]
+        if not UN.can_afford(world, unit, f.dist[grid.node_at(store.x, store.y)] + leg
+                             + UN.back_cost(world, *spot), energy):
+            continue
+        s.repairer = unit.id
+        unit.job = s.id
+        UN.release_dock(world, unit)
+        UN.set_path(unit, UN.path_to(world, unit, (store.x, store.y), f) or [(store.x, store.y)], "fetch_parts", store.id)
+        return True
+    return False
+
+
 def arrived(world, unit):
+    if unit.activity == "fetch_parts":
+        UN.work(unit, "load_parts", unit.spec["load_s"])
+        return
+    if unit.activity == "to_repair":
+        s = world.structures.get(unit.job)
+        if s is None or not s.built:
+            wear.release(world, unit)
+            unit.job = None
+            think(world, unit)
+        else:
+            UN.work(unit, "repairing", wear.repair_seconds(unit, s))
+        return
     if unit.activity == "to_teardown":
         s = world.structures.get(unit.target)
         if s is None or not s.deconstruct:
@@ -157,6 +198,9 @@ def arrived(world, unit):
 
 
 def work_tick(world, unit):
+    if unit.activity == "repairing":
+        unit.battery = max(0.0, unit.battery - unit.spec["build_drain_per_s"] / world.tick_rate)
+        return
     if unit.activity == "dismantling":
         s = world.structures.get(unit.target)
         if s is None or not s.deconstruct:
@@ -190,6 +234,28 @@ def work_tick(world, unit):
 
 
 def work_done(world, unit):
+    if unit.activity == "load_parts":
+        s = world.structures.get(unit.job)
+        store = world.structures.get(unit.target)
+        take = 0
+        if s is not None and store is not None and wear.needs_repair(s):
+            take = wear.take_parts(world, store, min(wear.parts_needed(s), unit.spec["cargo"] - unit.cargo_total()))
+        if not take:
+            wear.release(world, unit)
+            unit.job = None
+            think(world, unit)
+            return
+        unit.cargo["parts"] = unit.cargo.get("parts", 0) + take
+        goal = _repair_spot(s)
+        UN.set_path(unit, UN.path_to(world, unit, goal) or [goal], "to_repair", s.id)
+        return
+    if unit.activity == "repairing":
+        s = world.structures.get(unit.job)
+        if s is not None:
+            wear.finish_repair(world, unit, s)
+        unit.job = unit.target = None
+        think(world, unit)
+        return
     if unit.activity == "load":
         store = world.structures.get(unit.target)
         site = world.structures.get(unit.job)
@@ -229,6 +295,7 @@ def work_done(world, unit):
 
 
 def drop_job(world, unit):
+    wear.release(world, unit)
     site = world.structures.get(unit.job) if unit.job is not None else None
     if site is not None and not site.built:
         for k, n in unit.cargo.items():

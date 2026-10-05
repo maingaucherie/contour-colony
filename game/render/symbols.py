@@ -49,6 +49,10 @@ STRUCTURES = {
     # Outpost: a hexagonal hub with a charging bolt and three legs.
     "outpost": [_poly(6, 0.95, math.pi / 6), [(0.1, -0.45), (-0.15, 0.05), (0.15, 0.0), (-0.1, 0.45)],
                 [(0.0, -0.95), (0.0, -0.7)], [(-0.82, 0.47), (-0.6, 0.35)], [(0.82, 0.47), (0.6, 0.35)]],
+    # Maintenance hangar: a square with an arched door and a wrench.
+    "maintenance_hangar": [_box(-0.9, -0.9, 0.9, 0.9),
+                           [(-0.45, 0.9), (-0.45, 0.2), (-0.3, -0.05), (0.0, -0.15), (0.3, -0.05), (0.45, 0.2), (0.45, 0.9)],
+                           [(-0.6, -0.65), (0.2, -0.35)], [(0.2, -0.35), (0.35, -0.5), (0.5, -0.4)]],
     # Garage: open-fronted bay with an inbound chevron.
     "rover_bay": [[(-0.9, 0.85), (-0.9, -0.85), (0.9, -0.85), (0.9, 0.85)], [(-0.4, 0.75), (0.0, 0.35), (0.4, 0.75)],
                   [(-0.9, 0.3), (-0.55, 0.3)], [(0.9, 0.3), (0.55, 0.3)]],
@@ -81,6 +85,11 @@ UNITS = {
     # Square chassis with a crane boom reaching forward.
     "constructor": [_box(-0.7, -0.6, 0.4, 0.6), [(-0.2, 0.0), (1.0, 0.0)], [(0.85, -0.2), (1.0, 0.0), (0.85, 0.2)]],
     # Rounded body with a sensor dish ring towards the front.
+    # A quad-rotor: a cross frame with four rotor rings; the front pair is closer together.
+    "maintenance_drone": [[(-0.7, -0.7), (0.7, 0.7)], [(-0.7, 0.7), (0.7, -0.7)],
+                          _poly(6, 0.3, 0.0, 0.7, 0.7), _poly(6, 0.3, 0.0, 0.7, -0.7),
+                          _poly(6, 0.3, 0.0, -0.7, 0.7), _poly(6, 0.3, 0.0, -0.7, -0.7),
+                          [(0.15, 0.0), (0.45, 0.0)]],
     "survey_rover": [[(-0.85, -0.35), (-0.5, -0.6), (0.4, -0.6), (0.65, -0.3), (0.65, 0.3), (0.4, 0.6),
                       (-0.5, 0.6), (-0.85, 0.35), (-0.85, -0.35)], _poly(8, 0.28, 0.0, 0.15, 0.0)],
 }

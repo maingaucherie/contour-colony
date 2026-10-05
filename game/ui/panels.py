@@ -9,6 +9,7 @@ from game.content import world as W
 from game.content.items import ITEMS
 from game.render.hershey import draw_text, line_height
 from game.sim import production as P
+from game.sim import wear
 from game.sim import units as US
 from game.ui.menus import cost_text
 
@@ -37,6 +38,10 @@ ACTIVITY_LABELS = {
     "to_dropoff": "DELIVERING",
     "holding cargo - nowhere to take it": "HOLDING CARGO - NOWHERE TO TAKE IT",
     "to_park": "PARKING",
+    "fetch_parts": "FETCHING MACHINE PARTS",
+    "load_parts": "LOADING PARTS",
+    "to_repair": "ON THE WAY TO A REPAIR",
+    "repairing": "REPAIRING",
 }
 
 STATUS_LABELS = {
@@ -44,6 +49,7 @@ STATUS_LABELS = {
     P.STARVED: ("STARVED - WAITING FOR INPUTS", D.COLOR_ALERT),
     P.BLOCKED: ("BLOCKED - OUTPUT FULL", D.COLOR_ALERT),
     P.UNPOWERED: ("UNPOWERED", D.COLOR_ALERT),
+    P.BROKEN: ("BROKEN - NEEDS A REPAIR", D.COLOR_ALERT),
     P.IDLE: ("IDLE", D.COLOR_TEXT_DIM),
 }
 
@@ -126,7 +132,7 @@ def _structure_lines(world, s):
         lines.append((f"OUTPUT    +{s.output_kw:.1f} KW", 1, D.COLOR_TEXT_DIM))
     if spec.get("draw_kw"):
         state = "POWERED" if s.powered else ("NO GRID - BUILD A PYLON" if s.grid == -1 else "UNPOWERED - GRID OVERLOADED")
-        lines.append((f"DRAW      {spec['draw_kw']:.1f} KW  {state}", 1, D.COLOR_TEXT_DIM if s.powered else D.COLOR_ALERT))
+        lines.append((f"DRAW      {s.draw_kw():.1f} KW  {state}", 1, D.COLOR_TEXT_DIM if s.powered else D.COLOR_ALERT))
         lines.append((f"PRIORITY  {s.priority.upper()}  (P TO CHANGE)", 1, D.COLOR_FLOW))
     if grid:
         lines.append((f"GRID      {grid['supply']:.1f} KW SUPPLY  {grid['demand']:.1f} KW DEMAND", 1, D.COLOR_TEXT_DIM))
@@ -148,6 +154,8 @@ def _structure_lines(world, s):
     r = P.recipe(s)
     if r:
         lines.extend(_production_lines(world, s, r))
+        over = world.research.effect("overclock", False)
+        lines.append((f"CLOCK     {s.clock * 100:.0f}%   (J: 50 / 100" + (" / 150%)" if over else "%)"), 1, D.COLOR_FLOW))
     if s.kind == "scanner":
         lines.append((f"RADAR     {spec['scan_radius_cells'] * world.heightmap.cell_m / 1000:.0f} KM RANGE, "
                       f"SWEEP EVERY {spec['sweep_period_s']:.0f} S", 1, D.COLOR_TEXT_DIM))
@@ -176,6 +184,26 @@ def _structure_lines(world, s):
 
 def _amounts(d):
     return " + ".join(f"{n} {ITEMS[k]['name'].upper()}" for k, n in d.items()) or "NOTHING"
+
+
+def _wear_lines(world, s):
+    if not s.spec.get("wear_per_cycle"):
+        return []
+    lines = []
+    text = f"WEAR      {s.wear * 100:.0f}%"
+    if wear.speed_factor(s) < 1.0:
+        text += f"  (RUNNING AT {wear.speed_factor(s) * 100:.0f}%)"
+    lines.append((text, 1, D.COLOR_ALERT if s.wear >= 0.75 else D.COLOR_TEXT_DIM, ("bar", s.wear)))
+    if wear.needs_repair(s):
+        who = world.units.get(s.repairer)
+        if who is not None:
+            note = f"BEING REPAIRED BY {who.spec['name'].upper()}"
+        elif world.stock("parts") <= 0:
+            note = f"REPAIR NEEDS {wear.parts_needed(s)} MACHINE PARTS - NONE IN STORAGE"
+        else:
+            note = f"REPAIR QUEUED ({wear.parts_needed(s)} MACHINE PARTS)"
+        lines.append((note, 1, D.COLOR_POWER))
+    return lines
 
 
 def _speed_lines(world, s):
@@ -216,6 +244,7 @@ def _production_lines(world, s, r):
         (f"STATUS    {label}", 1, color, ("bar", P.progress(s))),
     ]
     out.extend(_speed_lines(world, s))
+    out.extend(_wear_lines(world, s))
     for k, n in r["in"].items():
         cap = P.input_cap(s, k)
         out.append((f"  IN   {ITEMS[k]['name'].upper()}  {s.inputs.get(k, 0)}/{cap}", 1, D.COLOR_TEXT_DIM))

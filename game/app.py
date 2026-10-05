@@ -353,6 +353,11 @@ class App:
             self.menu_cursor = 0
             self.placing = None
             self.targeting = False
+        elif action == "clock":
+            s = self._selected_structure()
+            if s is not None and s.built and s.spec.get("recipe"):
+                self.world.set_clock(s.id, ST.next_clock(self.world, s))
+                self.audio.play("menu")
         elif action == "priority":
             s = self._selected_structure()
             if s is not None and s.spec.get("draw_kw"):

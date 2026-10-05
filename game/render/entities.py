@@ -184,7 +184,7 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
         G.dotted_circle(surface, D.COLOR_SITE, sx, sy, s.spec["footprint_cells"] * camera.zoom, D.DOT_SPACING_PX)
         return G.draw_shape(surface, D.COLOR_SITE, shape, sx, sy, half, s.build_progress())
     color = D.COLOR_STRUCTURE
-    if s.status in (P.STARVED, P.BLOCKED) and P.recipe(s):
+    if s.status in (P.STARVED, P.BLOCKED, P.BROKEN) and P.recipe(s):
         color = _scale(D.COLOR_STARVED, 0.6 + 0.4 * (int(now_s * 2) % 2))
     if not s.powered:
         color = _scale(color, _flicker(now_s, s.id))
@@ -193,6 +193,11 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
         segs = G.draw_shape(surface, color, shape, sx, sy, half, 1.0 - min(1.0, s.teardown_progress()))
     else:
         segs = G.draw_shape(surface, color, shape, sx, sy, half)
+        if s.wear > D.WEAR_SHOW_FROM:
+            # Worn: a faint, shaky second image, like a tired CRT trace.
+            k = (s.wear - D.WEAR_SHOW_FROM) / (1.0 - D.WEAR_SHOW_FROM)
+            off = D.WEAR_JITTER_PX * k * math.sin(now_s * 9.0 + s.id)
+            segs += G.draw_shape(surface, _scale(color, 0.35 + 0.3 * k), shape, sx + off, sy - off * 0.6, half)
     r = P.recipe(s)
     if r and half >= D.GAUGE_MIN_HALF_PX:
         segs += _draw_gauges(surface, s, r, sx, sy, half)

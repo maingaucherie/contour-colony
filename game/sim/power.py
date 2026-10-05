@@ -75,10 +75,10 @@ def compute(structures):
     summary = {}
     for g, members in grids.items():
         supply = sum(m.output_kw for m in members)
-        consumers = [(m.id, m.spec.get("draw_kw", 0.0), m.priority) for m in members if m.spec.get("draw_kw", 0.0) > 0]
+        consumers = [(m.id, m.draw_kw(), m.priority) for m in members if m.draw_kw() > 0]
         on, served = allocate(supply, consumers)
         for m in members:
-            m.powered = m.spec.get("draw_kw", 0.0) <= 0 or m.id in on
+            m.powered = m.draw_kw() <= 0 or m.id in on
         demand = sum(c[1] for c in consumers)
         summary[g] = {"supply": supply, "demand": demand, "served": served,
                       "members": [m.id for m in members]}

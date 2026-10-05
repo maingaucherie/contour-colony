@@ -85,6 +85,7 @@ KEY_BINDINGS = {
     "priority": ("p",),
     "orbit": ("o",),
     "contracts": ("k",),
+    "clock": ("j",),
     "cancel_site": ("delete", "backspace"),
     "quit": ("escape",),
 }
@@ -159,6 +160,8 @@ SLOPE_MARK_RADIUS_CELLS = 10      # placement mode
 SLOPE_MARK_MAX = 1400             # survey view: marks per frame at most (sets the spacing)
 COLOR_BUILDABLE = (70, 200, 100)
 COLOR_TOO_STEEP = (170, 50, 45)
+WEAR_SHOW_FROM = 0.5              # worn structures get a shaky double image past this wear
+WEAR_JITTER_PX = 2.5
 FEED_DOT_SPEED = 0.8              # direct-feed link dots: trips along the link per second
 COLOR_GRADABLE = (200, 140, 40)   # buildable after grading (costs credits and time)
 

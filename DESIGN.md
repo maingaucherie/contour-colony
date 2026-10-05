@@ -384,6 +384,8 @@ Decisions made while playtesting Milestones 2–4, recorded here so this documen
 - **A larger-looking world.** The site stays 256 × 256 cells, but a band of coarse, never-simulated scenery terrain surrounds it, matching the site's heights at its edge and fading out with distance; the camera can look a little past the edge.
 - **Close-up sound.** Zoomed in, working machines and moving rovers near the middle of the screen are heard: thumping machinery (mines, crusher), humming process plant (melter, kiln, electrolyzer, furnace, shop) and rover motors.
 - **Saves and the sandbox.** The game autosaves (every minute, as each pass begins, and on winning or losing) and offers to continue at start-up. A save is the seed plus a snapshot of everything that changes; terrain is rebuilt from the seed. No save conversion between versions until the game is finished. After winning, "keep playing" lets the site run on as a sandbox with the score fixed at the win.
+- **Wear (Milestone 5), calm by default.** Production buildings wear with each cycle; past 50% they slow (to half speed at 100%) and post a repair, one machine part per 10%. Only in pressure mode do they break at 100%. Constructors repair at half speed whenever they have nothing to build; after Maintenance, drones from a maintenance hangar (which stores only parts) fly straight over any terrain to repair. Worn buildings draw a shaky double image.
+- **Clock speed.** Any production building can run at 50% (45% power, 40% wear) from the start, or 150% (double power and wear) after Overclocking: J cycles it.
 - **Starting kit.** 300 credits, 100 scrap, 40 parts (the scrap trickle alone can't pay for the opening).
 
 ## Later: touch screens and teaching

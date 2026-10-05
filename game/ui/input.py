@@ -7,7 +7,7 @@ from game.content import display as D
 # Actions that fire once per key press (the rest are held).
 _TRIGGERS = ("toggle_view", "toggle_glow", "toggle_stats", "new_site", "quit",
              "pause", "speed_up", "speed_down", "sell", "centre",
-             "build", "research", "orbit", "contracts", "priority", "cancel_site", "icons", "sound")
+             "build", "research", "orbit", "contracts", "clock", "priority", "cancel_site", "icons", "sound")
 
 
 class Input:

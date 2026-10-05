@@ -85,9 +85,18 @@ def make_unit(world, uid, kind, x, y):
 
 
 def brain(unit):
-    from game.sim import constructor, hauler, scavenger, surveyor
+    from game.sim import constructor, drone, hauler, scavenger, surveyor
     return {"scavenger": scavenger, "constructor": constructor, "survey_rover": surveyor,
-            "hauler": hauler}[unit.kind]
+            "hauler": hauler, "maintenance_drone": drone}[unit.kind]
+
+
+def flies(unit):
+    return unit.spec.get("flies", False)
+
+
+def fly_cost(unit, x, y):
+    """Cost-cells for a flyer: straight distance."""
+    return math.hypot(x - unit.x, y - unit.y)
 
 
 # Battery and planning ---------------------------------------------------------
@@ -129,6 +138,8 @@ def path_to(world, unit, goal, from_field=None):
     """Waypoints from the unit to goal, or None if unreachable. The path bends
     around structures, except any whose footprint the start or goal is near
     (the one being visited, or the one the unit is leaving)."""
+    if flies(unit):
+        return [goal]  # straight over everything
     grid = world.grid
     f = from_field or here_field(world, unit)
     node = grid.node_at(*goal)
@@ -237,17 +248,21 @@ def go_dock(world, unit, role, only=None):
     Never a charger the battery can't reach while one it can is around; a
     busy one counts as a little further away, since waiting in line beats a
     long drive. False if none reachable."""
-    f = here_field(world, unit)
+    flyer = flies(unit)
+    f = None if flyer else here_field(world, unit)
     grid = world.grid
     best = None
     for s in ([only] if only is not None else world.structures.values()):
+        if flyer and only is None and s.kind not in unit.spec.get("docks_at", ()):
+            continue
         if role == "charge" and not (s.charges() and (s.powered or s is world.lander)):
             continue
         # Scrap can always be unloaded: what doesn't fit is sold.
         only_scrap = set(unit.cargo) <= {"scrap"}
-        if role == "store" and not (s.stores() and (s.stored() < s.spec["storage"] or only_scrap)):
+        if role == "store" and not (s.stores() and (s.stored() < s.spec["storage"] or only_scrap)
+                                    and all(s.accepts(k) for k in unit.cargo)):
             continue
-        d = f.dist[grid.node_at(s.x, s.y)]
+        d = fly_cost(unit, s.x, s.y) if flyer else f.dist[grid.node_at(s.x, s.y)]
         if d == math.inf:
             continue
         free = None in s.dock_users or (unit.dock == s.id)
@@ -361,7 +376,7 @@ def head_home(world, unit):
         return
     # Parked empty at a storage dock (the lander): move to a free charging pad
     # nearby if there is one, so units bringing cargo can unload.
-    if "store" in roles and not unit.cargo_total() and _free_pad_near(world, unit):
+    if "store" in roles and not unit.cargo_total() and not flies(unit) and _free_pad_near(world, unit):
         go_dock(world, unit, "charge")
         return
     # Charged and nothing to do: give the dock slot back and wait beside it.
@@ -416,7 +431,7 @@ def _move(world, unit):
     size = world.heightmap.size
     cx = min(max(int(unit.x + 0.5), 0), size - 1)
     cy = min(max(int(unit.y + 0.5), 0), size - 1)
-    factor = 1.0 + world.slopes[cy * size + cx] / U.SLOPE_DIVISOR_DEG
+    factor = 1.0 if flies(unit) else 1.0 + world.slopes[cy * size + cx] / U.SLOPE_DIVISOR_DEG
     remaining = spec["base_speed_cells_per_s"] * dt / factor
     moved = 0.0
     while remaining > 0.0 and unit.path:
@@ -489,7 +504,8 @@ def update(world, unit):
         _trickle(world, unit, cap)
     elif state == MOVING:
         arrived = _move(world, unit)
-        world.tracks.drive(unit.x, unit.y, unit.heading)
+        if not flies(unit):
+            world.tracks.drive(unit.x, unit.y, unit.heading)
         spotted = world.reveal_debris(unit.x, unit.y, unit.spec.get("sight_cells", 0.0))
         if hasattr(b, "on_move"):
             b.on_move(world, unit)

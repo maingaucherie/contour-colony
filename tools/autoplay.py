@@ -104,7 +104,7 @@ class Bot:
                 supply += s.spec["power_kw"] * self.w.illumination_at(s.x, s.y)
             else:
                 supply += s.spec.get("power_kw", 0.0)
-            demand += s.spec.get("draw_kw", 0.0)
+            demand += s.draw_kw()
         return supply - demand
 
     def missing(self):

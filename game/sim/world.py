@@ -112,6 +112,8 @@ class World:
 
     def store(self, s, item, amount):
         """Move up to amount items into structure s. Returns how many fit."""
+        if not s.accepts(item):
+            return 0
         n = max(0, min(amount, s.spec["storage"] - s.stored()))
         if n:
             s.storage[item] = s.storage.get(item, 0) + n
@@ -259,6 +261,12 @@ class World:
         s = self.structures.get(structure_id)
         if s is not None and priority in W.PRIORITIES:
             s.priority = priority
+            self.dirty_power = True
+
+    def set_clock(self, structure_id, clock):
+        s = self.structures.get(structure_id)
+        if s is not None and s.spec.get("recipe"):
+            s.clock = clock
             self.dirty_power = True
 
     def start_research(self, node):

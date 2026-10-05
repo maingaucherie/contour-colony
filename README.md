@@ -35,8 +35,9 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | O | Orbit and market: order supply drops (crates or ready-built units, land during the next pass), aim the free orbital scan while the ship is overhead, or sell 10 of any stored good |
 | Left click | Select a unit or structure (inspect panel) |
 | Right click | Order the selected unit: go there, or for a survey rover, survey there |
-| 1-4 with a rover bay selected | Build a scavenger, constructor, survey rover or hauler |
+| 1-5 with a rover bay selected | Build a scavenger, constructor, survey rover, hauler or maintenance drone |
 | P | Cycle the selected structure's power priority |
+| J | Clock speed of the selected production building: 100%, 50% (less power, less wear), 150% after Overclocking |
 | Del | Cancel the selected construction site (materials refunded), or mark a finished structure for a constructor to dismantle (75% back); Del again keeps it |
 | X / Shift+X | Sell 10 scrap / all scrap (from any storage) |
 | C | Centre on the selection |
@@ -84,6 +85,10 @@ their own power, charging and storage.
 
 A rover that runs flat isn't lost: it trickle-charges from its emergency
 panels (faster in sunlight) and drives home when it can.
+
+Buildings wear as they work: past 50% they slow down and ask for a repair (a
+machine part per 10%). Constructors repair when idle; maintenance drones
+(after Maintenance research) fly straight to them from their hangar.
 
 Zoom right in to hear the site: machinery thumping, process plant humming,
 rovers whining past.

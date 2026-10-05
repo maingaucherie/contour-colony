@@ -5,9 +5,9 @@
 # reputation never drains. Pressure assigns every contract at once and drains
 # reputation, as the original brief had it.
 MODES = {
-    "calm": {"name": "calm", "accept_offers": True, "drain_per_min": 0.0,
+    "calm": {"name": "calm", "accept_offers": True, "drain_per_min": 0.0, "wear_breaks": False,
              "first_contract_s": 120, "offer_every_s": 150},
-    "pressure": {"name": "pressure", "accept_offers": False, "drain_per_min": 1.0,
+    "pressure": {"name": "pressure", "accept_offers": False, "drain_per_min": 1.0, "wear_breaks": True,
                  "first_contract_s": 300, "offer_every_s": 300},
 }
 DEFAULT_MODE = "calm"

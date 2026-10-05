@@ -77,7 +77,7 @@ def best_job(world, unit, f, only_item=None):
     if only_item is not None:
         amount = unit.cargo.get(only_item, 0)
         for dst, item, space, mult in reqs:
-            if item not in (None, only_item):
+            if item not in (None, only_item) or (item is None and not dst.accepts(only_item)):
                 continue  # (cargo already aboard may go to storage over the item cap)
             d = f.dist[grid.node_at(dst.x, dst.y)]
             if d == math.inf:
@@ -101,6 +101,8 @@ def best_job(world, unit, f, only_item=None):
                 continue
             if ritem is None and kind == "storage":
                 continue  # no storage-to-storage shuffling
+            if ritem is None and not dst.accepts(item):
+                continue
             if ritem is None:
                 if room is None:
                     room = world.storage_room(item)

@@ -15,8 +15,9 @@ import math
 from game.content import structures as S
 from game.content import world as W
 from game.content.items import ITEMS
+from game.sim import wear
 
-WORKING, STARVED, BLOCKED, UNPOWERED, IDLE = "working", "starved", "blocked", "unpowered", "idle"
+WORKING, STARVED, BLOCKED, UNPOWERED, IDLE, BROKEN = "working", "starved", "blocked", "unpowered", "idle", "broken"
 
 
 def recipe(s):
@@ -65,7 +66,7 @@ def speed(world, s):
         k *= max(spec["heat"]["cold_speed"], s.heat)
     if "waste_heat" in spec and s.warm:
         k *= spec["waste_heat"]["speed"]
-    return max(0.05, k)
+    return max(0.05, k * s.clock * wear.speed_factor(s))
 
 
 def cycle_time(world, s):
@@ -79,6 +80,9 @@ def update(world, s):
         return
     dt = 1.0 / W.TICK_RATE
     _update_heat(world, s, dt)
+    if wear.broken(world, s):
+        s.status = BROKEN
+        return
     if s.cycle_left_s > 0.0:
         if not s.powered:
             s.status = UNPOWERED
@@ -95,6 +99,7 @@ def update(world, s):
                     world.consumed[item] = world.consumed.get(item, 0) + n - keep
                     s.vented += n - keep
             s.cycles += 1
+            wear.add_wear(world, s)
             f = field_of(world, s)
             if f is not None:
                 f.mined += 1
