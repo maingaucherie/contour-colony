@@ -21,6 +21,7 @@ heat             warms up while working and cools when idle; runs at heat x
 waste_heat       runs `speed` times faster within gap_cells of a working one of `from`
 wear_per_cycle   wear added by each recipe cycle (0..1 scale; see WEAR)
 accepts          storage that takes only these items (the default is anything)
+cost_per_cell    conveyors: build cost per cell of length (plus build_time_per_cell_s)
 snap             tiles edge to edge with others of its kind on a (dx, dy) lattice
                  instead of keeping a gap; farm_bonus per touching neighbour
 unlocked_by      research node, or None when available from the start
@@ -136,12 +137,20 @@ STRUCTURES = {
         "draw_kw": 3.0, "charge_slots": 2, "charge_per_s": 6.0, "dock_radius_cells": 1.9,
         "storage": 30, "accepts": ("parts",), "unlocked_by": "maintenance",
     },
+    "conveyor": {
+        # A belt from one building to another (see conveyors.py), placed by
+        # clicking its source and then its destination. footprint_cells is
+        # only its width; its length comes from the two buildings.
+        "name": "conveyor", "footprint_cells": 0.5, "max_slope_deg": 5.0,
+        "cost_per_cell": {"sinter": 1}, "build_time_s": 4.0, "build_time_per_cell_s": 1.0,
+        "draw_kw": 0.5, "unlocked_by": "conveyors", "link": True,
+    },
 }
 
 # Order of the build menu.
 BUILD_MENU = ("solar", "pylon", "scanner", "charging_pad", "depot", "outpost", "rover_bay",
               "ilmenite_mine", "ice_mine", "crusher", "ice_melter", "sinter_kiln",
-              "electrolyzer", "reduction_furnace", "machine_shop", "maintenance_hangar")
+              "electrolyzer", "reduction_furnace", "machine_shop", "maintenance_hangar", "conveyor")
 
 # Production buffers: inputs hold this many cycles' worth of each ingredient,
 # but at least INPUT_BUFFER_MIN (so a full hauler load fits); outputs hold
@@ -180,6 +189,13 @@ SNAP_RADIUS_CELLS = 3.0              # a snapping structure this close to one of
 # FEED_ITEMS_PER_S, with no hauler.
 FEED_REACH_CELLS = 0.9
 FEED_ITEMS_PER_S = 1.0
+
+# Conveyors: at most CONVEYOR_MAX_CELLS long between the edges of the two
+# buildings, moving CONVEYOR_ITEMS_PER_S. Placement shows CONVEYOR_PICK_CELLS
+# around the cursor as the building it would pick.
+CONVEYOR_MAX_CELLS = 16.0
+CONVEYOR_ITEMS_PER_S = 1.0
+CONVEYOR_PICK_CELLS = 2.5
 
 # Grading: ground steeper than a structure allows, up to GRADE_MAX_DEG, can be
 # graded for credits and extra build time, per degree over the limit and per

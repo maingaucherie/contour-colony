@@ -23,6 +23,7 @@ from game.render.scenery import build_scenery
 from game.render.surfaces import new_surface
 from game.sim.terrain import generate_terrain
 from game.sim.world import build_world
+from game.sim import conveyors as CONV
 from game.sim import jobs
 from game.sim import structures as ST
 from game.content import audio as AUDIO
@@ -154,6 +155,7 @@ class App:
         self.menu_cursor = 0
         self.menu_rects = None    # (panel rect, row rects) from the last draw
         self.placing = None       # structure kind being placed
+        self.conveyor_from = None  # conveyor placement: the source building picked
         self.confirm_new_until = 0.0
         self.paused = False
         self.speed_index = 0
@@ -302,7 +304,9 @@ class App:
             return  # Space selects in menus
         if action == "quit":
             # Escape backs out of placement and menus first.
-            if self.placing or self.menu or self.targeting:
+            if self.conveyor_from is not None:
+                self.conveyor_from = None   # back to picking a source
+            elif self.placing or self.menu or self.targeting:
                 self.placing = self.menu = None
                 self.targeting = False
             elif not WEB:
@@ -421,7 +425,7 @@ class App:
         elif self.menu == "build":
             kind = entries[i]
             if world.unlocked(kind):
-                self.placing, self.menu = kind, None
+                self.placing, self.menu, self.conveyor_from = kind, None, None
                 self.audio.play("confirm")
             else:
                 need = RESEARCH[STRUCTURES[kind]["unlocked_by"]]["name"].upper()
@@ -499,6 +503,9 @@ class App:
             if inp.right_click is not None:
                 self.targeting = False
             return
+        if self.placing == "conveyor":
+            self._conveyor_input()
+            return
         if self.placing:
             if inp.click is not None:
                 x, y = ST.snap_position(world, self.placing, *self.camera.screen_to_world(*inp.click))
@@ -540,6 +547,35 @@ class App:
                 self.audio.play("order" if ok else "error")
                 world.event(("ORDER: " + ("SURVEY THERE" if kind == "survey" else "GO THERE")) if ok
                             else f"ORDER REFUSED: {reason}", "info" if ok else "alert")
+
+    def _conveyor_input(self):
+        """Conveyor placement: click the building to send from, then the one to send to."""
+        world, inp = self.world, self.input
+        if inp.click is not None:
+            target = entities.structure_at(world, *self.camera.screen_to_world(*inp.click))
+            if target is None:
+                self.audio.play("error")
+            elif self.conveyor_from is None:
+                ok, reason = CONV.can_start(target)
+                self.audio.play("confirm" if ok else "error")
+                if ok:
+                    self.conveyor_from = target.id
+                else:
+                    world.event(f"CONVEYOR: {reason}", "info")
+            else:
+                site, reason = world.place_conveyor(self.conveyor_from, target.id)
+                self.audio.play("place" if site is not None else "error")
+                if site is None:
+                    world.event(f"CAN'T BUILD CONVEYOR: {reason}", "info")
+                else:
+                    self.conveyor_from = None
+                    if not (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                        self.placing = None  # hold shift to lay several
+        if inp.right_click is not None:
+            if self.conveyor_from is not None:
+                self.conveyor_from = None
+            else:
+                self.placing = None
 
     # Simulation ---------------------------------------------------------------
 
@@ -585,7 +621,13 @@ class App:
         if self.view == "survey" and not self.placing:
             draw.draw_slope_marks(self.screen, world, cam, W.SLOPE_BUILDABLE_DEG, impassable_only=True)
         ghost = None
-        if self.placing and self.input.mouse_inside:
+        if self.placing == "conveyor" and self.input.mouse_inside:
+            mx, my = self._mouse_world()
+            draw.draw_slope_marks(self.screen, world, cam, STRUCTURES["conveyor"]["max_slope_deg"],
+                                  (mx, my), D.SLOPE_MARK_RADIUS_CELLS, gradable=STRUCTURE_RULES.GRADE_MAX_DEG)
+            hover = entities.structure_at(world, mx, my)
+            ghost = ("conveyor", self.conveyor_from, hover.id if hover else None, (mx, my))
+        elif self.placing and self.input.mouse_inside:
             draw.draw_slope_marks(self.screen, world, cam, STRUCTURES[self.placing]["max_slope_deg"],
                                   self._mouse_world(), D.SLOPE_MARK_RADIUS_CELLS, gradable=STRUCTURE_RULES.GRADE_MAX_DEG)
             x, y = ST.snap_position(world, self.placing, *self._mouse_world())
@@ -737,6 +779,9 @@ class App:
     def _hint(self):
         if self.targeting:
             return "ORBITAL SCAN:  CLICK THE MAP TO SCAN THERE  RIGHT CLICK/ESC CANCEL"
+        if self.placing == "conveyor":
+            step = "CLICK WHERE TO SEND" if self.conveyor_from is not None else "CLICK A BUILDING TO SEND FROM"
+            return f"CONVEYOR:  {step}  SHIFT: LAY SEVERAL  RIGHT CLICK/ESC BACK"
         if self.placing:
             return (f"PLACING {STRUCTURES[self.placing]['name'].upper()}:  CLICK TO PLACE  "
                     "SHIFT+CLICK PLACE MORE  RIGHT CLICK/ESC CANCEL")

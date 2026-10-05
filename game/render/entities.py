@@ -10,6 +10,8 @@ from game.render import glyphs as G
 from game.render import symbols as SYM
 from game.render.hershey import draw_text
 from game.content import contracts as CT
+from game.content import structures as S
+from game.sim import conveyors as CONV
 from game.sim import feeds as FEEDS
 from game.sim import production as P
 from game.sim import structures as ST
@@ -166,7 +168,7 @@ def draw_feed_links(surface, world, camera, now_s):
 def draw_grid_links(surface, world, camera):
     to_screen = camera.world_to_screen
     for s in world.structures.values():
-        if s.built and s.grid_parent is not None and s.grid_parent in world.structures:
+        if s.built and s.grid_parent is not None and s.grid_parent in world.structures and not s.is_link():
             p = world.structures[s.grid_parent]
             G.dotted(surface, D.COLOR_GRID_LINK, to_screen(s.x, s.y), to_screen(p.x, p.y), D.DOT_SPACING_PX)
 
@@ -205,6 +207,59 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
         bx, by = G.LANDER_BEACON if style == "pictorial" else (0.0, 0.0)
         pygame.draw.circle(surface, D.COLOR_SELECT, (int(sx + bx * half), int(sy + by * half)), 1)
     return segs
+
+
+def _rails(camera, p0, p1):
+    """Screen points of a belt's two rails from world p0 to p1, and its unit direction."""
+    a, b = camera.world_to_screen(*p0), camera.world_to_screen(*p1)
+    d = math.hypot(b[0] - a[0], b[1] - a[1]) or 1.0
+    ux, uy = (b[0] - a[0]) / d, (b[1] - a[1]) / d
+    half = max(D.CONVEYOR_WIDTH_CELLS * camera.zoom, D.CONVEYOR_WIDTH_MIN_PX) / 2
+    nx, ny = -uy * half, ux * half
+    left = ((a[0] + nx, a[1] + ny), (b[0] + nx, b[1] + ny))
+    right = ((a[0] - nx, a[1] - ny), (b[0] - nx, b[1] - ny))
+    return a, b, d, left, right
+
+
+def draw_conveyor(surface, world, c, camera, now_s, selected=None, color=None):
+    """A belt: two cyan rails, with items running along it while it works.
+    A site is dotted, solid as far as it is built."""
+    line = ST.conveyor_line(world, c)
+    if line is None:
+        return 0
+    a, b, d, left, right = _rails(camera, *line)
+    w, h = surface.get_size()
+    if max(a[0], b[0]) < 0 or min(a[0], b[0]) > w or max(a[1], b[1]) < 0 or min(a[1], b[1]) > h:
+        return 0
+    if color is None:
+        color = D.COLOR_FLOW
+        if not c.built:
+            color = D.COLOR_SITE
+        elif c.deconstruct:
+            color = _scale(D.COLOR_ALERT, 0.5 + 0.5 * (int(now_s * 2) % 2))
+        elif not c.powered:
+            color = _scale(color, 0.5 * _flicker(now_s, c.id))
+        elif c.status != P.WORKING:
+            color = _scale(color, 0.6)
+        if selected == ("structure", c.id):
+            color = D.COLOR_SELECT
+    if not c.built:
+        k = c.build_progress()
+        for p, q in (left, right):
+            G.dotted(surface, color, p, q, D.DOT_SPACING_PX)
+            pygame.draw.aaline(surface, color, p, (p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k))
+        return 2
+    for p, q in (left, right):
+        pygame.draw.aaline(surface, color, p, q)
+    if c.status == P.WORKING:
+        spacing = max(D.CONVEYOR_DOT_SPACING_CELLS * camera.zoom, 6.0)
+        speed = S.CONVEYOR_ITEMS_PER_S * spacing   # one item arrives per second
+        ux, uy = (b[0] - a[0]) / d, (b[1] - a[1]) / d
+        pos = (now_s * speed) % spacing
+        while pos < d:
+            pygame.draw.circle(surface, D.COLOR_SELECT, (int(a[0] + ux * pos), int(a[1] + uy * pos)), 1)
+            pos += spacing
+    return 2
 
 
 def _draw_gauges(surface, s, r, sx, sy, half):
@@ -310,6 +365,11 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
             segments += G.draw_shape(surface, D.COLOR_DEBRIS, G.DEBRIS_SHAPES[piece.kind], sx, sy, size)
 
     for s in world.structures.values():
+        if s.is_link():
+            segments += draw_conveyor(surface, world, s, camera, now_s, selected)
+    for s in world.structures.values():
+        if s.is_link():
+            continue
         if s.kind == "scanner" and s.built and s.powered:
             segments += _draw_scan_beam(surface, s, camera)
         segments += _draw_structure(surface, world, s, camera, now_s, selected)
@@ -375,7 +435,7 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
             if unit.path:
                 G.dashed(surface, D.COLOR_FLOW, [(sx, sy)] + [to_screen(x, y) for x, y in unit.path], D.DASH_PX, D.GAP_PX)
             _brackets(surface, sx, sy, rover_half * (1.9 if style == "symbols" else 1.4))
-        elif kind == "structure" and eid in world.structures:
+        elif kind == "structure" and eid in world.structures and not world.structures[eid].is_link():
             s = world.structures[eid]
             sx, sy = to_screen(s.x, s.y)
             _brackets(surface, sx, sy, structure_half_px(s.spec, z, s.kind == "lander") * 1.15)
@@ -388,8 +448,54 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
     return segments
 
 
+def draw_conveyor_ghost(surface, world, camera, ghost):
+    """Conveyor placement: the source picked (or the one under the cursor), then
+    the belt to the destination under the cursor, with its cost or why not."""
+    _, src, hover, (mx, my) = ghost
+    sx, sy = camera.world_to_screen(mx, my)
+    a = world.structures.get(src) if src is not None else None
+    b = world.structures.get(hover) if hover is not None else None
+    if a is None:
+        if b is None:
+            draw_text(surface, "CONVEYOR: CLICK A BUILDING TO SEND FROM", (sx, sy + 14), 1, D.COLOR_TEXT, "center")
+            return 0
+        ok, reason = CONV.can_start(b)
+        bx, by = camera.world_to_screen(b.x, b.y)
+        _brackets(surface, bx, by, structure_half_px(b.spec, camera.zoom, b is world.lander) * 1.15)
+        note = f"SEND FROM {b.spec['name'].upper()}" if ok else reason
+        draw_text(surface, "CONVEYOR: " + note, (bx, by + 14), 1, D.COLOR_TEXT if ok else D.COLOR_ALERT, "center")
+        return 0
+    ax, ay = camera.world_to_screen(a.x, a.y)
+    _brackets(surface, ax, ay, structure_half_px(a.spec, camera.zoom, a is world.lander) * 1.15)
+    if b is None or b is a:
+        G.dotted(surface, D.COLOR_GHOST_OK, (ax, ay), (sx, sy), D.DOT_SPACING_PX)
+        draw_text(surface, f"FROM {a.spec['name'].upper()}: CLICK WHERE TO SEND", (sx, sy + 14), 1, D.COLOR_TEXT,
+                  "center")
+        return 0
+    p = CONV.plan(world, a, b)
+    p0, p1 = ST.link_ends(a, b)
+    color = D.COLOR_GHOST_OK if p["ok"] else D.COLOR_ALERT
+    _, _, _, left, right = _rails(camera, p0, p1)
+    for q0, q1 in (left, right):
+        G.dotted(surface, color, q0, q1, D.DOT_SPACING_PX)
+    bx, by = camera.world_to_screen(b.x, b.y)
+    if p["ok"]:
+        cells = max(1, math.ceil(p["length"] - 1e-6))
+        cost = ", ".join(f"{n * cells} {k.upper()}" for k, n in S.STRUCTURES["conveyor"]["cost_per_cell"].items())
+        note = (f"TO {b.spec['name'].upper()}  {p['length']:.1f} CELLS  {cost}  CARRIES "
+                + ", ".join(k.upper() for k in p["items"]))
+        if p["credits"]:
+            note += f"  GRADING {p['credits']} CR"
+    else:
+        note = p["reason"]
+    draw_text(surface, note, (bx, by + 14), 1, D.COLOR_TEXT if p["ok"] else D.COLOR_ALERT, "center")
+    return 2
+
+
 def draw_ghost(surface, world, camera, ghost):
     """Placement preview: the structure where it would go, its grid reach, and why not."""
+    if ghost[0] == "conveyor":
+        return draw_conveyor_ghost(surface, world, camera, ghost)
     kind, x, y, ok, reason, spec = ghost
     z = camera.zoom
     sx, sy = camera.world_to_screen(x, y)
@@ -461,8 +567,27 @@ def pick(world, camera, alpha, pos):
     if best is not None:
         return best
     for s in world.structures.values():
+        if s.is_link():
+            continue
         sx, sy = camera.world_to_screen(s.x, s.y)
         r = max(structure_half_px(s.spec, camera.zoom, s.kind == "lander"), D.SELECT_PICK_RADIUS_PX)
         if math.hypot(sx - mx, sy - my) <= r:
             return ("structure", s.id)
+    for s in world.structures.values():   # conveyors last: buildings sit on their ends
+        line = ST.conveyor_line(world, s) if s.is_link() else None
+        if line and ST.distance_to_segment(mx, my, *(camera.world_to_screen(*p) for p in line)) <= D.CONVEYOR_PICK_PX:
+            return ("structure", s.id)
     return None
+
+
+def structure_at(world, x, y):
+    """The building (not a conveyor) whose footprint is nearest the world point
+    (x, y), within CONVEYOR_PICK_CELLS of its edge, or None."""
+    best = None
+    for s in world.structures.values():
+        if s.is_link():
+            continue
+        d = math.hypot(s.x - x, s.y - y) - s.spec["footprint_cells"]
+        if d <= S.CONVEYOR_PICK_CELLS and (best is None or d < best[0]):
+            best = (d, s)
+    return best[1] if best else None

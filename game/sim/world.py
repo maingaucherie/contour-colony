@@ -20,7 +20,7 @@ from game.content.research import RESEARCH
 from game.content.structures import STRUCTURES
 from game.content.terrain import CONTOUR_CHUNK_CELLS
 from game.content import contracts as CT
-from game.sim import debris, feeds, fields, power, production, structures, units
+from game.sim import conveyors, debris, feeds, fields, power, production, structures, units
 from game.sim.contracts import Contracts
 from game.sim.orbit import Orbit
 from game.sim.pathing import PathGrid
@@ -226,6 +226,9 @@ class World:
 
     def place(self, kind, x, y):
         return structures.place_site(self, kind, x, y)
+
+    def place_conveyor(self, src_id, dst_id):
+        return conveyors.place(self, src_id, dst_id)
 
     def cancel(self, structure_id):
         s = self.structures.get(structure_id)
@@ -434,6 +437,7 @@ class World:
             elif s.built:
                 production.update(self, s)
         feeds.update(self)
+        conveyors.update(self)
         self.orbit.update(self)
         # Environment and units.
         debris.update(self)

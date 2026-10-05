@@ -8,6 +8,7 @@ from game.content import units as U
 from game.content import world as W
 from game.content.items import ITEMS
 from game.render.hershey import draw_text, line_height
+from game.sim import conveyors as CONV
 from game.sim import production as P
 from game.sim import wear
 from game.sim import units as US
@@ -104,7 +105,7 @@ def _structure_lines(world, s):
     if not s.built:
         need = s.materials_needed()
         lines.append((f"UNDER CONSTRUCTION {s.build_progress() * 100:3.0f}%", 1, D.COLOR_TEXT, ("bar", s.build_progress())))
-        delivered = ", ".join(f"{s.delivered.get(k, 0)}/{n} {k.upper()}" for k, n in spec["build_cost"].items())
+        delivered = ", ".join(f"{s.delivered.get(k, 0)}/{n} {k.upper()}" for k, n in s.build_cost().items())
         lines.append((f"MATERIALS {delivered}", 1, D.COLOR_TEXT_DIM))
         short = [k for k in need if world.stock(k) < need[k] and not s.incoming.get(k)]
         if short:
@@ -115,7 +116,7 @@ def _structure_lines(world, s):
         elif not US.in_charger_range(world, builders[0], s.x, s.y):
             lines.append(("OUT OF ROVER RANGE - BUILD A CHARGING PAD NEARER", 1, D.COLOR_ALERT))
         if s.grade_deg > 0:
-            lines.append((f"GRADING   {s.grade_deg:.1f} DEG ({s.grade_cr} CR PAID, +{s.build_time() - spec['build_time_s']:.0f} S)",
+            lines.append((f"GRADING   {s.grade_deg:.1f} DEG ({s.grade_cr} CR PAID, +{s.build_time() - s.assembly_time():.0f} S)",
                           1, D.COLOR_TEXT_DIM))
         lines.append(("DEL: CANCEL (REFUNDS MATERIALS)", 1, D.COLOR_FLOW))
         return lines
@@ -151,6 +152,9 @@ def _structure_lines(world, s):
         used = sum(1 for u in s.dock_users if u is not None)
         what = "CHARGING DOCKS" if spec.get("charge_slots") else "UNLOADING DOCKS"
         lines.append((f"{what} {used}/{len(s.docks)} IN USE", 1, D.COLOR_TEXT_DIM))
+    if s.is_link():
+        lines.extend(_conveyor_lines(world, s))
+    lines.extend(_belts_of(world, s))
     r = P.recipe(s)
     if r:
         lines.extend(_production_lines(world, s, r))
@@ -180,6 +184,38 @@ def _structure_lines(world, s):
             if world.unlocked(kind):
                 lines.append((f"{i + 1}  {spec_u['name'].upper()}: {cost_text(spec_u['bay_cost'])}", 1, D.COLOR_FLOW))
     return lines
+
+
+def _conveyor_lines(world, c):
+    a, b = world.structures.get(c.src), world.structures.get(c.dst)
+    if a is None or b is None:
+        return []
+    carries = ", ".join(ITEMS[k]["name"].upper() for k in CONV.items_for(a.kind, b.kind))
+    state = {P.WORKING: "MOVING", P.UNPOWERED: "UNPOWERED"}.get(c.status, "WAITING")
+    if state == "WAITING":
+        if not (a.built and b.built):
+            state = "WAITING FOR " + (a if not a.built else b).spec["name"].upper()
+        else:
+            state = "WAITING: NOTHING TO SEND OR NO ROOM"
+    return [
+        (f"FROM {a.spec['name'].upper()} TO {b.spec['name'].upper()}", 1, D.COLOR_TEXT),
+        (f"CARRIES   {carries}", 1, D.COLOR_TEXT_DIM),
+        (f"LENGTH    {c.length:.1f} CELLS   {S.CONVEYOR_ITEMS_PER_S:.0f} ITEM/S", 1, D.COLOR_TEXT_DIM),
+        (f"STATUS    {state}   MOVED {c.moved}", 1, D.COLOR_FLOW if c.status == P.WORKING else D.COLOR_TEXT_DIM),
+    ]
+
+
+def _belts_of(world, s):
+    """Lines for the conveyors that start or end at a building."""
+    out = []
+    for c in CONV.attached(world, s):
+        other = world.structures.get(c.dst if c.src == s.id else c.src)
+        if other is None:
+            continue
+        verb = "CONVEYOR TO" if c.src == s.id else "CONVEYOR FROM"
+        state = "" if c.built else " (BEING BUILT)"
+        out.append((f"{verb} {other.spec['name'].upper()}{state}", 1, D.COLOR_FLOW))
+    return out
 
 
 def _amounts(d):

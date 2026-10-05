@@ -113,7 +113,7 @@ def think(world, unit):
     for s in sorted((s for s in world.structures.values() if s.built and s.deconstruct), key=lambda s: s.id):
         if any(u.job == s.id and u is not unit for u in world.units.values()):
             continue  # one constructor per teardown
-        remaining = s.spec["build_time_s"] * ST.S.DECONSTRUCT_TIME_FRACTION - s.teardown_s
+        remaining = s.assembly_time() * ST.S.DECONSTRUCT_TIME_FRACTION - s.teardown_s
         energy = remaining / unit.spec["build_rate"] * unit.spec["build_drain_per_s"]
         if not UN.can_afford(world, unit, f.dist[grid.node_at(s.x, s.y)] + UN.back_cost(world, s.x, s.y), energy):
             continue
@@ -185,7 +185,7 @@ def arrived(world, unit):
             return
         for k, n in list(unit.cargo.items()):
             site.incoming[k] = max(0, site.incoming.get(k, 0) - n)
-            take = min(n, site.spec["build_cost"].get(k, 0) - site.delivered.get(k, 0))
+            take = min(n, site.build_cost().get(k, 0) - site.delivered.get(k, 0))
             if take > 0:
                 site.delivered[k] = site.delivered.get(k, 0) + take
                 unit.cargo[k] -= take

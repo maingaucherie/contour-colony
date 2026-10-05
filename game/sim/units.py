@@ -167,6 +167,8 @@ def avoid_structures(world, start, points):
     obstacles = []
     gx, gy = points[-1] if points else start
     for s in world.structures.values():
+        if s.is_link():
+            continue  # rovers drive over conveyors
         r = s.spec["footprint_cells"] + U.STRUCTURE_CLEARANCE_CELLS
         reach = r + s.spec.get("dock_radius_cells", 0.0)
         if math.hypot(gx - s.x, gy - s.y) <= reach or math.hypot(start[0] - s.x, start[1] - s.y) <= reach:

@@ -2,8 +2,10 @@
 
 Structures with a grid reach (lander, solar arrays, pylons) link to each other
 when either one's reach covers the other; any other structure joins a grid if
-it lies within a linked structure's reach. Each connected grid sums its supply
-and serves demand in priority order; structures that don't fit go unpowered.
+it lies within a linked structure's reach. A conveyor joins the grid of the
+building it starts from (or else the one it ends at). Each connected grid
+sums its supply and serves demand in priority order; structures that don't
+fit go unpowered.
 """
 
 import math
@@ -61,7 +63,7 @@ def compute(structures):
         gid += 1
 
     for s in built:
-        if s.grid != -1:
+        if s.grid != -1 or s.spec.get("link"):
             continue
         best = None
         for n in nodes:
@@ -71,6 +73,16 @@ def compute(structures):
         if best:
             s.grid, s.grid_parent = best[1].grid, best[1].id
             grids[s.grid].append(s)
+
+    by_id = {s.id: s for s in built}
+    for c in built:
+        if not c.spec.get("link"):
+            continue
+        for end in (by_id.get(c.src), by_id.get(c.dst)):
+            if end is not None and end.grid != -1:
+                c.grid, c.grid_parent = end.grid, end.id
+                grids[c.grid].append(c)
+                break
 
     summary = {}
     for g, members in grids.items():

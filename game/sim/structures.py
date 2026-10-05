@@ -59,6 +59,11 @@ class Structure:
     warm: bool = False                              # getting waste heat from a neighbour
     deconstruct: bool = False                       # marked for a constructor to dismantle
     teardown_s: float = 0.0                         # dismantling seconds done
+    # Conveyors only (see conveyors.py): the buildings they join and their length.
+    src: int | None = None
+    dst: int | None = None
+    length: float = 0.0
+    moved: int = 0                                  # items carried
 
     @property
     def spec(self):
@@ -78,36 +83,75 @@ class Structure:
         allowed = self.spec.get("accepts")
         return allowed is None or item in allowed
 
+    def is_link(self):
+        return self.spec.get("link", False)
+
+    def cells(self):
+        """Whole cells of length a conveyor is paid and built by (at least 1)."""
+        return max(1, math.ceil(self.length - 1e-6))
+
+    def build_cost(self):
+        """Items constructors bring. A conveyor's grows with its length."""
+        per_cell = self.spec.get("cost_per_cell")
+        if per_cell:
+            return {k: n * self.cells() for k, n in per_cell.items()}
+        return self.spec.get("build_cost", {})
+
     def materials_needed(self):
         """Items still to bring: cost - delivered - incoming (never negative)."""
-        cost = self.spec.get("build_cost", {})
+        cost = self.build_cost()
         return {k: n - self.delivered.get(k, 0) - self.incoming.get(k, 0)
                 for k, n in cost.items() if n - self.delivered.get(k, 0) - self.incoming.get(k, 0) > 0}
 
     def fully_delivered(self):
-        cost = self.spec.get("build_cost", {})
+        cost = self.build_cost()
         return all(self.delivered.get(k, 0) >= n for k, n in cost.items())
 
     def draw_kw(self):
         """Power drawn while working, at this clock speed."""
         return self.spec.get("draw_kw", 0.0) * clock_spec(self.clock)["power"]
 
+    def assembly_time(self):
+        per_cell = self.spec.get("build_time_per_cell_s", 0.0) * self.cells() if self.is_link() else 0.0
+        return self.spec.get("build_time_s", 1.0) + per_cell
+
     def build_time(self):
         """Assembly seconds, plus grading if the ground needs it."""
-        return self.spec.get("build_time_s", 1.0) + grade_seconds(self.spec, self.grade_deg)
+        return self.assembly_time() + grade_seconds(self.spec, self.grade_deg)
 
     def teardown_progress(self):
-        return self.teardown_s / (self.spec.get("build_time_s", 1.0) * S.DECONSTRUCT_TIME_FRACTION)
+        return self.teardown_s / (self.assembly_time() * S.DECONSTRUCT_TIME_FRACTION)
 
     def build_progress(self):
         """0..1 over the whole job: materials first (a third), then assembly."""
         if self.built:
             return 1.0
-        cost = self.spec.get("build_cost", {})
+        cost = self.build_cost()
         total = sum(cost.values()) or 1
         got = sum(min(self.delivered.get(k, 0), n) for k, n in cost.items())
         assembly = self.work_done_s / self.build_time()
         return min(1.0, got / total / 3 + assembly * 2 / 3)
+
+
+def link_ends(a, b):
+    """Start and end of a conveyor from a's edge to b's edge."""
+    d = math.hypot(b.x - a.x, b.y - a.y) or 1.0
+    ux, uy = (b.x - a.x) / d, (b.y - a.y) / d
+    ra, rb = a.spec["footprint_cells"], b.spec["footprint_cells"]
+    return (a.x + ux * ra, a.y + uy * ra), (b.x - ux * rb, b.y - uy * rb)
+
+
+def distance_to_segment(px, py, p0, p1):
+    dx, dy = p1[0] - p0[0], p1[1] - p0[1]
+    l2 = dx * dx + dy * dy
+    t = 0.0 if l2 == 0 else max(0.0, min(1.0, ((px - p0[0]) * dx + (py - p0[1]) * dy) / l2))
+    return math.hypot(px - (p0[0] + t * dx), py - (p0[1] + t * dy))
+
+
+def conveyor_line(world, c):
+    """(start, end) of conveyor c, or None if one of its buildings is gone."""
+    a, b = world.structures.get(c.src), world.structures.get(c.dst)
+    return link_ends(a, b) if a is not None and b is not None else None
 
 
 def make_docks(s, world=None):
@@ -260,6 +304,11 @@ def check_placement(world, kind, x, y):
         if world.credits < cost:
             return False, f"GRADING NEEDS {cost} CR"
     for other in world.structures.values():
+        if other.is_link():
+            line = conveyor_line(world, other)
+            if line and distance_to_segment(x, y, *line) < r + other.spec["footprint_cells"] / 2:
+                return False, "OVERLAPS CONVEYOR"
+            continue
         if _snaps(kind, x, y, other.kind, other.x, other.y):
             continue
         if math.hypot(other.x - x, other.y - y) < r + other.spec["footprint_cells"] + S.PLACEMENT_GAP_CELLS:
@@ -307,8 +356,16 @@ def complete(world, s):
     world.event(f"{s.spec['name'].upper()} COMPLETE")
 
 
+def remove_conveyors(world, s):
+    """Conveyors to or from s go with it: sites are cancelled, built ones dismantled."""
+    for c in [c for c in world.structures.values() if c.is_link() and s.id in (c.src, c.dst)]:
+        if c.id in world.structures:
+            (dismantle if c.built else cancel_site)(world, c)
+
+
 def cancel_site(world, s):
     """Remove an unfinished site; delivered materials go back to the lander."""
+    remove_conveyors(world, s)
     for item, n in s.delivered.items():
         world.lander.storage[item] = world.lander.storage.get(item, 0) + n
     world.credits += s.grade_cr
@@ -349,7 +406,8 @@ def refund_items(world, items):
 
 def dismantle(world, s):
     """Remove a built structure: part of its cost and all its contents go back to storage."""
-    cost = s.spec.get("build_cost", {})
+    remove_conveyors(world, s)
+    cost = s.build_cost()
     refund = {k: int(n * S.DECONSTRUCT_REFUND) for k, n in cost.items()}
     for k, n in refund.items():
         world.consumed[k] = world.consumed.get(k, 0) - n
