@@ -448,6 +448,20 @@ def _wander(unit):
     unit.vy += (target_y - unit.vy) * f
 
 
+def _trickle(world, unit, cap):
+    """A stranded unit unfolds its panels and trickle-charges (faster in
+    sunlight) until it has enough to crawl back to a charger, then goes."""
+    light = world.illumination_at(unit.x, unit.y)
+    unit.battery = min(cap, unit.battery + U.STRANDED_TRICKLE_PER_S * light / W.TICK_RATE)
+    back = back_cost(world, unit.x, unit.y)
+    need = cap if back == math.inf else min(cap, trip_energy(unit, back) + reserve(world, unit))
+    if unit.battery >= max(need, U.STRANDED_RESUME_FRACTION * cap):
+        unit.state = IDLE
+        world.event(f"{unit.spec['name'].upper()} RECHARGED BY SUNLIGHT - HEADING HOME")
+        if not go_dock(world, unit, "charge"):
+            idle(unit)
+
+
 def update(world, unit):
     b = brain(unit)
     unit.prev_vx, unit.prev_vy = unit.vx, unit.vy
@@ -455,7 +469,7 @@ def update(world, unit):
     cap = capacity(world, unit)
 
     if state == STRANDED:
-        pass
+        _trickle(world, unit, cap)
     elif state == MOVING:
         arrived = _move(world, unit)
         world.tracks.drive(unit.x, unit.y, unit.heading)
@@ -468,7 +482,7 @@ def update(world, unit):
         if unit.battery <= 0.0:
             b.drop_job(world, unit)
             unit.state, unit.activity, unit.path = STRANDED, "stranded", []
-            world.event(f"{unit.spec['name'].upper()} STRANDED - BATTERY EMPTY", "alert")
+            world.event(f"{unit.spec['name'].upper()} STRANDED - RECHARGING SLOWLY BY SUNLIGHT", "alert")
         elif unit.activity != "to_charge" and unit.battery < U.LOW_BATTERY_FRACTION * cap:
             b.drop_job(world, unit)
             unit.order = None

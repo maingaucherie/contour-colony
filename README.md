@@ -76,6 +76,9 @@ needed; solar arrays click together into farms. Slightly steep ground can be
 graded for credits (amber marks while placing). Outposts give far fields
 their own power, charging and storage.
 
+A rover that runs flat isn't lost: it trickle-charges from its emergency
+panels (faster in sunlight) and drives home when it can.
+
 Zoom right in to hear the site: machinery thumping, process plant humming,
 rovers whining past.
 

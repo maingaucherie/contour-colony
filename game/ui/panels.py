@@ -32,7 +32,7 @@ ACTIVITY_LABELS = {
     "to_frontier": "EXPLORING",
     "surveying": "DETAILED SURVEY",
     "to_order": "FOLLOWING ORDERS",
-    "stranded": "STRANDED - BATTERY EMPTY",
+    "stranded": "STRANDED - SOLAR TRICKLE CHARGING",
     "to_pickup": "DRIVING TO PICK UP",
     "to_dropoff": "DELIVERING",
     "holding cargo - nowhere to take it": "HOLDING CARGO - NOWHERE TO TAKE IT",

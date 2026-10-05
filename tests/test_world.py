@@ -170,3 +170,22 @@ class DeterminismTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StrandedTests(unittest.TestCase):
+    def test_stranded_units_trickle_charge_and_head_home(self):
+        w = make_world(1)
+        unit = scavengers(w)[0]
+        unit.x, unit.y = w.lander.x + 20, w.lander.y
+        US.release_dock(w, unit)
+        unit.battery = 0.0
+        unit.state, unit.activity = US.STRANDED, "stranded"
+        for _ in range(minutes(20)):
+            w.tick()
+            if unit.state != US.STRANDED:
+                break
+        self.assertNotEqual(unit.state, US.STRANDED)
+        self.assertIn(unit.activity, ("to_charge", "charging", "idle", "waiting for a dock"))
+        for _ in range(minutes(3)):
+            w.tick()
+        self.assertGreater(unit.battery, 0.0)

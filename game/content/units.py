@@ -76,6 +76,8 @@ SLOPE_DIVISOR_DEG = 5.0              # speed = base / (1 + slope / SLOPE_DIVISOR
 LOW_BATTERY_FRACTION = 0.2           # below this, drop the job and go charge
 TOP_UP_BELOW_FRACTION = 0.6          # when docked below this, charge to full before the next job
 TRIP_SAFETY_FACTOR = 1.25            # planned energy is multiplied by this before checking range
+STRANDED_TRICKLE_PER_S = 0.3        # battery a stranded unit's emergency panels recover per second, in full sun
+STRANDED_RESUME_FRACTION = 0.3       # ... until it has at least this much, and enough to reach a charger
 RELAY_PLANNING_FRACTION = 1.0        # a far job is taken via a charger near it if it fits in a full battery
 IDLE_RETHINK_S = 2.0                 # idle units look for work this often
 # Units with nothing to unload prefer a charging pad over a storage dock (the
