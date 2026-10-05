@@ -9,6 +9,8 @@ from game.content import display as D
 from game.render import glyphs as G
 from game.render import symbols as SYM
 from game.render.hershey import draw_text
+from game.content import contracts as CT
+from game.sim import production as P
 from game.sim import units as US
 
 _facing = {}  # unit id -> +1 / -1, with a deadband so rovers don't flip-flop
@@ -120,6 +122,8 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
         G.dotted_circle(surface, D.COLOR_SITE, sx, sy, s.spec["footprint_cells"] * camera.zoom, D.DOT_SPACING_PX)
         return G.draw_shape(surface, D.COLOR_SITE, shape, sx, sy, half, s.build_progress())
     color = D.COLOR_STRUCTURE
+    if s.status in (P.STARVED, P.BLOCKED) and P.recipe(s):
+        color = _scale(D.COLOR_STARVED, 0.6 + 0.4 * (int(now_s * 2) % 2))
     if not s.powered:
         color = _scale(color, _flicker(now_s, s.id))
     if s.deconstruct:
@@ -127,10 +131,48 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
         segs = G.draw_shape(surface, color, shape, sx, sy, half, 1.0 - min(1.0, s.teardown_progress()))
     else:
         segs = G.draw_shape(surface, color, shape, sx, sy, half)
+    r = P.recipe(s)
+    if r and half >= D.GAUGE_MIN_HALF_PX:
+        segs += _draw_gauges(surface, s, r, sx, sy, half)
     if s.kind == "lander" and int(now_s * D.BEACON_BLINK_HZ * 2) % 2 == 0:
         bx, by = G.LANDER_BEACON if style == "pictorial" else (0.0, 0.0)
         pygame.draw.circle(surface, D.COLOR_SELECT, (int(sx + bx * half), int(sy + by * half)), 1)
     return segs
+
+
+def _draw_gauges(surface, s, r, sx, sy, half):
+    """Thin vertical buffer gauges: inputs on the left, outputs on the right."""
+    h = int(half * 1.6)
+    top = int(sy - h / 2)
+    gw, gap = D.GAUGE_WIDTH_PX, D.GAUGE_GAP_PX
+    n = 0
+    for side, items, held, cap in ((-1, list(r["in"]), s.inputs, lambda k: P.input_cap(s, k)),
+                                   (1, list(r["out"]), s.outputs, lambda k: P.output_cap(s, k))):
+        for i, k in enumerate(items):
+            x = int(sx + side * (half + gap + 1 + i * (gw + gap + 1))) - (gw if side < 0 else 0)
+            frac = held.get(k, 0) / max(1, cap(k))
+            pygame.draw.rect(surface, D.COLOR_FRAME, (x - 1, top - 1, gw + 2, h + 2), 1)
+            fill = int(h * min(1.0, frac))
+            if fill:
+                pygame.draw.rect(surface, D.COLOR_FLOW, (x, top + h - fill, gw, fill))
+            n += 1
+    return n
+
+
+def draw_pods(surface, world, camera):
+    """Supply pods on their way down: a marker sliding to its landing ring."""
+    now = world.time_s()
+    n = 0
+    for pod in world.orbit.falling:
+        k = max(0.0, min(1.0, (pod.land_s - now) / CT.DROP_FALL_S))
+        gx, gy = camera.world_to_screen(pod.x, pod.y)
+        px, py = gx, gy - k * D.POD_FALL_PX
+        G.dotted_circle(surface, D.COLOR_POWER, gx, gy, D.POD_SIZE_PX + 6 * k, D.DOT_SPACING_PX)
+        G.dotted(surface, D.COLOR_POWER, (px, py), (gx, gy), D.DOT_SPACING_PX)
+        r = D.POD_SIZE_PX
+        pygame.draw.aalines(surface, D.COLOR_POWER, True, [(px, py - r), (px + r, py), (px, py + r), (px - r, py)])
+        n += 5
+    return n
 
 
 def _draw_scan_beam(surface, s, camera):
@@ -178,6 +220,8 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
         if s.kind == "scanner" and s.built and s.powered:
             segments += _draw_scan_beam(surface, s, camera)
         segments += _draw_structure(surface, world, s, camera, now_s, selected)
+
+    segments += draw_pods(surface, world, camera)
 
     # Phosphor trails (world space, so they survive panning and zooming).
     for unit in world.units.values():

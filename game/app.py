@@ -20,7 +20,9 @@ from game.render.surfaces import new_surface
 from game.sim.terrain import generate_terrain
 from game.sim.world import build_world
 from game.sim import structures as ST
-from game.ui import hud, menus, panels
+from game.content import contracts as CT
+from game.sim.orbit import Orbit
+from game.ui import board, hud, menus, panels
 from game.ui.input import Input
 
 WEB = sys.platform == "emscripten"
@@ -71,7 +73,9 @@ class App:
         self.world = None
         self.selected = None
         self.shading = None
-        self.menu = None          # None, "build" or "research"
+        self.menu = None          # None, "build", "research" or "orbit"
+        self.targeting = False    # choosing where an orbital scan goes
+        self.last_tick_sound = 0.0
         self.menu_cursor = 0
         self.menu_rects = None    # (panel rect, row rects) from the last draw
         self.placing = None       # structure kind being placed
@@ -148,8 +152,9 @@ class App:
             return  # Space selects in menus
         if action == "quit":
             # Escape backs out of placement and menus first.
-            if self.placing or self.menu:
+            if self.placing or self.menu or self.targeting:
                 self.placing = self.menu = None
+                self.targeting = False
             elif not WEB:
                 self.running = False
         elif action == "toggle_glow":
@@ -160,7 +165,7 @@ class App:
             self.view = "survey" if self.view == "operations" else "operations"
         elif action == "new_site":
             now = time.perf_counter()
-            if self.world is None or now < self.confirm_new_until:
+            if self.world is None or self.world.outcome is not None or now < self.confirm_new_until:
                 self.start_site()
             else:
                 self.confirm_new_until = now + D.NEW_SITE_CONFIRM_S
@@ -187,10 +192,11 @@ class App:
         elif action == "icons":
             styles = D.ICON_STYLES
             entities.style = styles[(styles.index(entities.style) + 1) % len(styles)]
-        elif action in ("build", "research"):
+        elif action in ("build", "research", "orbit"):
             self.menu = None if self.menu == action else action
             self.menu_cursor = 0
             self.placing = None
+            self.targeting = False
         elif action == "priority":
             s = self._selected_structure()
             if s is not None and s.spec.get("draw_kw"):
@@ -212,6 +218,8 @@ class App:
         return None
 
     def _menu_entries(self):
+        if self.menu == "orbit":
+            return board.orbit_entries()
         return BUILD_MENU if self.menu == "build" else RESEARCH_MENU
 
     def _menu_choose(self, i):
@@ -219,7 +227,23 @@ class App:
         entries = self._menu_entries()
         if not 0 <= i < len(entries):
             return
-        if self.menu == "build":
+        if self.menu == "orbit":
+            kind, index = entries[i]
+            if kind == "supply":
+                ok, reason = world.order_supply(index)
+                self.audio.play("confirm" if ok else "error")
+                if not ok:
+                    world.event(f"{CT.SUPPLY[index]['name'].upper()}: {reason}", "alert")
+            elif not Orbit.overhead(world.time_s()):
+                self.audio.play("error")
+                world.event("ORBITAL SCAN: SHIP NOT OVERHEAD", "alert")
+            elif world.orbit.scan_used:
+                self.audio.play("error")
+                world.event("ORBITAL SCAN: ALREADY USED THIS PASS", "alert")
+            else:
+                self.targeting, self.menu = True, None
+                self.audio.play("confirm")
+        elif self.menu == "build":
             kind = entries[i]
             if world.unlocked(kind):
                 self.placing, self.menu = kind, None
@@ -289,6 +313,17 @@ class App:
                     if not ok:
                         world.event(reason, "alert")
         # Pointer.
+        if self.targeting:
+            if inp.click is not None:
+                x, y = self.camera.screen_to_world(*inp.click)
+                ok, reason = world.orbital_scan(x, y)
+                self.audio.play("order" if ok else "error")
+                if not ok:
+                    world.event(f"ORBITAL SCAN: {reason}", "alert")
+                self.targeting = False
+            if inp.right_click is not None:
+                self.targeting = False
+            return
         if self.placing:
             if inp.click is not None:
                 x, y = self.camera.screen_to_world(*inp.click)
@@ -367,6 +402,12 @@ class App:
             ghost = (self.placing, x, y, ok, reason, STRUCTURES[self.placing])
         self.segments += entities.draw_world(self.screen, world, cam, self._alpha(),
                                              time.perf_counter(), self.selected, ghost)
+        if self.targeting and self.input.mouse_inside:
+            mx, my = self.input.mouse
+            r = CT.SCAN_RADIUS_CELLS * cam.zoom
+            entities.G.dotted_circle(self.screen, D.COLOR_POWER, mx, my, r, D.DOT_SPACING_PX * 2)
+            board.draw_text(self.screen, "ORBITAL SCAN: SURVEYS AND FLAGS FIELDS IN THIS CIRCLE", (mx, my + 10), 1,
+                            D.COLOR_POWER, "center")
 
         cursor = None
         if self.input.mouse_inside:
@@ -380,6 +421,7 @@ class App:
             "show_stats": self.show_stats, "fps": self.clock.get_fps(),
             "frame_ms": self.frame_ms, "segments": self.segments, "glow": self.glow_on,
             "credits": world.credits, "scrap": world.stock("scrap"), "parts": world.stock("parts"),
+            "sinter": world.stock("sinter"), "reputation": world.contracts.reputation,
             "power": self._power_summary(), "time_s": world.time_s(),
             "paused": self.paused, "speed": W.SIM_SPEEDS[self.speed_index], "actual_speed": self.actual_speed,
             "research": (RESEARCH[world.research.current]["name"], world.research.progress())
@@ -387,12 +429,23 @@ class App:
             "events": [((world.tick_count - t) / world.tick_rate, text, kind) for t, text, kind in world.events],
             "hint": self._hint(),
         })
-        panels.draw_inspect(self.screen, world, self.selected, D.PANEL_TOP)
+        now = time.perf_counter()
+        board_bottom = board.draw_board(self.screen, world, now)
+        panels.draw_inspect(self.screen, world, self.selected, board_bottom + D.PANEL_GAP)
         self.menu_rects = None
         if self.menu == "build":
             self.menu_rects = menus.draw_build_menu(self.screen, world, D.HUD_MARGIN + 6, D.MENU_TOP, self.menu_cursor)
         elif self.menu == "research":
             self.menu_rects = menus.draw_research(self.screen, world, self.menu_cursor)
+        elif self.menu == "orbit":
+            self.menu_rects = board.draw_orbit_menu(self.screen, world, self.menu_cursor)
+        if world.outcome is not None:
+            board.draw_end(self.screen, world)
+        # A ticking clock while a contract is close to its deadline.
+        if (not self.paused and world.outcome is None and now - self.last_tick_sound >= 1.0
+                and any(board.contract_urgent(world, c) for c in world.contracts.open)):
+            self.last_tick_sound = now
+            self.audio.play("tick")
 
     def _sounds_for_events(self):
         """Chimes for new world events (the most important one per frame)."""
@@ -402,11 +455,17 @@ class App:
             return
         self.events_heard = world.event_count
         recent = list(world.events)[-min(new, len(world.events)):]
-        rank = ("alert", "field", "research", "complete", "rolled")
+        rank = ("won", "lost", "alert", "contract", "field", "static", "research", "complete", "offer", "rolled")
         best = None
         for _, text, kind in recent:
-            if kind == "alert":
-                name = "alert"
+            if kind == "won":
+                name = "won"
+            elif kind == "alert":
+                name = "lost" if text.startswith("REPUTATION GONE") else "alert"
+            elif kind == "contract":
+                name = "contract" if text.startswith("CONTRACT FILLED") else "offer"
+            elif kind == "orbit":
+                name = "static" if text.startswith("ORBITAL PASS") else "rolled"
             elif kind == "field":
                 name = "field"
             elif text.startswith("RESEARCH COMPLETE"):
@@ -427,6 +486,8 @@ class App:
         return (grid["supply"], grid["demand"]) if grid else (0.0, 0.0)
 
     def _hint(self):
+        if self.targeting:
+            return "ORBITAL SCAN:  CLICK THE MAP TO SCAN THERE  RIGHT CLICK/ESC CANCEL"
         if self.placing:
             return (f"PLACING {STRUCTURES[self.placing]['name'].upper()}:  CLICK TO PLACE  "
                     "SHIFT+CLICK PLACE MORE  RIGHT CLICK/ESC CANCEL")

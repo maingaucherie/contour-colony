@@ -1,6 +1,6 @@
 """Shared unit machinery: movement, wandering, battery, docking, orders.
 
-Each unit kind has a brain module (scavenger, constructor, surveyor) with:
+Each unit kind has a brain module (scavenger, constructor, surveyor, hauler) with:
   think(world, unit)        choose the next activity
   arrived(world, unit)      a MOVING unit reached the end of its path
   work_done(world, unit)    a WORKING unit's timer ran out

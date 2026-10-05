@@ -18,3 +18,15 @@ class ArchitectureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeyBindingTests(unittest.TestCase):
+    def test_every_one_shot_binding_is_a_trigger(self):
+        try:
+            import pygame  # noqa: F401
+        except ImportError:
+            self.skipTest("pygame not installed")
+        from game.content import display as D
+        from game.ui import input as I
+        held = {a for a in D.KEY_BINDINGS if a.startswith(("pan_", "zoom_"))}
+        self.assertEqual(set(D.KEY_BINDINGS) - held - set(I._TRIGGERS), set())

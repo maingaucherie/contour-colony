@@ -21,6 +21,9 @@ def _wave(x0, x1, y, amp, n=8):
     return [(x0 + (x1 - x0) * k / n, y + amp * math.sin(math.pi * k / 2)) for k in range(n + 1)]
 
 
+_GEAR = [(0.58 * math.cos(2 * math.pi * k / 20) * (1.0 if k % 4 < 2 else 0.72),
+          0.58 * math.sin(2 * math.pi * k / 20) * (1.0 if k % 4 < 2 else 0.72)) for k in range(21)]
+
 _LEG = 0.55
 _LANDER = [_poly(16, _LEG), _poly(8, 0.18)]
 for _a in (45, 135, 225, 315):
@@ -54,6 +57,12 @@ STRUCTURES = {
     "crusher": [_box(-0.85, -0.85, 0.85, 0.85), [(-0.7, 0.1), (-0.42, -0.25), (-0.14, 0.1), (0.14, -0.25), (0.42, 0.1), (0.7, -0.25)]],
     "ice_melter": [_poly(14, 0.95), _wave(-0.6, 0.6, -0.15, 0.15), _wave(-0.6, 0.6, 0.25, 0.15)],
     "sinter_kiln": [_box(-0.85, -0.85, 0.85, 0.85), [(-0.4, 0.45), (0.0, -0.45), (0.4, 0.45), (-0.4, 0.45)]],
+    # Tier 2: a cell with two electrodes; a furnace with a flame; a shop with a gear.
+    "electrolyzer": [_poly(6, 0.95), [(-0.35, -0.55), (-0.35, 0.55)], [(0.35, -0.55), (0.35, 0.55)],
+                     [(-0.5, -0.55), (-0.2, -0.55)], [(0.2, -0.55), (0.5, -0.55)]],
+    "reduction_furnace": [_box(-0.85, -0.85, 0.85, 0.85), _poly(12, 0.55),
+                          [(-0.25, 0.25), (-0.1, -0.1), (0.0, 0.1), (0.12, -0.3), (0.25, 0.25)]],
+    "machine_shop": [_box(-0.85, -0.85, 0.85, 0.85), _GEAR, _poly(8, 0.15)],
 }
 
 # Unit markers: outline (unit box) and where the heading tick starts and ends.
@@ -61,4 +70,5 @@ UNITS = {
     "scavenger": {"outline": _poly(10, 0.7), "tick": (0.7, 1.45)},
     "survey_rover": {"outline": _poly(4, 0.85), "tick": (0.85, 1.55)},
     "constructor": {"outline": _poly(4, 0.85, math.pi / 4), "tick": (0.6, 1.45)},
+    "hauler": {"outline": _poly(6, 0.85), "tick": (0.75, 1.5)},
 }

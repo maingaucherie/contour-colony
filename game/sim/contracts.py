@@ -1,8 +1,8 @@
 """Contracts, reputation and credits: the run's clock. Never imports pygame.
 
-Goods count as delivered when they reach the lander (its export bay): each
-tick, matching goods in the lander's storage go to the open contracts, oldest
-first. Filled on time pays credits and reputation; filled late (within the
+Goods count as delivered when a hauler brings them to the lander's export bay
+(they go straight to the open contracts, oldest first); goods already in the
+lander's hold ship too, except building materials (scrap, parts, sinter). Filled on time pays credits and reputation; filled late (within the
 grace period) pays credits only; past that the contract expires and costs
 reputation. Reputation also drains slowly. At zero the run is lost.
 """

@@ -52,6 +52,19 @@ def ping(freq, dur, volume, rate):
             for i in range(n)]
 
 
+def noise(dur, volume, rate, seed=7):
+    """Radio static: filtered noise with a crackly envelope (deterministic)."""
+    rng = random.Random(seed)
+    n = max(1, int(dur * rate))
+    out, prev = [], 0.0
+    for i in range(n):
+        prev = prev * 0.55 + rng.uniform(-1.0, 1.0) * 0.45
+        crackle = 0.6 + 0.4 * (rng.random() < 0.08)
+        fade = min(1.0, i / (0.02 * rate), (n - 1 - i) / (0.08 * rate))
+        out.append(prev * volume * crackle * fade)
+    return out
+
+
 def mix(parts, rate):
     """parts: [(start_s, samples)] -> one float list."""
     length = max(int(s * rate) + len(p) for s, p in parts)
@@ -72,6 +85,8 @@ def sfx(spec, rate):
             parts.append((start, sweep(*params, rate)))
         elif kind == "ping":
             parts.append((start, ping(*params, rate)))
+        elif kind == "noise":
+            parts.append((start, noise(*params, rate)))
     return mix(parts, rate)
 
 

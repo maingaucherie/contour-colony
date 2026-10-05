@@ -12,6 +12,7 @@ MASTER = 0.8
 #   tone  (freq_hz, dur_s, wave, volume)            wave: square, sine, triangle
 #   sweep (freq_from, freq_to, dur_s, wave, volume)
 #   ping  (freq_hz, dur_s, volume)                  sine with an exponential decay
+#   noise (dur_s, volume)                           radio static
 SFX = {
     "select":   [(0.00, "tone", (1320, 0.035, "square", 0.18))],
     "menu":     [(0.00, "tone", (880, 0.02, "square", 0.12))],
@@ -25,6 +26,14 @@ SFX = {
                  (0.36, "ping", (1046, 0.7, 0.25))],
     "field":    [(0.00, "ping", (1046, 0.9, 0.35)), (0.45, "ping", (1046, 0.7, 0.12))],
     "alert":    [(0.00, "tone", (440, 0.09, "square", 0.2)), (0.14, "tone", (440, 0.09, "square", 0.2))],
+    "contract": [(0.00, "ping", (784, 0.5, 0.3)), (0.10, "ping", (988, 0.5, 0.3)), (0.20, "ping", (1175, 0.6, 0.3)),
+                 (0.30, "ping", (1568, 0.9, 0.25))],
+    "offer":    [(0.00, "tone", (1175, 0.05, "square", 0.12)), (0.08, "tone", (1175, 0.05, "square", 0.12))],
+    "static":   [(0.00, "noise", (0.55, 0.35)), (0.05, "sweep", (2400, 900, 0.3, "sine", 0.06))],
+    "tick":     [(0.00, "tone", (2093, 0.012, "square", 0.08))],
+    "won":      [(0.00, "ping", (523, 0.6, 0.3)), (0.15, "ping", (659, 0.6, 0.3)), (0.30, "ping", (784, 0.6, 0.3)),
+                 (0.45, "ping", (1046, 1.2, 0.3)), (0.45, "ping", (523, 1.2, 0.2))],
+    "lost":     [(0.00, "sweep", (440, 110, 1.2, "triangle", 0.35))],
     "rolled":   [(0.00, "tone", (784, 0.04, "square", 0.14)), (0.06, "tone", (988, 0.04, "square", 0.14)),
                  (0.12, "tone", (1175, 0.06, "square", 0.14))],
 }

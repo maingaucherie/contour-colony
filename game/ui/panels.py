@@ -8,6 +8,7 @@ from game.content import units as U
 from game.content import world as W
 from game.content.items import ITEMS
 from game.render.hershey import draw_text, line_height
+from game.sim import production as P
 from game.sim import units as US
 from game.ui.menus import cost_text
 
@@ -32,6 +33,18 @@ ACTIVITY_LABELS = {
     "surveying": "DETAILED SURVEY",
     "to_order": "FOLLOWING ORDERS",
     "stranded": "STRANDED - BATTERY EMPTY",
+    "to_pickup": "DRIVING TO PICK UP",
+    "to_dropoff": "DELIVERING",
+    "holding cargo - nowhere to take it": "HOLDING CARGO - NOWHERE TO TAKE IT",
+    "to_park": "PARKING",
+}
+
+STATUS_LABELS = {
+    P.WORKING: ("WORKING", D.COLOR_FIELD),
+    P.STARVED: ("STARVED - WAITING FOR INPUTS", D.COLOR_ALERT),
+    P.BLOCKED: ("BLOCKED - OUTPUT FULL", D.COLOR_ALERT),
+    P.UNPOWERED: ("UNPOWERED", D.COLOR_ALERT),
+    P.IDLE: ("IDLE", D.COLOR_TEXT_DIM),
 }
 
 
@@ -63,6 +76,11 @@ def _unit_lines(world, unit):
     ]
     if unit.spec["cargo"]:
         lines.append((f"CARGO     {cargo}  (MAX {unit.spec['cargo']})", 1, D.COLOR_TEXT_DIM))
+    if unit.haul is not None:
+        src_id, dst_id, item, amount = unit.haul
+        src, dst = world.structures.get(src_id), world.structures.get(dst_id)
+        where = (f"{src.spec['name'].upper()} TO " if src else "TO ") + (dst.spec["name"].upper() if dst else "?")
+        lines.append((f"HAUL      {amount} {ITEMS[item]['name'].upper()}: {where}", 1, D.COLOR_TEXT_DIM))
     if unit.job is not None and unit.job in world.structures:
         lines.append((f"JOB       {world.structures[unit.job].spec['name'].upper()} SITE", 1, D.COLOR_TEXT_DIM))
     lines.append((f"BATTERY   {frac * 100:3.0f}% OF {cap:.0f}", 1, D.COLOR_TEXT_DIM, ("bar", frac)))
@@ -85,8 +103,11 @@ def _structure_lines(world, s):
         short = [k for k in need if world.stock(k) < need[k] and not s.incoming.get(k)]
         if short:
             lines.append(("WAITING FOR " + ", ".join(k.upper() for k in short) + " IN STORAGE", 1, D.COLOR_ALERT))
-        if not any(u.kind == "constructor" for u in world.units.values()):
+        builders = [u for u in world.units.values() if u.kind == "constructor"]
+        if not builders:
             lines.append(("NO CONSTRUCTOR ON SITE", 1, D.COLOR_ALERT))
+        elif not US.in_charger_range(world, builders[0], s.x, s.y):
+            lines.append(("OUT OF ROVER RANGE - BUILD A CHARGING PAD NEARER", 1, D.COLOR_ALERT))
         lines.append(("DEL: CANCEL (REFUNDS MATERIALS)", 1, D.COLOR_FLOW))
         return lines
 
@@ -108,20 +129,24 @@ def _structure_lines(world, s):
         lines.append((f"GRID      {grid['supply']:.1f} KW SUPPLY  {grid['demand']:.1f} KW DEMAND", 1, D.COLOR_TEXT_DIM))
     if spec.get("storage"):
         lines.append((f"STORAGE   {s.stored()}/{spec['storage']}", 1, D.COLOR_TEXT, ("bar", s.stored() / spec["storage"])))
-        for k, n in sorted(s.storage.items()):
-            lines.append((f"  {k.upper():8s}{n}", 1, D.COLOR_TEXT_DIM))
+        held = [f"{ITEMS[k]['name'].upper()} {n}" for k, n in sorted(s.storage.items())]
+        for i in range(0, len(held), 3):
+            lines.append(("  " + "   ".join(held[i:i + 3]), 1, D.COLOR_TEXT_DIM))
     if s.docks:
         used = sum(1 for u in s.dock_users if u is not None)
         what = "CHARGING DOCKS" if spec.get("charge_slots") else "UNLOADING DOCKS"
         lines.append((f"{what} {used}/{len(s.docks)} IN USE", 1, D.COLOR_TEXT_DIM))
-    if s.kind in ("ilmenite_mine", "ice_mine", "crusher", "ice_melter", "sinter_kiln"):
-        lines.append(("NOT PRODUCING YET: RECIPES AND HAULERS", 1, D.COLOR_ALERT))
-        lines.append(("ARRIVE WITH MILESTONE 4 (THE PRODUCTION CHAIN)", 1, D.COLOR_ALERT))
+    r = P.recipe(s)
+    if r:
+        lines.extend(_production_lines(world, s, r))
     if s.kind == "scanner":
         lines.append((f"RADAR     {spec['scan_radius_cells'] * world.heightmap.cell_m / 1000:.0f} KM RANGE, "
                       f"SWEEP EVERY {spec['sweep_period_s']:.0f} S", 1, D.COLOR_TEXT_DIM))
         lines.append((f"REVEALS DEBRIS; FLAGS FIELDS AFTER {W.FIELD_SIGNAL_PASSES} SWEEPS", 1, D.COLOR_TEXT_DIM))
     if s.kind == "lander":
+        lines.append(("EXPORT BAY: CONTRACT GOODS SHIP FROM HERE", 1, D.COLOR_TEXT_DIM))
+        if world.storage_full:
+            lines.append(("STORAGE FULL - BUILD A DEPOT", 1, D.COLOR_ALERT))
         price = ITEMS["scrap"]["sell_price"]
         lines.append((f"X  SELL {D.SELL_BATCH} SCRAP FOR {D.SELL_BATCH * price} CR", 1, D.COLOR_FLOW))
         lines.append(("SHIFT+X  SELL ALL SCRAP", 1, D.COLOR_FLOW))
@@ -138,6 +163,35 @@ def _structure_lines(world, s):
             if world.unlocked(kind):
                 lines.append((f"{i + 1}  {spec_u['name'].upper()}: {cost_text(spec_u['bay_cost'])}", 1, D.COLOR_FLOW))
     return lines
+
+
+def _amounts(d):
+    return " + ".join(f"{n} {ITEMS[k]['name'].upper()}" for k, n in d.items()) or "NOTHING"
+
+
+def _production_lines(world, s, r):
+    label, color = STATUS_LABELS.get(s.status, (s.status.upper(), D.COLOR_TEXT))
+    if s.status == P.STARVED:
+        short = [ITEMS[k]["name"].upper() for k, n in r["in"].items() if s.inputs.get(k, 0) < n]
+        label = "STARVED - NEEDS " + ", ".join(short)
+    out = [
+        (f"RECIPE    {_amounts(r['in'])} > {_amounts(r['out'])}", 1, D.COLOR_TEXT_DIM),
+        (f"          EVERY {P.cycle_time(s):.1f} S" + (f"  (FIELD RICHNESS {s.richness:.1f}X)"
+                                                        if s.spec.get("requires_field") else ""), 1, D.COLOR_TEXT_DIM),
+        (f"STATUS    {label}", 1, color, ("bar", P.progress(s))),
+    ]
+    for k, n in r["in"].items():
+        cap = P.input_cap(s, k)
+        out.append((f"  IN   {ITEMS[k]['name'].upper()}  {s.inputs.get(k, 0)}/{cap}", 1, D.COLOR_TEXT_DIM))
+    for k in r["out"]:
+        cap = P.output_cap(s, k)
+        out.append((f"  OUT  {ITEMS[k]['name'].upper()}  {s.outputs.get(k, 0)}/{cap}", 1, D.COLOR_TEXT_DIM))
+    out.append((f"CYCLES    {s.cycles}", 1, D.COLOR_TEXT_DIM))
+    if s.status == P.BLOCKED and world.storage_full:
+        out.append(("STORAGE FULL - BUILD A DEPOT OR USE THE OUTPUT", 1, D.COLOR_ALERT))
+    if not any(u.kind == "hauler" for u in world.units.values()):
+        out.append(("NO HAULERS: RESEARCH LOGISTICS I, BUILD AT A ROVER BAY", 1, D.COLOR_ALERT))
+    return out
 
 
 def draw_inspect(surface, world, selected, top):

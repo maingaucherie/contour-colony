@@ -80,6 +80,7 @@ KEY_BINDINGS = {
     "sound": ("m",),
     "research": ("r",),
     "priority": ("p",),
+    "orbit": ("o",),
     "cancel_site": ("delete", "backspace"),
     "quit": ("escape",),
 }
@@ -155,9 +156,29 @@ DASH_PX = 6
 GAP_PX = 4
 DOT_SPACING_PX = 5
 
+# Contracts board (top right) and the orbital pass timer under it.
+BOARD_WIDTH = 330
+PASS_ARC_RADIUS = 12
+ALERT_BLINK_HZ = 2.0
+REPUTATION_WARN = 20              # reputation shown in red below this
+ORBIT_MENU_WIDTH = 660
+ORBIT_COLUMNS = (130, 200)        # x offsets: cost, contents
+END_PANEL_SIZE = (440, 300)
+
+# Production gauges beside structures: one thin bar per buffer, shown once
+# the structure is at least GAUGE_MIN_HALF_PX on screen.
+GAUGE_MIN_HALF_PX = 7
+GAUGE_WIDTH_PX = 2
+GAUGE_GAP_PX = 2
+COLOR_STARVED = (255, 70, 60)     # status colours on the wireframe (red: starved or blocked)
+
+# Supply pods falling to the surface.
+POD_SIZE_PX = 5
+POD_FALL_PX = 60                  # a pod starts this far above its landing spot on screen
+
 # Panels.
 PANEL_WIDTH = 340
-PANEL_TOP = 100                   # below the stats block
+PANEL_GAP = 8                     # inspect panel sits this far under the contracts board
 MENU_WIDTH = 470                  # build menu, top left under the HUD
 MENU_TOP = 112
 MENU_COLUMNS = (22, 170)          # x offsets: name, cost

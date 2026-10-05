@@ -2,8 +2,9 @@
 and the fixed-step tick.
 
 Tick order follows the design: power -> production -> job board -> units ->
-wear -> contracts. Milestone 3 has power, production (research, rover bays),
-debris spawning and units; the rest arrive with later milestones.
+wear -> contracts. Production covers research, rover bays, scanners and
+recipes; the job board is consulted by haulers as they think; orbital passes
+run after production. Wear arrives with a later milestone.
 Commands (methods called by the UI between ticks) are the only way the
 player changes the world, so a replay of commands reproduces a run.
 """

@@ -4,7 +4,7 @@ import pygame
 
 from game.content import display as D
 from game.content import world as W
-from game.render.hershey import draw_text, line_height
+from game.render.hershey import draw_text, line_height, text_width
 
 M = D.HUD_MARGIN
 
@@ -46,12 +46,25 @@ def draw_running(surface, info):
     # Top left: site, economy, power, clock, research and view.
     draw_text(surface, f"SITE {info['seed']}", (M + 6, M + 4), 2)
     y = M + 4 + line_height(2) + 4
-    draw_text(surface, f"CREDITS {info['credits']}   SCRAP {info['scrap']}   PARTS {info['parts']}", (M + 6, y), 1)
+    rep = info["reputation"]
+    credits = f"CREDITS {info['credits']}"
+    draw_text(surface, credits, (M + 6, y), 1)
+    rep_color = D.COLOR_ALERT if rep < D.REPUTATION_WARN else D.COLOR_TEXT
+    rep_text = f"REPUTATION {rep:.0f}"
+    rx = M + 6 + max(110, text_width(credits) + 18)
+    draw_text(surface, rep_text, (rx, y), 1, rep_color)
+    bx, bw = rx + text_width(rep_text) + 8, 90
+    pygame.draw.rect(surface, D.COLOR_FRAME, (bx, y + 1, bw, 9), 1)
+    fill = int((bw - 4) * max(0.0, min(1.0, rep / 100.0)))
+    if fill:
+        pygame.draw.rect(surface, rep_color if rep < D.REPUTATION_WARN else D.COLOR_FIELD, (bx + 2, y + 3, fill, 5))
+    y += lh
+    stock = f"SCRAP {info['scrap']}   PARTS {info['parts']}   SINTER {info['sinter']}"
+    draw_text(surface, stock, (M + 6, y), 1, D.COLOR_TEXT_DIM)
     supply, demand = info["power"]
     spare = supply - demand
     text = f"POWER {spare:.0f} KW FREE OF {supply:.0f}" if spare >= 0 else f"POWER {-spare:.0f} KW SHORT"
-    draw_text(surface, text, (M + 6 + 330, y), 1, D.COLOR_ALERT if spare < 0 else D.COLOR_POWER)
-    y += lh
+    draw_text(surface, text, (M + 6 + text_width(stock) + 18, y), 1, D.COLOR_ALERT if spare < 0 else D.COLOR_POWER)
     t = int(info["time_s"])
     clock = f"T+{t // 3600:02d}:{t // 60 % 60:02d}:{t % 60:02d}"
     rate = "PAUSED" if info["paused"] else f"SPEED {info['speed']}X"
@@ -70,7 +83,8 @@ def draw_running(surface, info):
         if age_s > D.EVENT_SHOW_S:
             continue
         fade = 1.0 - age_s / D.EVENT_SHOW_S
-        base = {"alert": D.COLOR_ALERT, "field": D.COLOR_FIELD}.get(kind, D.COLOR_TEXT)
+        base = {"alert": D.COLOR_ALERT, "field": D.COLOR_FIELD, "contract": D.COLOR_FLOW,
+                "won": D.COLOR_FIELD, "orbit": D.COLOR_POWER}.get(kind, D.COLOR_TEXT)
         color = tuple(int(c * (0.35 + 0.65 * fade)) for c in base)
         draw_text(surface, "> " + text, (M + 6, ey), 1, color)
         ey -= lh
@@ -90,8 +104,8 @@ def draw_running(surface, info):
             kind, color = "CLIFF - IMPASSABLE", D.COLOR_ALERT
         draw_text(surface, f"X {x_km:5.1f} KM   Y {y_km:5.1f} KM   ELEV {elev:+6.0f} M   SLOPE {slope:4.1f} DEG  {kind}",
                   (M + 6, y), 1, color)
-    draw_text(surface, info.get("hint") or "B BUILD  R RESEARCH  CLICK SELECT  RIGHT CLICK ORDER  SPACE PAUSE"
-              "  ,/. SPEED  TAB VIEW  M SOUND  I ICONS", (M + 6, y + lh), 1, D.COLOR_TEXT_DIM)
+    draw_text(surface, info.get("hint") or "B BUILD  R RESEARCH  O ORBIT  CLICK SELECT  RIGHT CLICK ORDER"
+              "  SPACE PAUSE  ,/. SPEED  TAB VIEW  M SOUND  I ICONS", (M + 6, y + lh), 1, D.COLOR_TEXT_DIM)
 
     # Bottom right: scale bar.
     km_per_px = info["cell_m"] / 1000.0 / info["zoom"]
@@ -102,14 +116,8 @@ def draw_running(surface, info):
     pygame.draw.lines(surface, D.COLOR_TEXT, False, [(bx0, by - 5), (bx0, by), (bx1, by), (bx1, by - 5)])
     draw_text(surface, f"{km} KM", (bx1, by - 5 - lh), 1, align="right")
 
-    # Top right: performance stats.
+    # Bottom right, above the scale bar: performance stats (F to hide).
     if info["show_stats"]:
-        lines = (
-            f"FPS {info['fps']:5.1f}",
-            f"FRAME {info['frame_ms']:5.1f} MS",
-            f"SEGMENTS {info['segments']:5d}",
-            f"TIER {info['tier']}  ZOOM {info['zoom']:5.1f}",
-            f"GLOW {'ON' if info['glow'] else 'OFF'}",
-        )
-        for i, text in enumerate(lines):
-            draw_text(surface, text, (w - M - 6, M + 4 + i * lh), 1, D.COLOR_TEXT_DIM, "right")
+        text = (f"FPS {info['fps']:4.1f}  FRAME {info['frame_ms']:4.1f} MS  SEGMENTS {info['segments']}"
+                f"  TIER {info['tier']}  ZOOM {info['zoom']:4.1f}  GLOW {'ON' if info['glow'] else 'OFF'}")
+        draw_text(surface, text, (w - M - 6, by - 5 - 2 * lh), 1, D.COLOR_TEXT_DIM, "right")
