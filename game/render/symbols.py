@@ -65,10 +65,19 @@ STRUCTURES = {
     "machine_shop": [_box(-0.85, -0.85, 0.85, 0.85), _GEAR, _poly(8, 0.15)],
 }
 
-# Unit markers: outline (unit box) and where the heading tick starts and ends.
+# Unit markers: one silhouette per type, drawn facing +x and rotated to the
+# unit's heading. Blunt, boxy outlines with the "front" told by a feature
+# (scoop, cab, boom, dish) rather than a point, so nothing reads as a ship.
 UNITS = {
-    "scavenger": {"outline": _poly(10, 0.7), "tick": (0.7, 1.45)},
-    "survey_rover": {"outline": _poly(4, 0.85), "tick": (0.85, 1.55)},
-    "constructor": {"outline": _poly(4, 0.85, math.pi / 4), "tick": (0.6, 1.45)},
-    "hauler": {"outline": _poly(6, 0.85), "tick": (0.75, 1.5)},
+    # Squat body with a V-notched scoop at the front.
+    "scavenger": [[(-0.75, -0.55), (0.35, -0.55), (0.8, -0.3), (0.45, 0.0), (0.8, 0.3), (0.35, 0.55),
+                   (-0.75, 0.55), (-0.9, 0.0), (-0.75, -0.55)]],
+    # Long trailer box and a narrower cab ahead of it.
+    "hauler": [_box(-1.0, -0.5, 0.35, 0.5), [(0.35, -0.35), (0.85, -0.3), (0.95, 0.0), (0.85, 0.3), (0.35, 0.35)],
+               [(-0.35, -0.5), (-0.35, 0.5)]],
+    # Square chassis with a crane boom reaching forward.
+    "constructor": [_box(-0.7, -0.6, 0.4, 0.6), [(-0.2, 0.0), (1.0, 0.0)], [(0.85, -0.2), (1.0, 0.0), (0.85, 0.2)]],
+    # Rounded body with a sensor dish ring towards the front.
+    "survey_rover": [[(-0.85, -0.35), (-0.5, -0.6), (0.4, -0.6), (0.65, -0.3), (0.65, 0.3), (0.4, 0.6),
+                      (-0.5, 0.6), (-0.85, 0.35), (-0.85, -0.35)], _poly(8, 0.28, 0.0, 0.15, 0.0)],
 }

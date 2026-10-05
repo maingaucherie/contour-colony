@@ -81,6 +81,7 @@ KEY_BINDINGS = {
     "research": ("r",),
     "priority": ("p",),
     "orbit": ("o",),
+    "contracts": ("k",),
     "cancel_site": ("delete", "backspace"),
     "quit": ("escape",),
 }
@@ -107,7 +108,7 @@ ICON_STYLES = ("symbols", "pictorial")
 SYMBOL_STRUCTURE_SCALE = 1.0      # symbol radius = footprint radius x this
 SYMBOL_STRUCTURE_MIN_PX = 4
 UNIT_SYMBOL_CELLS = 0.55          # unit marker radius in cells ...
-UNIT_SYMBOL_PX = (5, 9)           # ... clamped to this pixel range
+UNIT_SYMBOL_PX = (6, 10)          # ... clamped to this pixel range
 CARGO_DOT_PX = 2
 SELECT_PICK_RADIUS_PX = 14
 CLICK_MAX_DRAG_PX = 5
@@ -126,9 +127,14 @@ COLOR_GHOST_OK = (200, 255, 210)
 COLOR_GRID_LINK = (170, 115, 30)  # dim amber
 UNPOWERED_FLICKER = (0.25, 0.55)  # brightness range of an unpowered structure
 FIELD_HINT_FLICKER_HZ = 3.0
-SCAN_BEAM_TRAIL = 4               # faint copies of the radar beam behind it
-SCAN_BEAM_TRAIL_STEP = 0.025      # radians between them
-COLOR_SCAN = (40, 120, 60)        # dim green: a quiet, map-wide sweep
+SCAN_BEAM_TRAIL = 3               # faint copies of the radar beam behind it
+SCAN_BEAM_TRAIL_STEP = 0.02       # radians between them
+COLOR_TRACK = (72, 66, 54)        # worn tracks: dusty, below everything else
+TRACK_MIN_BRIGHTNESS = 0.3
+TRACK_REFRESH_TICKS = 50          # rebuild the visible track list this often (sim ticks)
+TRACK_TWIN_ZOOM = 10.0            # from this zoom, tracks show as two tread lines
+TRACK_TWIN_GAP_CELLS = 0.18
+COLOR_SCAN = (22, 64, 36)         # very dim green: a quiet sweep across the whole map
 FIELD_LONG_DASH_PX = 10
 FIELD_GAP_PX = 4
 
@@ -174,7 +180,22 @@ COLOR_STARVED = (255, 70, 60)     # status colours on the wireframe (red: starve
 
 # Supply pods falling to the surface.
 POD_SIZE_PX = 5
-POD_FALL_PX = 60                  # a pod starts this far above its landing spot on screen
+POD_FALL_PX = 180                 # a pod starts this far above its landing spot on screen
+POD_TRAIL_STEPS = 8
+POD_TRAIL_STEP_PX = 12
+POD_RETRO_FRACTION = 0.25         # retro-rockets fire for the last quarter of the fall
+POD_FLARE_PX = 9
+POD_DUST_RADIUS_PX = 40
+
+# Landing intro (real seconds and screen pixels).
+INTRO_DESCENT_S = 4.0
+INTRO_LANDER_START_PX = 260       # the lander starts this far above its spot
+INTRO_PLUME_PX = 26
+INTRO_DUST_S = 2.0
+INTRO_DUST_RADIUS_PX = 90
+INTRO_TEXT_DELAY_S = 0.6
+INTRO_CHARS_PER_S = 70
+INTRO_PANEL_WIDTH = 520
 
 # Panels.
 PANEL_WIDTH = 340

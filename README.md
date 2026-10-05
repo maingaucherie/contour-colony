@@ -31,6 +31,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | --- | --- |
 | B | Build menu: Up/Down (or W/S) + Enter, click a row, or press 1-0; then click to place (Shift+click places more), right click or Esc cancels |
 | R | Research panel: Up/Down + Enter or click a row to start a project |
+| K | Contract offers: accept one (or click an offer on the board) |
 | O | Orbit and market: order supply drops (crates or ready-built units, land during the next pass), aim the free orbital scan while the ship is overhead, or sell 10 of any stored good |
 | Left click | Select a unit or structure (inspect panel) |
 | Right click | Order the selected unit: go there, or for a survey rover, survey there |
@@ -43,16 +44,19 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | Mouse wheel, Q / E | Zoom |
 | Space, `,` / `.` | Pause, slower / faster (1x up to 64x for testing; the HUD shows the speed actually managed) |
 | Tab or V | Operations / survey view |
-| G, F | Glow, performance stats |
+| G, F | Glow, performance stats (off by default) |
 | M | Sound: all, effects only, off |
 | I | Icons: console symbols or pictorial rovers and structures |
 | N twice | Abandon the site and generate a new one (once, after a site ends) |
 | Esc | Close menus (desktop: quit when nothing is open) |
 
-How a site goes: contracts (top right) ask for goods by a deadline. Goods
-count when a hauler brings them to the lander's export bay. Filled on time
-pays credits and +10 reputation, late pays credits only, expired costs 15
-reputation, and reputation also drains slowly after the first ten minutes.
+How a site goes: the landing briefing names the body you're on and lets you
+pick the pace (P). In calm mode (the default) contracts arrive as offers on
+the board (top right): click one, or press K, to accept it, and its clock
+starts then. Goods count when a hauler brings them to the lander's export
+bay. Filled on time pays credits and +10 reputation, late pays credits only,
+expired costs 15 reputation. Pressure mode assigns contracts outright and
+drains reputation slowly after the first fifteen minutes.
 
 A first plan: build a scanner (its radar reveals debris for the scavengers and,
 after three sweeps, flags fields as "SIGNAL?"), research Field Survey and
@@ -69,8 +73,7 @@ may fill more than 30% of it (scrap 60%), so a surplus backs up at its
 producer instead of clogging the colony; sell surplus from the orbit menu.
 Scrap that doesn't fit is sold on arrival, and hydrogen and oxygen are vented
 when nothing takes them. The HUD shows colony storage and whether loads are
-waiting for haulers. The first contract arrives five minutes in, and
-reputation only starts draining after fifteen.
+waiting for haulers.
 
 If the game crashes at startup, try `python main.py --no-scale` (a plain
 960x540 window without SDL's SCALED mode), then run

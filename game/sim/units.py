@@ -458,6 +458,7 @@ def update(world, unit):
         pass
     elif state == MOVING:
         arrived = _move(world, unit)
+        world.tracks.drive(unit.x, unit.y, unit.heading)
         spotted = world.reveal_debris(unit.x, unit.y, unit.spec.get("sight_cells", 0.0))
         if hasattr(b, "on_move"):
             b.on_move(world, unit)

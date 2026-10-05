@@ -195,7 +195,7 @@ def _production_lines(world, s, r):
     if s.status == P.BLOCKED:
         capped = [ITEMS[k]["name"].upper() for k in r["out"] if world.stock(k) >= world.item_cap(k)]
         if capped:
-            out.append(("COLONY HOLDS ITS CAP OF " + ", ".join(capped) + ": USE OR SELL (O)", 1, D.COLOR_ALERT))
+            out.append((", ".join(capped) + " AT COLONY CAP: USE OR SELL (O)", 1, D.COLOR_ALERT))
         elif world.storage_full:
             out.append(("STORAGE FULL - BUILD A DEPOT OR SELL (O)", 1, D.COLOR_ALERT))
         else:

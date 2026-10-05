@@ -1,7 +1,7 @@
 """Headless autoplayer: plays a site with a simple build order, for balance
 runs and the Milestone 4 exit test (a site can be won, and lost).
 
-    python tools/autoplay.py --seed 3 [--minutes 70] [--neglect] [--quiet]
+    python tools/autoplay.py --seed 3 [--minutes 70] [--neglect] [--quiet] [--mode pressure]
 
 The bot only uses the same commands the UI does (place, research, order unit,
 order supply, sell scrap, orbital scan), once per simulated second.
@@ -280,7 +280,14 @@ class Bot:
         if best:
             w.orbital_scan(*best)
 
+    def contracts(self):
+        """Calm mode: take every offer while there's room (the bot isn't picky)."""
+        for c in list(self.w.contracts.offers):
+            if self.w.accept_contract(c.id)[0]:
+                self.log(f"accept {c.qty} {c.good}")
+
     def step(self):
+        self.contracts()
         self.research()
         self.build()
         self.units_order()
@@ -288,9 +295,9 @@ class Bot:
         self.scan()
 
 
-def make(seed):
+def make(seed, mode=CT.DEFAULT_MODE):
     hm = run_to_completion(generate_terrain(seed))
-    return run_to_completion(build_world(seed, hm))
+    return run_to_completion(build_world(seed, hm, mode))
 
 
 def play(world, minutes, neglect=False, log=None, report_every_s=300):
@@ -327,9 +334,10 @@ def main():
     ap.add_argument("--minutes", type=float, default=75)
     ap.add_argument("--neglect", action="store_true")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--mode", choices=sorted(CT.MODES), default=CT.DEFAULT_MODE)
     args = ap.parse_args()
     t0 = time.time()
-    w = make(args.seed)
+    w = make(args.seed, args.mode)
 
     def log(text):
         if not args.quiet:

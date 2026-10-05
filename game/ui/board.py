@@ -33,8 +33,9 @@ def contract_urgent(world, c):
     return c.late or c.deadline_s - now <= C.WARN_S
 
 
-def draw_board(surface, world, now_s):
-    """Contracts (top right) and the pass timer under them. Returns the bottom y."""
+def draw_board(surface, world, now_s, mouse=None):
+    """Contracts and offers (top right) and the pass timer under them.
+    Returns (bottom y, [(rect, offer id)]) so offers can be clicked."""
     w = surface.get_width()
     lh = D.HUD_LINE_HEIGHT
     bw = D.BOARD_WIDTH
@@ -42,12 +43,13 @@ def draw_board(surface, world, now_s):
     y = M + 4
     t = world.time_s()
     cs = world.contracts
-    draw_text(surface, "CONTRACTS", (x, y), 1, D.COLOR_TEXT)
+    draw_text(surface, "CONTRACTS" + ("" if cs.mode["accept_offers"] else "  (PRESSURE)"), (x, y), 1, D.COLOR_TEXT)
     draw_text(surface, f"FILLED {cs.filled}  EXPIRED {cs.expired}", (x + bw, y), 1, D.COLOR_TEXT_DIM, "right")
     y += lh + 2
-    if not cs.open:
+    if not cs.open and not cs.offers:
         first = cs.filled == 0 and cs.expired == 0
-        label = "FIRST CONTRACT IN" if first else "NO OPEN CONTRACTS - NEXT OFFER IN"
+        noun = "OFFER" if cs.mode["accept_offers"] else "CONTRACT"
+        label = f"FIRST {noun} IN" if first else f"NEXT {noun} IN"
         draw_text(surface, f"{label} {clock(cs.next_offer_s - t)}", (x, y), 1, D.COLOR_TEXT_DIM)
         y += lh
     for c in sorted(cs.open, key=lambda c: c.deadline_s):
@@ -74,12 +76,27 @@ def draw_board(surface, world, now_s):
             dx = x + 2 + int((bw - 4) * c.delivered / c.qty)
             pygame.draw.line(surface, D.COLOR_TEXT, (dx, y - 2), (dx, y + 7))
         y += 11
+    rects = []
+    full = sum(1 for c in cs.open if not c.standing) >= C.MAX_OPEN
+    for c in cs.offers:
+        rect = pygame.Rect(x - 4, y - 3, bw + 8, lh + 2)
+        hover = mouse is not None and rect.collidepoint(mouse) and not full
+        if hover:
+            pygame.draw.rect(surface, D.COLOR_MENU_CURSOR, rect)
+        pygame.draw.rect(surface, D.COLOR_FLOW if not full else D.COLOR_FRAME, rect, 1)
+        name = ITEMS[c.good]["name"].upper()
+        draw_text(surface, f"{c.qty} {name}  {int(c.minutes)} MIN  {c.payout()} CR", (x, y), 1,
+                  D.COLOR_TEXT if not full else D.COLOR_TEXT_DIM, additive=True)
+        draw_text(surface, ("FULL" if full else "ACCEPT"), (x + bw, y), 1,
+                  D.COLOR_FLOW if not full else D.COLOR_TEXT_DIM, "right", additive=True)
+        rects.append((rect, c.id))
+        y += lh + 5
     if cs.standing_streak and any(c.standing for c in cs.open):
         draw_text(surface, f"STANDING STREAK {cs.standing_streak}/{C.STANDING_WINS} - NO SUPPLY DROPS",
                   (x, y), 1, D.COLOR_FLOW)
         y += lh
     y += 4
-    return draw_pass_timer(surface, world, x, y, bw)
+    return draw_pass_timer(surface, world, x, y, bw), rects
 
 
 def draw_pass_timer(surface, world, x, y, bw):
@@ -118,6 +135,28 @@ def draw_pass_timer(surface, world, x, y, bw):
 
 
 # Orbit menu ---------------------------------------------------------------------
+
+def offer_lines(world):
+    """Rows of the contracts menu (K): the open offers, to accept."""
+    lines = []
+    for c in world.contracts.offers:
+        name = ITEMS[c.good]["name"].upper()
+        lines.append(([(0, f"ACCEPT {c.qty} {name}"), (D.ORBIT_COLUMNS[1] + 60, f"{int(c.minutes)} MIN"),
+                       (D.ORBIT_COLUMNS[1] + 140, f"{c.payout()} CR")], D.COLOR_TEXT))
+    return lines
+
+
+def draw_contracts_menu(surface, world, cursor=None):
+    lines = offer_lines(world)
+    n = len(lines)
+    if not n:
+        lines.append(("NO OFFERS RIGHT NOW", D.COLOR_TEXT_DIM))
+    lines.append(("", D.COLOR_TEXT_DIM))
+    lines.append((f"UP TO {C.MAX_OPEN} CONTRACTS AT ONCE. THE CLOCK STARTS WHEN YOU ACCEPT.", D.COLOR_TEXT_DIM))
+    lines.append(("YOU CAN ALSO CLICK AN OFFER ON THE BOARD.   ESC: CLOSE", D.COLOR_TEXT_DIM))
+    w = D.ORBIT_MENU_WIDTH
+    return _panel(surface, (surface.get_width() - w) // 2, D.RESEARCH_TOP, w, lines, "CONTRACT OFFERS", cursor, n)
+
 
 def orbit_entries(world):
     """Rows of the orbit menu: every supply crate or unit, the scan, then a

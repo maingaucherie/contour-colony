@@ -123,9 +123,10 @@ class ChainRunTests(unittest.TestCase):
 class ContractTests(unittest.TestCase):
     def test_offer_fill_and_expire(self):
         w = make_world(2)
+        w.contracts.set_mode("pressure")
         while not w.contracts.open:
             w.tick()
-        self.assertAlmostEqual(w.time_s(), C.FIRST_CONTRACT_S, delta=0.2)
+        self.assertAlmostEqual(w.time_s(), C.MODES["pressure"]["first_contract_s"], delta=0.2)
         c = w.contracts.open[0]
         credits, rep = w.credits, w.contracts.reputation
         # Haulers delivering to the lander's export bay fill it.
@@ -158,6 +159,7 @@ class ContractTests(unittest.TestCase):
 
     def test_neglect_loses_and_stops_the_clock(self):
         w = make_world(3)
+        w.contracts.set_mode("pressure")
         for _ in range(minutes(60)):
             w.tick()
             if w.outcome:
@@ -239,7 +241,7 @@ class ExitTests(unittest.TestCase):
         self.assertEqual(w.outcome, "won", autoplay.status(w))
 
     def test_a_neglected_site_is_lost(self):
-        w = autoplay.make(5)
+        w = autoplay.make(5, "pressure")   # calm sites can only be lost on accepted contracts
         autoplay.play(w, 80, neglect=True)
         self.assertEqual(w.outcome, "lost")
 
@@ -342,7 +344,31 @@ class SurveyPastCliffsTests(unittest.TestCase):
 class StartTests(unittest.TestCase):
     def test_quiet_start(self):
         w = make_world(1)
-        for _ in range(int((C.FIRST_CONTRACT_S - 1) * W.TICK_RATE)):
+        w.contracts.set_mode("pressure")
+        for _ in range(int((C.MODES["pressure"]["first_contract_s"] - 1) * W.TICK_RATE)):
             w.tick()
         self.assertEqual(w.contracts.open, [])
         self.assertEqual(w.contracts.reputation, C.REPUTATION_START)
+
+
+class CalmModeTests(unittest.TestCase):
+    def test_offers_wait_for_acceptance_and_never_drain(self):
+        w = make_world(2)
+        self.assertEqual(w.contracts.mode["name"], "calm")
+        while not w.contracts.offers:
+            w.tick()
+        self.assertEqual(w.contracts.open, [])
+        offer = w.contracts.offers[0]
+        # Unaccepted, the clock doesn't run: nothing expires, reputation holds.
+        for _ in range(minutes(30)):
+            w.tick()
+        self.assertEqual(w.contracts.expired, 0)
+        self.assertEqual(w.contracts.reputation, C.REPUTATION_START)
+        self.assertNotIn(offer, w.contracts.offers)        # withdrawn after its window
+        while not w.contracts.offers:
+            w.tick()
+        offer = w.contracts.offers[0]
+        self.assertTrue(w.accept_contract(offer.id)[0])
+        self.assertIn(offer, w.contracts.open)
+        self.assertAlmostEqual(offer.deadline_s - w.time_s(), offer.minutes * 60, delta=0.2)
+        self.assertFalse(w.accept_contract(offer.id)[0])

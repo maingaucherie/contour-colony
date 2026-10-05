@@ -102,6 +102,16 @@ ITEM_CAP_MIN = 30
 SPOT_PRICE_FRACTION = 0.3
 SELL_EVENT_EVERY = 10                # report automatic scrap sales in batches of this many
 
+# Worn tracks (drawn on frequently driven ground). Wear is one point per tick
+# a unit spends driving in a TRACK_CELLS square: one pass is about 7 points.
+TRACK_CELLS = 2
+TRACK_SHOW_WEAR = 60                 # about eight passes before a track shows ...
+TRACK_FULL_WEAR = 300                # ... and this much for full strength
+TRACK_WEAR_MAX = 600
+TRACK_FADE_EVERY_S = 30
+TRACK_FADE = 0.95                    # wear kept per fade: an unused track fades over ~20 minutes
+TRACK_FORGET = 5.0
+
 # Storage warning: checked every STORAGE_CHECK_S; warns once it passes this fraction.
 STORAGE_CHECK_S = 5
 STORAGE_FULL_FRACTION = 0.95

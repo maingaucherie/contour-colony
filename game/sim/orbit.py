@@ -27,6 +27,7 @@ class Orbit:
         self.was_overhead = False
         self.scan_used = False
         self.orders = 0
+        self.landed = []       # (x, y, time) of recent landings, for the dust ring
 
     @staticmethod
     def overhead(now):
@@ -89,6 +90,8 @@ class Orbit:
             if now >= pod.land_s:
                 self.falling.remove(pod)
                 self._land(world, pod)
+                self.landed.append((pod.x, pod.y, now))
+        self.landed = [d for d in self.landed if now - d[2] < C.DUST_S]
 
     def _land(self, world, pod):
         entry = pod.item

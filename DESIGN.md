@@ -82,13 +82,15 @@ A run is one site, 40–60 minutes long, driven by a sequence of consortium cont
 
 **Contracts.** At most 3 are open at once. Each names a good, a quantity and a deadline, e.g. "40 iron ingots in 6 minutes". Goods count as delivered when they reach the lander's export bay. Contracts escalate from raw-ish goods (iron) to manufactured ones (machine parts, fuel cells).
 
+**Pace (decided by playtest).** Two modes, chosen on the landing briefing. *Calm* (default): contracts arrive as offers on the board; the player accepts the ones they want (click, or K), the clock starts on acceptance, an offer nobody takes is withdrawn without penalty, and reputation never drains, so only accepted contracts can cost reputation. *Pressure*: contracts are assigned at once and reputation drains after a 15-minute grace, as originally written. The game should feel zen first; pressure is opt-in.
+
 | Outcome | Effect |
 | --- | --- |
 | Filled on time | Credits plus reputation (+10) |
 | Filled late | Credits only |
 | Expired | Reputation −15 |
 
-**Reputation** (0–100, starts at 50) is the run's clock and fail state. It also drains slowly (−1 per minute) to keep pressure on. At 0, the consortium pulls the plug and the run is lost.
+**Reputation** (0–100, starts at 50) is the run's clock and fail state. In pressure mode it also drains slowly (−1 per minute) to keep pressure on. At 0, the consortium pulls the plug and the run is lost.
 
 **Credits** pay for research, supply drops and site improvements. Scavenged debris can be sold for a trickle of credits, which pairs with the scavengers to prevent a hard stall.
 
@@ -365,11 +367,28 @@ Seven milestones; each ends playable and is checked in a pygbag browser build. M
 
 **Tests to write as you go:** item conservation (no items created or destroyed outside recipes), job reservations (no double-claims), power allocation by priority, unit battery returns home before dying, deterministic replay (same seed and inputs produce the same state after 5,000 ticks).
 
+## Changes from playtesting
+
+Decisions made while playtesting Milestones 2–4, recorded here so this document stays the source of truth.
+
+- **Finding things.** Debris is hidden until something sees it: scavengers (short sight), survey rovers (wider), the lander, and the **scanner**, a powered structure whose slow, faint radar sweep reaches most of the map. Fields are never found by ground units: the scanner flags a field after three sweeps (or an orbital scan does), then a survey rover confirms it with a detailed survey. Parts of a field behind cliffs are surveyed from the nearest reachable spot; a field whose remaining ground is unreachable counts as fully surveyed.
+- **Storage is one colony-wide pool** (the lander plus depots). No single good may fill more than 30% of it (scrap 60%); haulers stop adding a good at its cap, so the producer backs up instead of the colony clogging. Scrap that doesn't fit is sold on arrival. Hydrogen and oxygen are vented when nothing takes them. Every good can be sold on the market (orbit menu) at 30% of its contract value; scrap at 2 credits. Input buffers hold at least a full hauler load (10).
+- **Range.** Units top up at chargers on the way to jobs beyond one battery's reach, hopping charger to charger; charging pads are how the colony reaches far fields. Idle units give their dock back, and units without cargo prefer charging pads to the lander's docks.
+- **Feel.** Units are distinct top-down silhouettes that turn with their heading (no ship-like arrows); frequently driven ground wears visible tracks that fade when unused; the landing opens with the lander coming down and a briefing on the body (a generated moon, dwarf planet or asteroid); drop pods fall with a trail, retro flare and dust ring.
+- **Starting kit.** 300 credits, 100 scrap, 40 parts (the scrap trickle alone can't pay for the opening).
+
+## Later: touch screens and teaching
+
+Not built yet, kept in mind:
+
+- **Touch.** Every action is a named action (`App._do`), so a touch toolbar can send the same ones keys do. New UI must be reachable by tap (board offers and menu rows are clickable). Still needed: on-screen buttons for build, research, contracts, orbit, pause and speed; long-press instead of right-click for orders; pinch to zoom and drag to pan; larger hit areas; no hover-only information.
+- **Teaching.** The project should stay readable enough to rebuild from scratch as a Python course: plain data in `game/content`, a pygame-free simulation in `game/sim`, small modules with a docstring saying what each does and why, and tests that show each rule in isolation.
+
 ## Open questions
 
 These are deliberately unresolved; decide them by playtesting, not up front.
 
-- [ ] Is the reputation drain (−1/min) plus contract deadlines too stressful for a systems game? Alternative: no drain, only contract penalties.
+- [x] Is the reputation drain (−1/min) plus contract deadlines too stressful for a systems game? Yes: calm mode (offers you accept, no drain) is the default; the drain lives on in pressure mode.
 - [ ] Should orbital passes also gate direct unit orders (comms only while overhead)? More flavor, but possibly just frustrating.
 - [ ] Do conveyors need splitters/mergers, or is one-to-one enough? Start with one-to-one.
 - [ ] Day/night and batteries: worth adding in Milestone 6, or keep power static?

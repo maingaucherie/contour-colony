@@ -15,6 +15,7 @@ from game.sim import units as US
 
 _facing = {}  # unit id -> +1 / -1, with a deadband so rovers don't flip-flop
 style = D.ICON_STYLES[0]  # set by the app
+lander_lift = 0.0         # pixels above its spot, while it lands in the intro (set by the app)
 
 
 def interp(unit, alpha):
@@ -49,14 +50,16 @@ def unit_half_px(zoom):
 
 
 def _draw_unit_symbol(surface, color, unit, sx, sy, half, carrying):
-    spec = SYM.UNITS[unit.kind]
-    pygame.draw.aalines(surface, color, False, [(sx + x * half, sy + y * half) for x, y in spec["outline"]])
-    r0, r1 = spec["tick"]
-    c, s = math.cos(unit.vis_heading), math.sin(unit.vis_heading)
-    pygame.draw.aaline(surface, color, (sx + c * r0 * half, sy + s * r0 * half), (sx + c * r1 * half, sy + s * r1 * half))
+    """The unit's silhouette, rotated to where it's heading."""
+    c, s = math.cos(unit.vis_heading) * half, math.sin(unit.vis_heading) * half
+    n = 0
+    for line in SYM.UNITS[unit.kind]:
+        pygame.draw.aalines(surface, color, False, [(sx + x * c - y * s, sy + x * s + y * c) for x, y in line])
+        n += len(line) - 1
     if carrying:
-        pygame.draw.circle(surface, D.COLOR_FLOW, (int(sx), int(sy)), D.CARGO_DOT_PX)
-    return len(spec["outline"])
+        bx, by = -0.3, 0.0  # cargo shown in the middle of the body
+        pygame.draw.circle(surface, D.COLOR_FLOW, (int(sx + bx * c), int(sy + bx * s)), D.CARGO_DOT_PX)
+    return n
 
 
 def _flicker(now_s, key):
@@ -103,6 +106,38 @@ def draw_fields(surface, world, camera, now_s):
             draw_text(surface, label, (sx, sy - 6), 1, color, "center", additive=True)
 
 
+_tracks_cache = {"key": None, "items": []}
+
+
+def draw_tracks(surface, world, camera):
+    """Worn tracks: short tread marks along the usual direction of travel."""
+    t = world.tracks
+    key = (id(t), t.version, world.tick_count // D.TRACK_REFRESH_TICKS)
+    if _tracks_cache["key"] != key:
+        _tracks_cache["key"], _tracks_cache["items"] = key, t.visible()
+    w, h = surface.get_size()
+    z = camera.zoom
+    half = t.res * z * 0.55
+    twin = z >= D.TRACK_TWIN_ZOOM
+    gap = D.TRACK_TWIN_GAP_CELLS * z
+    n = 0
+    for x, y, a, k in _tracks_cache["items"]:
+        sx, sy = camera.world_to_screen(x, y)
+        if not _on_screen(sx, sy, half, w, h):
+            continue
+        color = _scale(D.COLOR_TRACK, D.TRACK_MIN_BRIGHTNESS + (1 - D.TRACK_MIN_BRIGHTNESS) * k)
+        dx, dy = math.cos(a) * half, math.sin(a) * half
+        if twin:
+            ox, oy = -math.sin(a) * gap, math.cos(a) * gap
+            pygame.draw.line(surface, color, (sx - dx + ox, sy - dy + oy), (sx + dx + ox, sy + dy + oy))
+            pygame.draw.line(surface, color, (sx - dx - ox, sy - dy - oy), (sx + dx - ox, sy + dy - oy))
+            n += 2
+        else:
+            pygame.draw.line(surface, color, (sx - dx, sy - dy), (sx + dx, sy + dy))
+            n += 1
+    return n
+
+
 def draw_grid_links(surface, world, camera):
     to_screen = camera.world_to_screen
     for s in world.structures.values():
@@ -114,6 +149,8 @@ def draw_grid_links(surface, world, camera):
 def _draw_structure(surface, world, s, camera, now_s, selected):
     w, h = surface.get_size()
     sx, sy = camera.world_to_screen(s.x, s.y)
+    if s is world.lander:
+        sy -= lander_lift
     half = structure_half_px(s.spec, camera.zoom, s.kind == "lander")
     if not _on_screen(sx, sy, half * 2, w, h):
         return 0
@@ -160,25 +197,49 @@ def _draw_gauges(surface, s, r, sx, sy, half):
 
 
 def draw_pods(surface, world, camera):
-    """Supply pods on their way down: a marker sliding to its landing ring."""
+    """Supply pods coming down: a capsule falling out of the sky on a fading
+    trail, a retro-rocket flare just before touchdown, then a dust ring."""
     now = world.time_s()
     n = 0
     for pod in world.orbit.falling:
-        k = max(0.0, min(1.0, (pod.land_s - now) / CT.DROP_FALL_S))
+        k = max(0.0, min(1.0, (pod.land_s - now) / CT.DROP_FALL_S))   # 1 at the top, 0 on the ground
         gx, gy = camera.world_to_screen(pod.x, pod.y)
-        px, py = gx, gy - k * D.POD_FALL_PX
-        G.dotted_circle(surface, D.COLOR_POWER, gx, gy, D.POD_SIZE_PX + 6 * k, D.DOT_SPACING_PX)
-        G.dotted(surface, D.COLOR_POWER, (px, py), (gx, gy), D.DOT_SPACING_PX)
+        drop = k * k * D.POD_FALL_PX          # slows as the retros fire
+        px, py = gx, gy - drop
+        # Trail back up toward orbit, fading.
+        for i in range(D.POD_TRAIL_STEPS):
+            a, b = py - i * D.POD_TRAIL_STEP_PX, py - (i + 1) * D.POD_TRAIL_STEP_PX
+            if b < 0:
+                break
+            pygame.draw.line(surface, _scale(D.COLOR_POWER, 0.5 * (1 - i / D.POD_TRAIL_STEPS)), (px, a), (px, b))
+            n += 1
+        # Landing marker on the ground.
+        G.dotted_circle(surface, _scale(D.COLOR_POWER, 0.6), gx, gy, D.POD_SIZE_PX + 3, D.DOT_SPACING_PX)
+        # Retro flare in the last moments.
+        if k < D.POD_RETRO_FRACTION:
+            flare = D.POD_FLARE_PX * (0.6 + 0.4 * math.sin(now * 40))
+            for dx in (-0.35, 0.0, 0.35):
+                pygame.draw.aaline(surface, D.COLOR_SELECT, (px + dx * 6, py + D.POD_SIZE_PX),
+                                   (px + dx * 10, py + D.POD_SIZE_PX + flare))
+            n += 3
         r = D.POD_SIZE_PX
-        pygame.draw.aalines(surface, D.COLOR_POWER, True, [(px, py - r), (px + r, py), (px, py + r), (px - r, py)])
-        n += 5
+        pygame.draw.aalines(surface, D.COLOR_POWER, True,
+                            [(px - r * 0.6, py - r), (px + r * 0.6, py - r), (px + r, py + r * 0.6), (px - r, py + r * 0.6)])
+        n += 4
+    for x, y, t in world.orbit.landed:
+        k = (now - t) / CT.DUST_S
+        gx, gy = camera.world_to_screen(x, y)
+        G.dotted_circle(surface, _scale(D.COLOR_DEBRIS, 1 - k), gx, gy, 4 + k * D.POD_DUST_RADIUS_PX, D.DOT_SPACING_PX)
+        n += 6
     return n
 
 
 def _draw_scan_beam(surface, s, camera):
-    """Radar sweep: a faint beam with a short fading trail."""
+    """Radar sweep: a faint beam with a short fading trail, long enough to
+    cross the whole map (the scanner's detection range is separate)."""
     sx, sy = camera.world_to_screen(s.x, s.y)
-    r = s.spec["scan_radius_cells"] * camera.zoom
+    e = camera.extent
+    r = max(math.hypot(cx - s.x, cy - s.y) for cx in (0, e) for cy in (0, e)) * camera.zoom
     n = D.SCAN_BEAM_TRAIL
     for i in range(n):
         a = s.sweep_angle - i * D.SCAN_BEAM_TRAIL_STEP
@@ -205,6 +266,7 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
     to_screen = camera.world_to_screen
     segments = 0
 
+    segments += draw_tracks(surface, world, camera)
     draw_fields(surface, world, camera, now_s)
     draw_grid_links(surface, world, camera)
 
@@ -222,6 +284,8 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
         segments += _draw_structure(surface, world, s, camera, now_s, selected)
 
     segments += draw_pods(surface, world, camera)
+    if lander_lift > 0:
+        return segments  # still landing: the rovers are aboard
 
     # Phosphor trails (world space, so they survive panning and zooming).
     for unit in world.units.values():

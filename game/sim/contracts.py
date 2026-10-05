@@ -2,9 +2,12 @@
 
 Goods count as delivered when a hauler brings them to the lander's export bay
 (they go straight to the open contracts, oldest first); goods already in the
-lander's hold ship too, except building materials (scrap, parts, sinter). Filled on time pays credits and reputation; filled late (within the
-grace period) pays credits only; past that the contract expires and costs
-reputation. Reputation also drains slowly. At zero the run is lost.
+lander's hold ship too, except building materials (scrap, parts, sinter).
+In calm mode contracts arrive as offers and their clock starts when accepted;
+in pressure mode they start at once and reputation also drains. Filled on time
+pays credits and reputation; filled late (within the grace period) pays
+credits only; past that the contract expires and costs reputation. At zero
+reputation the run is lost.
 """
 
 import random
@@ -25,9 +28,11 @@ class Contract:
     id: int
     good: str
     qty: int
-    issued_s: float
-    deadline_s: float
-    grace_end_s: float
+    minutes: float
+    offered_s: float
+    issued_s: float = 0.0          # accepted at
+    deadline_s: float = 0.0
+    grace_end_s: float = 0.0
     standing: bool = False
     delivered: int = 0
     late: bool = False
@@ -38,20 +43,34 @@ class Contract:
     def payout(self):
         return int(self.qty * ITEMS[self.good]["value"] * C.PAY_MULTIPLIER)
 
+    def start(self, now):
+        span = self.minutes * 60.0
+        self.issued_s, self.deadline_s = now, now + span
+        self.grace_end_s = now + span * (1 + C.LATE_GRACE_FRACTION)
+
 
 class Contracts:
-    def __init__(self, seed):
+    def __init__(self, seed, mode=C.DEFAULT_MODE):
         self.rng = random.Random(f"{seed}/contracts")
-        self.open = []
+        self.mode = C.MODES[mode]
+        self.offers = []               # waiting to be accepted (calm mode)
+        self.open = []                 # accepted, with a clock running
         self.next_id = 1
         self.filled = 0
         self.expired = 0
-        self.next_offer_s = C.FIRST_CONTRACT_S
+        self.next_offer_s = self.mode["first_contract_s"]
         self.reputation = float(C.REPUTATION_START)
         self.credits_earned = 0
         self.standing_streak = 0
         self.drops_since_standing = 0
         self.log = []                  # (time_s, text) of finished contracts
+
+    def set_mode(self, mode):
+        """Switch pace (the landing briefing allows it before the first offer)."""
+        first = self.next_offer_s == self.mode["first_contract_s"] and not self.offers and not self.open
+        self.mode = C.MODES[mode]
+        if first:
+            self.next_offer_s = self.mode["first_contract_s"]
 
     def needs(self):
         """Goods still wanted at the export bay: {item: amount}."""
@@ -63,29 +82,60 @@ class Contracts:
     def tier(self):
         return min(len(C.TEMPLATES) - 1, self.filled // C.TIER_EVERY)
 
-    def _issue(self, now, template, standing=False):
+    def _make(self, now, template, standing=False):
         lo, hi = (template["qty"], template["qty"]) if standing else template["qty"]
-        qty = self.rng.randint(lo, hi)
-        span = template["minutes"] * 60.0
-        c = Contract(self.next_id, template["good"], qty, now, now + span, now + span * (1 + C.LATE_GRACE_FRACTION),
+        c = Contract(self.next_id, template["good"], self.rng.randint(lo, hi), template["minutes"], now,
                      standing=standing)
         self.next_id += 1
+        return c
+
+    def _issue(self, now, template, standing=False):
+        """A contract that starts at once (pressure mode, standing contracts, tests)."""
+        c = self._make(now, template, standing)
+        c.start(now)
         self.open.append(c)
         return c
+
+    def accept(self, world, contract_id):
+        """Command: accept an offer. Returns (ok, reason)."""
+        c = next((o for o in self.offers if o.id == contract_id), None)
+        if c is None:
+            return False, "NO SUCH OFFER"
+        if sum(1 for o in self.open if not o.standing) >= C.MAX_OPEN:
+            return False, f"ALREADY {C.MAX_OPEN} CONTRACTS UNDER WAY"
+        self.offers.remove(c)
+        c.start(world.time_s())
+        self.open.append(c)
+        world.event(f"CONTRACT ACCEPTED: {c.qty} {ITEMS[c.good]['name'].upper()} IN {int(c.minutes)} MIN", "contract")
+        return True, ""
 
     def note_drop(self):
         self.drops_since_standing += 1
 
     def update(self, world):
         now = world.time_s()
-        # New offers.
-        if now >= self.next_offer_s and sum(1 for c in self.open if not c.standing) < C.MAX_OPEN:
+        mode = self.mode
+        # New offers (or, under pressure, new contracts outright).
+        waiting = len(self.offers) if mode["accept_offers"] else sum(1 for c in self.open if not c.standing)
+        room = C.MAX_OFFERS if mode["accept_offers"] else C.MAX_OPEN
+        if now >= self.next_offer_s and waiting < room:
             pool = [t for tier in C.TEMPLATES[: self.tier() + 1] for t in tier]
-            open_goods = {c.good for c in self.open}
-            choices = [t for t in pool if t["good"] not in open_goods] or pool
-            c = self._issue(now, self.rng.choice(choices))
-            world.event(f"NEW CONTRACT: {c.qty} {ITEMS[c.good]['name'].upper()} IN {C_minutes(c)} MIN", "contract")
-            self.next_offer_s = now + C.NEW_CONTRACT_EVERY_S
+            taken = {c.good for c in self.open + self.offers}
+            choices = [t for t in pool if t["good"] not in taken] or pool
+            template = self.rng.choice(choices)
+            name = ITEMS[template["good"]]["name"].upper()
+            if mode["accept_offers"]:
+                c = self._make(now, template)
+                self.offers.append(c)
+                world.event(f"CONTRACT OFFERED: {c.qty} {name} IN {int(c.minutes)} MIN - CLICK IT TO ACCEPT", "contract")
+            else:
+                c = self._issue(now, template)
+                world.event(f"NEW CONTRACT: {c.qty} {name} IN {int(c.minutes)} MIN", "contract")
+            self.next_offer_s = now + mode["offer_every_s"]
+        for c in list(self.offers):
+            if now - c.offered_s > C.OFFER_WINDOW_S:
+                self.offers.remove(c)
+                world.event(f"OFFER WITHDRAWN: {ITEMS[c.good]['name'].upper()}")
         if (self.filled >= C.STANDING_AFTER and not any(c.standing for c in self.open)
                 and any(s.kind == C.STANDING_REQUIRES and s.built for s in world.structures.values())):
             c = self._issue(now, C.STANDING, standing=True)
@@ -112,9 +162,9 @@ class Contracts:
                 c.late = True
                 world.event(f"CONTRACT LATE: {ITEMS[c.good]['name'].upper()} - CREDITS ONLY NOW", "alert")
 
-        # Slow reputation drain once the site has had time to get going.
-        if now > C.REPUTATION_DRAIN_GRACE_S:
-            self.reputation -= C.REPUTATION_DRAIN_PER_MIN / 60.0 / W.TICK_RATE
+        # Under pressure, reputation drains slowly once the site has had time to get going.
+        if mode["drain_per_min"] and now > C.REPUTATION_DRAIN_GRACE_S:
+            self.reputation -= mode["drain_per_min"] / 60.0 / W.TICK_RATE
         self.reputation = min(self.reputation, C.REPUTATION_MAX)
         if self.reputation <= 0 and world.outcome is None:
             self.reputation = 0.0
@@ -162,5 +212,3 @@ class Contracts:
         self.log.append((world.time_s(), f"expired {c.qty} {c.good}"))
 
 
-def C_minutes(c):
-    return int(round((c.deadline_s - c.issued_s) / 60))

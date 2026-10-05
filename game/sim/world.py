@@ -26,11 +26,12 @@ from game.sim.orbit import Orbit
 from game.sim.pathing import PathGrid
 from game.sim.research import Research
 from game.sim.survey import SurveyMap
+from game.sim.tracks import Tracks
 from game.sim.terrain import illumination
 
 
 class World:
-    def __init__(self, seed, heightmap, slopes, grid, light):
+    def __init__(self, seed, heightmap, slopes, grid, light, mode=CT.DEFAULT_MODE):
         self.seed = seed
         self.rng = random.Random(f"{seed}/world")
         self.heightmap = heightmap
@@ -49,7 +50,7 @@ class World:
         self.scrap_sold = 0
         self.consumed = {}            # items used up: construction, rover bays, recipes, contracts
         self.produced = {}            # items made: recipes, supply drops
-        self.contracts = Contracts(seed)
+        self.contracts = Contracts(seed, mode)
         self.orbit = Orbit()
         self.outcome = None           # None, "won" or "lost"
         self.storage_full = False
@@ -63,6 +64,7 @@ class World:
         self.charger_key = None
         self.spawn_map = None
         self.survey = SurveyMap(heightmap.size, CONTOUR_CHUNK_CELLS)
+        self.tracks = Tracks(heightmap.size)
         self.research = Research()
         self.power_grids = {}
         self.dirty_power = True
@@ -377,6 +379,9 @@ class World:
             n += sum(d.value for d in self.debris.values())
         return n
 
+    def accept_contract(self, contract_id):
+        return self.contracts.accept(self, contract_id)
+
     def order_supply(self, index):
         return self.orbit.order(self, index)
 
@@ -409,6 +414,8 @@ class World:
         debris.update(self)
         for unit in list(self.units.values()):
             units.update(self, unit)
+        if self.tick_count % (W.TRACK_FADE_EVERY_S * W.TICK_RATE) == 0:
+            self.tracks.fade()
         # Contracts last, as in the design's tick order.
         self.contracts.update(self)
         if self.tick_count % (W.STORAGE_CHECK_S * W.TICK_RATE) == 0:
@@ -429,6 +436,7 @@ class World:
             tuple((s.id, tuple(sorted(s.inputs.items())), tuple(sorted(s.outputs.items())), s.cycle_left_s)
                   for s in self.structures.values()),
             tuple((c.id, c.good, c.qty, c.delivered) for c in self.contracts.open),
+            tuple((c.id, c.good, c.qty) for c in self.contracts.offers),
             round(self.contracts.reputation, 6), self.outcome,
         )
 
@@ -457,7 +465,7 @@ def _place_lander(grid):
     return node, grid.field(node)
 
 
-def build_world(seed, heightmap):
+def build_world(seed, heightmap, mode=CT.DEFAULT_MODE):
     """Generator: yields progress in [0, 1], returns a ready World."""
     slopes = heightmap.cell_slopes()
     yield 0.15
@@ -465,7 +473,7 @@ def build_world(seed, heightmap):
     yield 0.3
     light = illumination(heightmap, W)
     yield 0.45
-    world = World(seed, heightmap, slopes, grid, light)
+    world = World(seed, heightmap, slopes, grid, light, mode)
 
     node, home = _place_lander(grid)
     lx, ly = grid.node_centre(node)

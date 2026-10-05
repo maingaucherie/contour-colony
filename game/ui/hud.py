@@ -112,7 +112,7 @@ def draw_running(surface, info):
             kind, color = "CLIFF - IMPASSABLE", D.COLOR_ALERT
         draw_text(surface, f"X {x_km:5.1f} KM   Y {y_km:5.1f} KM   ELEV {elev:+6.0f} M   SLOPE {slope:4.1f} DEG  {kind}",
                   (M + 6, y), 1, color)
-    draw_text(surface, info.get("hint") or "B BUILD  R RESEARCH  O ORBIT  CLICK SELECT  RIGHT CLICK ORDER"
+    draw_text(surface, info.get("hint") or "B BUILD  R RESEARCH  K CONTRACTS  O ORBIT  RIGHT CLICK ORDER"
               "  SPACE PAUSE  ,/. SPEED  TAB VIEW  M SOUND  I ICONS", (M + 6, y + lh + 4), 1, D.COLOR_TEXT_DIM)
 
     # Bottom right: scale bar.

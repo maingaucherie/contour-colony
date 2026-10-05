@@ -24,7 +24,9 @@ from game.sim import jobs
 from game.sim import structures as ST
 from game.content import contracts as CT
 from game.sim.orbit import Orbit
+from game.sim import body
 from game.ui import board, hud, menus, panels
+from game.ui.intro import Intro
 from game.ui.input import Input
 
 WEB = sys.platform == "emscripten"
@@ -52,10 +54,11 @@ class App:
         self.glow_on = D.GLOW_ENABLED
         self.input = Input()
         self.view = "operations"
-        self.show_stats = True
+        self.show_stats = False   # F shows frame rate and drawing stats
         self.running = True
         self.audio = Audio()
         self.audio_built = False
+        self.mode = CT.DEFAULT_MODE    # pace of the next site (switchable on the briefing)
         self.events_heard = 0
         self.segments = 0
         self.frame_ms = 0.0
@@ -77,6 +80,7 @@ class App:
         self.shading = None
         self.menu = None          # None, "build", "research" or "orbit"
         self.targeting = False    # choosing where an orbital scan goes
+        self.board_rects = []     # clickable offers on the contracts board
         self.last_tick_sound = 0.0
         self.menu_cursor = 0
         self.menu_rects = None    # (panel rect, row rects) from the last draw
@@ -88,6 +92,7 @@ class App:
         self.actual_speed = 1.0
         self.stage = 0
         self.progress = 0.0
+        self.intro = None
         self.loader = self._load()
 
     def _load(self):
@@ -103,7 +108,7 @@ class App:
         self.colors = {view: draw.contour_colors(self.contours, hm.min_h, hm.max_h, view)
                        for view in ("operations", "survey")}
         self.stage = 4
-        self.world = yield from build_world(self.seed, hm)
+        self.world = yield from build_world(self.seed, hm, self.mode)
         self.events_heard = 0
         self.camera = draw.Camera(D.SCREEN_SIZE, hm.size - 1)
         self.camera.x, self.camera.y = self.world.lander.x, self.world.lander.y
@@ -117,6 +122,7 @@ class App:
                 self.progress = next(self.loader)
             except StopIteration:
                 self.loader = None
+                self.intro = Intro(time.perf_counter(), body.briefing_lines(self.seed, body.generate(self.seed)))
                 return
 
     # Frame ----------------------------------------------------------------
@@ -124,7 +130,10 @@ class App:
     def frame(self):
         dt = self.clock.tick(D.FRAME_RATE_CAP) / 1000.0
         start = time.perf_counter()
-        for action in self.input.process(pygame.event.get(), self.camera):
+        actions = self.input.process(pygame.event.get(), self.camera)
+        if self.intro is not None and self.loader is None:
+            actions = self._intro_input(actions)
+        for action in actions:
             self._do(action)
 
         self.screen.fill(D.COLOR_BACKGROUND)
@@ -133,10 +142,11 @@ class App:
             hud.draw_loading(self.screen, self.seed, self.stage, len(_STAGES),
                              _STAGES[self.stage - 1], self.progress)
         else:
-            self.input.panning_enabled = self.menu is None
+            self.input.panning_enabled = self.menu is None and self.intro is None
             self.input.apply_held(self.camera, dt)
-            self._handle_pointer_and_keys()
-            self._advance(dt)
+            if self.intro is None:
+                self._handle_pointer_and_keys()
+                self._advance(dt)
             self._draw_site()
         if self.world is not None and self.loader is None:
             self._sounds_for_events()
@@ -148,6 +158,27 @@ class App:
         self.frame_ms = (time.perf_counter() - start) * 1000.0
         self.window.blit(self.screen, (0, 0))
         pygame.display.flip()
+
+    def _intro_input(self, actions):
+        """During the landing briefing: P switches pace, a click, Enter or Space
+        skips ahead, then begins. Other actions (sound, glow, quit) pass through."""
+        now = time.perf_counter()
+        intro, inp = self.intro, self.input
+        if any(ch == "P" for ch in inp.typed):
+            self.mode = "pressure" if self.mode == "calm" else "calm"
+            self.world.contracts.set_mode(self.mode)
+            self.audio.play("menu")
+        go = inp.click is not None or "pause" in actions or any(
+            k in (pygame.K_RETURN, pygame.K_KP_ENTER) for k in inp.keys_down)
+        if go:
+            if intro.ready(now):
+                self.intro = None
+                self.audio.play("confirm")
+            else:
+                intro.skip()
+        inp.click = None
+        inp.right_click = None
+        return [a for a in actions if a in ("quit", "sound", "toggle_glow", "toggle_stats", "new_site")]
 
     def _do(self, action):
         if self.menu and action == "pause":
@@ -194,7 +225,7 @@ class App:
         elif action == "icons":
             styles = D.ICON_STYLES
             entities.style = styles[(styles.index(entities.style) + 1) % len(styles)]
-        elif action in ("build", "research", "orbit"):
+        elif action in ("build", "research", "orbit", "contracts"):
             self.menu = None if self.menu == action else action
             self.menu_cursor = 0
             self.placing = None
@@ -220,6 +251,8 @@ class App:
         return None
 
     def _menu_entries(self):
+        if self.menu == "contracts":
+            return [c.id for c in self.world.contracts.offers]
         if self.menu == "orbit":
             return board.orbit_entries(self.world)
         return BUILD_MENU if self.menu == "build" else RESEARCH_MENU
@@ -229,7 +262,13 @@ class App:
         entries = self._menu_entries()
         if not 0 <= i < len(entries):
             return
-        if self.menu == "orbit":
+        if self.menu == "contracts":
+            ok, reason = world.accept_contract(entries[i])
+            self.audio.play("confirm" if ok else "error")
+            if not ok:
+                world.event(reason, "alert")
+            self.menu_cursor = max(0, min(self.menu_cursor, len(self._menu_entries()) - 1))
+        elif self.menu == "orbit":
             kind, index = entries[i]
             if kind == "sell":
                 n = world.sell(index, D.MARKET_BATCH)
@@ -271,7 +310,7 @@ class App:
         """Cursor (up/down, W/S), Enter/Space to choose, mouse hover and click,
         and number shortcuts in the build menu."""
         inp = self.input
-        n = len(self._menu_entries())
+        n = max(1, len(self._menu_entries()))
         for key in inp.keys_down:
             if key in (pygame.K_UP, pygame.K_w):
                 self.menu_cursor = (self.menu_cursor - 1) % n
@@ -345,6 +384,13 @@ class App:
                 self.placing = None
             return
         if inp.click is not None:
+            for rect, offer_id in self.board_rects:
+                if rect.collidepoint(inp.click):
+                    ok, reason = world.accept_contract(offer_id)
+                    self.audio.play("confirm" if ok else "error")
+                    if not ok:
+                        world.event(reason, "alert")
+                    return
             picked = entities.pick(world, self.camera, self._alpha(), inp.click)
             if picked is not None and picked != self.selected:
                 self.audio.play("select")
@@ -408,8 +454,16 @@ class App:
             x, y = self._mouse_world()
             ok, reason = ST.check_placement(world, self.placing, x, y)
             ghost = (self.placing, x, y, ok, reason, STRUCTURES[self.placing])
+        now = time.perf_counter()
+        entities.lander_lift = self.intro.lift_px(now) if self.intro else 0.0
         self.segments += entities.draw_world(self.screen, world, cam, self._alpha(),
-                                             time.perf_counter(), self.selected, ghost)
+                                             now, self.selected, ghost)
+        if self.intro is not None:
+            if self.intro.descent(now) >= 1.0 and not self.intro.touched_down:
+                self.intro.touched_down = True
+                self.audio.play("thump")
+            self.intro.draw(self.screen, cam, world.lander, now, self.mode)
+            return
         if self.targeting and self.input.mouse_inside:
             mx, my = self.input.mouse
             r = CT.SCAN_RADIUS_CELLS * cam.zoom
@@ -439,7 +493,8 @@ class App:
             "hint": self._hint(),
         })
         now = time.perf_counter()
-        board_bottom = board.draw_board(self.screen, world, now)
+        board_bottom, self.board_rects = board.draw_board(self.screen, world, now,
+                                                          self.input.mouse if self.input.mouse_inside else None)
         panels.draw_inspect(self.screen, world, self.selected, board_bottom + D.PANEL_GAP)
         self.menu_rects = None
         if self.menu == "build":
@@ -448,6 +503,8 @@ class App:
             self.menu_rects = menus.draw_research(self.screen, world, self.menu_cursor)
         elif self.menu == "orbit":
             self.menu_rects = board.draw_orbit_menu(self.screen, world, self.menu_cursor)
+        elif self.menu == "contracts":
+            self.menu_rects = board.draw_contracts_menu(self.screen, world, self.menu_cursor)
         if world.outcome is not None:
             board.draw_end(self.screen, world)
         # A ticking clock while a contract is close to its deadline.
@@ -464,7 +521,8 @@ class App:
             return
         self.events_heard = world.event_count
         recent = list(world.events)[-min(new, len(world.events)):]
-        rank = ("won", "lost", "alert", "contract", "field", "static", "research", "complete", "offer", "rolled")
+        rank = ("won", "lost", "alert", "contract", "field", "static", "thump", "research", "complete", "offer",
+                "rolled")
         best = None
         for _, text, kind in recent:
             if kind == "won":
@@ -474,7 +532,7 @@ class App:
             elif kind == "contract":
                 name = "contract" if text.startswith("CONTRACT FILLED") else "offer"
             elif kind == "orbit":
-                name = "static" if text.startswith("ORBITAL PASS") else "rolled"
+                name = "static" if text.startswith("ORBITAL PASS") else "thump"
             elif kind == "field":
                 name = "field"
             elif text.startswith("RESEARCH COMPLETE"):
