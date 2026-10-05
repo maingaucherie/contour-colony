@@ -7,10 +7,12 @@ import pygame
 
 from game.content import display as D
 from game.render import glyphs as G
+from game.render import symbols as SYM
 from game.render.hershey import draw_text
 from game.sim import units as US
 
 _facing = {}  # unit id -> +1 / -1, with a deadband so rovers don't flip-flop
+style = D.ICON_STYLES[0]  # set by the app
 
 
 def interp(unit, alpha):
@@ -26,8 +28,33 @@ def _on_screen(sx, sy, margin, w, h):
 
 
 def structure_half_px(spec, zoom, is_lander):
-    """Half-size of a structure glyph on screen, with a readable minimum."""
+    """Half-size of a structure icon on screen. Symbols follow the footprint
+    (they scale with zoom); pictorial glyphs keep a readable minimum."""
+    if style == "symbols":
+        return max(spec["footprint_cells"] * D.SYMBOL_STRUCTURE_SCALE * zoom, D.SYMBOL_STRUCTURE_MIN_PX)
     return max(spec["footprint_cells"] * D.STRUCTURE_SCALE * zoom, D.LANDER_MIN_PX if is_lander else D.STRUCTURE_MIN_PX)
+
+
+def structure_shape(kind):
+    return SYM.STRUCTURES[kind] if style == "symbols" else G.STRUCTURE_SHAPES[kind]
+
+
+def unit_half_px(zoom):
+    if style == "symbols":
+        lo, hi = D.UNIT_SYMBOL_PX
+        return min(max(D.UNIT_SYMBOL_CELLS * zoom, lo), hi)
+    return max(D.ROVER_SIZE_CELLS * zoom, D.ROVER_MIN_PX)
+
+
+def _draw_unit_symbol(surface, color, unit, sx, sy, half, carrying):
+    spec = SYM.UNITS[unit.kind]
+    pygame.draw.aalines(surface, color, False, [(sx + x * half, sy + y * half) for x, y in spec["outline"]])
+    r0, r1 = spec["tick"]
+    c, s = math.cos(unit.vis_heading), math.sin(unit.vis_heading)
+    pygame.draw.aaline(surface, color, (sx + c * r0 * half, sy + s * r0 * half), (sx + c * r1 * half, sy + s * r1 * half))
+    if carrying:
+        pygame.draw.circle(surface, D.COLOR_FLOW, (int(sx), int(sy)), D.CARGO_DOT_PX)
+    return len(spec["outline"])
 
 
 def _flicker(now_s, key):
@@ -85,16 +112,20 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
     half = structure_half_px(s.spec, camera.zoom, s.kind == "lander")
     if not _on_screen(sx, sy, half * 2, w, h):
         return 0
-    shape = G.STRUCTURE_SHAPES[s.kind]
+    shape = structure_shape(s.kind)
     if not s.built:
         G.dotted_circle(surface, D.COLOR_SITE, sx, sy, s.spec["footprint_cells"] * camera.zoom, D.DOT_SPACING_PX)
         return G.draw_shape(surface, D.COLOR_SITE, shape, sx, sy, half, s.build_progress())
     color = D.COLOR_STRUCTURE
     if not s.powered:
         color = _scale(color, _flicker(now_s, s.id))
-    segs = G.draw_shape(surface, color, shape, sx, sy, half)
+    if s.deconstruct:
+        color = _scale(D.COLOR_ALERT, 0.5 + 0.5 * (int(now_s * 2) % 2))
+        segs = G.draw_shape(surface, color, shape, sx, sy, half, 1.0 - min(1.0, s.teardown_progress()))
+    else:
+        segs = G.draw_shape(surface, color, shape, sx, sy, half)
     if s.kind == "lander" and int(now_s * D.BEACON_BLINK_HZ * 2) % 2 == 0:
-        bx, by = G.LANDER_BEACON
+        bx, by = G.LANDER_BEACON if style == "pictorial" else (0.0, 0.0)
         pygame.draw.circle(surface, D.COLOR_SELECT, (int(sx + bx * half), int(sy + by * half)), 1)
     return segs
 
@@ -144,7 +175,7 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
                 segments += 1
             prev = p
 
-    rover_half = max(D.ROVER_SIZE_CELLS * z, D.ROVER_MIN_PX)
+    rover_half = unit_half_px(z)
     for unit in world.units.values():
         rx, ry = interp(unit, alpha)
         sx, sy = to_screen(rx, ry)
@@ -169,7 +200,9 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
         if unit.kind == "survey_rover" and unit.state == US.WORKING:
             r = unit.spec["linger_radius_cells"] * z
             G.dotted_circle(surface, D.COLOR_FIELD, sx, sy, r * (0.4 + 0.6 * ((now_s * 0.8) % 1.0)), D.DOT_SPACING_PX)
-        if visible:
+        if visible and style == "symbols":
+            segments += _draw_unit_symbol(surface, color, unit, sx, sy, rover_half, unit.cargo_total() > 0)
+        elif visible:
             moving = unit.state == US.MOVING
             bob = D.ROVER_BOB * math.sin(2 * math.pi * unit.odometer / D.ROVER_BOB_WAVELENGTH_CELLS) if moving else 0.0
             segments += G.draw_rover(surface, color, unit.kind, sx, sy - rover_half * 0.25, rover_half,
@@ -183,7 +216,7 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
             sx, sy = to_screen(*interp(unit, alpha))
             if unit.path:
                 G.dashed(surface, D.COLOR_FLOW, [(sx, sy)] + [to_screen(x, y) for x, y in unit.path], D.DASH_PX, D.GAP_PX)
-            _brackets(surface, sx, sy, rover_half * 1.4)
+            _brackets(surface, sx, sy, rover_half * (1.9 if style == "symbols" else 1.4))
         elif kind == "structure" and eid in world.structures:
             s = world.structures[eid]
             sx, sy = to_screen(s.x, s.y)
@@ -204,7 +237,7 @@ def draw_ghost(surface, world, camera, ghost):
     sx, sy = camera.world_to_screen(x, y)
     color = D.COLOR_GHOST_OK if ok else D.COLOR_ALERT
     half = structure_half_px(spec, z, False)
-    segs = G.draw_shape(surface, _scale(color, 0.8), G.STRUCTURE_SHAPES[kind], sx, sy, half)
+    segs = G.draw_shape(surface, _scale(color, 0.8), structure_shape(kind), sx, sy, half)
     G.dotted_circle(surface, color, sx, sy, spec["footprint_cells"] * z, D.DOT_SPACING_PX)
     reach = spec.get("grid_reach_cells", 0)
     if reach:
@@ -237,10 +270,11 @@ def pick(world, camera, alpha, pos):
     """Entity under a screen position: ('unit', id), ('structure', id) or None."""
     mx, my = pos
     best, best_d = None, D.SELECT_PICK_RADIUS_PX
-    rover_half = max(D.ROVER_SIZE_CELLS * camera.zoom, D.ROVER_MIN_PX)
+    rover_half = unit_half_px(camera.zoom)
+    lift = rover_half * 0.25 if style == "pictorial" else 0.0
     for unit in world.units.values():
         sx, sy = camera.world_to_screen(*interp(unit, alpha))
-        d = math.hypot(sx - mx, sy - (my + rover_half * 0.25))
+        d = math.hypot(sx - mx, sy - lift - my)
         if d <= max(best_d, rover_half) and (best is None or d < best_d):
             best, best_d = ("unit", unit.id), d
     if best is not None:

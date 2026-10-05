@@ -37,6 +37,8 @@ class Structure:
     building_unit: str | None = None
     bay_ticks_left: int = 0
     created_tick: int = 0
+    deconstruct: bool = False                       # marked for a constructor to dismantle
+    teardown_s: float = 0.0                         # dismantling seconds done
 
     @property
     def spec(self):
@@ -60,6 +62,9 @@ class Structure:
     def fully_delivered(self):
         cost = self.spec.get("build_cost", {})
         return all(self.delivered.get(k, 0) >= n for k, n in cost.items())
+
+    def teardown_progress(self):
+        return self.teardown_s / (self.spec.get("build_time_s", 1.0) * S.DECONSTRUCT_TIME_FRACTION)
 
     def build_progress(self):
         """0..1 over the whole job: materials first (a third), then assembly."""
@@ -168,3 +173,32 @@ def update_bay(world, s):
         r = s.spec["footprint_cells"] + 0.8
         world.spawn_unit(kind, s.x + r, s.y + r * 0.3)
         world.event(f"{U.UNITS[kind]['name'].upper()} ROLLED OUT")
+
+
+def refund_items(world, items):
+    """Put items into the lander (over capacity if need be: nothing is lost)."""
+    for k, n in items.items():
+        if n > 0:
+            world.lander.storage[k] = world.lander.storage.get(k, 0) + n
+
+
+def dismantle(world, s):
+    """Remove a built structure: part of its cost and all its contents go back to storage."""
+    cost = s.spec.get("build_cost", {})
+    refund = {k: int(n * S.DECONSTRUCT_REFUND) for k, n in cost.items()}
+    for k, n in refund.items():
+        world.consumed[k] = world.consumed.get(k, 0) - n
+    refund_items(world, refund)
+    refund_items(world, s.storage)
+    s.storage = {}
+    if s.building_unit:  # a rover bay mid-build gives its materials back
+        refund_items(world, U.UNITS[s.building_unit]["bay_cost"])
+        for k, n in U.UNITS[s.building_unit]["bay_cost"].items():
+            world.consumed[k] = world.consumed.get(k, 0) - n
+    for unit in world.units.values():
+        if unit.dock == s.id:
+            unit.dock, unit.slot, unit.docked = None, -1, False
+    del world.structures[s.id]
+    world.structures_changed()
+    world.event(f"{s.spec['name'].upper()} DISMANTLED - " + ", ".join(f"{n} {k.upper()}" for k, n in refund.items())
+                + " RETURNED")

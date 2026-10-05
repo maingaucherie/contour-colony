@@ -59,10 +59,17 @@ TRIP_SAFETY_FACTOR = 1.25            # planned energy is multiplied by this befo
 IDLE_RETHINK_S = 2.0                 # idle units look for work this often
 TRAIL_POINTS = 40                    # trail history kept per unit, one point per tick
 
-# Wandering: units weave around their planned path on a low sine wave. Purely
-# cosmetic: planning, battery and arrival use the planned path.
-WOBBLE_AMPLITUDE_CELLS = (0.25, 0.45)   # per-unit range
-WOBBLE_WAVELENGTH_CELLS = (2.5, 4.0)    # per-unit range
-WOBBLE_SECOND_HARMONIC = 0.4            # weight of a faster, irregular second wave
-WOBBLE_RAMP_CELLS = 1.0                 # fades in after setting off and out before arriving
-WOBBLE_TURN_SMOOTHING = 0.25            # how fast the sideways direction follows turns, per tick
+# Driving feel (cosmetic: planning, battery and arrival use the planned path).
+# The drawn position steers toward the planned one with a gentle lag, which
+# rounds off path corners, plus a slow, shallow weave like small course
+# corrections.
+WOBBLE_AMPLITUDE_CELLS = (0.08, 0.16)   # per-unit range of the weave
+WOBBLE_WAVELENGTH_CELLS = (6.0, 10.0)   # per-unit range
+WOBBLE_SECOND_HARMONIC = 0.0            # irregular second wave (0 = off)
+WOBBLE_RAMP_CELLS = 1.5                 # the weave fades in after setting off and out before arriving
+WOBBLE_TURN_SMOOTHING = 0.12            # how fast the sideways direction follows turns, per tick
+STEER_FOLLOW = 0.3                      # fraction of the gap to the planned position closed per tick
+HEADING_SMOOTHING = 0.25                # how fast the drawn heading turns, per tick
+
+# Paths keep this far from structures they aren't visiting (beyond the footprint).
+STRUCTURE_CLEARANCE_CELLS = 0.6

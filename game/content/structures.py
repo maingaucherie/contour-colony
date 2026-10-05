@@ -28,7 +28,7 @@ STRUCTURES = {
     "pylon": {
         "name": "power pylon", "footprint_cells": 0.4, "max_slope_deg": 15.0,
         "build_cost": {"scrap": 4}, "build_time_s": 5.0,
-        "grid_reach_cells": 6.0, "unlocked_by": None,
+        "grid_reach_cells": 9.0, "unlocked_by": None,
     },
     "charging_pad": {
         "name": "charging pad", "footprint_cells": 1.0, "max_slope_deg": 5.0,
@@ -77,6 +77,11 @@ STRUCTURES = {
 # Order of the build menu.
 BUILD_MENU = ("solar", "pylon", "charging_pad", "depot", "rover_bay",
               "ilmenite_mine", "ice_mine", "crusher", "ice_melter", "sinter_kiln")
+
+# Deconstruction: a constructor dismantles a marked structure in this fraction of
+# its build time and this fraction of its build cost returns to storage.
+DECONSTRUCT_TIME_FRACTION = 0.5
+DECONSTRUCT_REFUND = 0.75
 
 # Minimum clear gap between footprints, in cells.
 PLACEMENT_GAP_CELLS = 0.4

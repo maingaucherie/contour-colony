@@ -3,6 +3,7 @@
 import pygame
 
 from game.content import display as D
+from game.content import structures as S
 from game.content import units as U
 from game.content.items import ITEMS
 from game.render.hershey import draw_text, line_height
@@ -22,6 +23,8 @@ ACTIVITY_LABELS = {
     "load": "LOADING MATERIALS",
     "to_site": "DELIVERING TO SITE",
     "building": "ASSEMBLING",
+    "to_teardown": "DRIVING TO DISMANTLE",
+    "dismantling": "DISMANTLING",
     "to_survey_spot": "DRIVING TO SURVEY A FIELD",
     "to_frontier": "EXPLORING",
     "surveying": "DETAILED SURVEY",
@@ -85,6 +88,13 @@ def _structure_lines(world, s):
         lines.append(("DEL: CANCEL (REFUNDS MATERIALS)", 1, D.COLOR_FLOW))
         return lines
 
+    if s.deconstruct:
+        frac = s.teardown_progress()
+        lines.append(("MARKED FOR DECONSTRUCTION" + (f" {frac * 100:3.0f}%" if frac else ""), 1, D.COLOR_ALERT))
+        lines.append(("DEL: KEEP IT", 1, D.COLOR_FLOW))
+    elif s.kind != "lander":
+        refund = int(S.DECONSTRUCT_REFUND * 100)
+        lines.append((f"DEL: DECONSTRUCT ({refund}% OF MATERIALS BACK)", 1, D.COLOR_FLOW))
     grid = world.power_grids.get(s.grid)
     if spec.get("power_kw"):
         lines.append((f"OUTPUT    +{s.output_kw:.1f} KW", 1, D.COLOR_TEXT_DIM))

@@ -28,13 +28,13 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 | Input | Action |
 | --- | --- |
-| B, then 1-0 | Build menu, then pick a structure; click to place (Shift+click places more), right click or Esc cancels |
-| R, then A-N | Research panel, then start a project |
+| B | Build menu: Up/Down (or W/S) + Enter, click a row, or press 1-0; then click to place (Shift+click places more), right click or Esc cancels |
+| R | Research panel: Up/Down + Enter or click a row to start a project |
 | Left click | Select a unit or structure (inspect panel) |
 | Right click | Order the selected unit: go there, or for a survey rover, survey there |
 | 1-3 with a rover bay selected | Build a scavenger, constructor or survey rover |
 | P | Cycle the selected structure's power priority |
-| Del | Cancel the selected construction site (materials are refunded) |
+| Del | Cancel the selected construction site (materials refunded), or mark a finished structure for a constructor to dismantle (75% back); Del again keeps it |
 | X / Shift+X | Sell 10 scrap / all scrap from the lander |
 | C | Centre on the selection |
 | WASD / arrows / drag | Pan |
@@ -42,6 +42,8 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | Space, `,` / `.` | Pause, slower / faster (1x, 2x, 4x) |
 | Tab or V | Operations / survey view |
 | G, F | Glow, performance stats |
+| M | Sound: all, effects only, off |
+| I | Icons: console symbols or pictorial rovers and structures |
 | N twice | Abandon the site and generate a new one |
 | Esc | Close menus (desktop: quit when nothing is open) |
 
@@ -85,8 +87,10 @@ game/app.py        loading and running states, one frame at a time
 game/sim/          simulation, no pygame: terrain, world + tick, pathing, power, research,
                    survey, fields, structures, debris, units + one brain per unit kind
 game/content/      tunable numbers only, as plain data tables
-game/render/       contours (pure Python), camera + terrain, glyphs, entities, glow, Hershey text
+game/render/       contours (pure Python), camera + terrain, symbols and pictorial glyphs, entities,
+                   glow, Hershey text
 game/ui/           HUD, inspect panel, build and research menus, input
+game/audio/        synth.py (pure Python tones, loops and music plan), player.py (mixer playback)
 web/contour.tmpl   page template for the browser build (pygbag 0.9.3's, restyled)
 tests/             unittest, headless
 tools/             hershey_convert.py regenerates game/render/hershey_data.py

@@ -4,6 +4,7 @@ import pygame
 
 from game.content import display as D
 from game.content import terrain as T
+from game.render.contours import level_rank, tier_for_zoom
 
 
 class Camera:
@@ -72,31 +73,90 @@ def contour_colors(contours, min_h, max_h, view):
         if view == "survey":
             base = palette_color(D.SURVEY_PALETTE, (k * contours.interval - min_h) / span)
             gain = D.SURVEY_INDEX_BRIGHTNESS if index else D.SURVEY_NORMAL_BRIGHTNESS
-            colors[k] = tuple(int(c * gain) for c in base)
+            full = tuple(int(c * gain) for c in base)
         else:
-            colors[k] = D.COLOR_CONTOUR_OPS_INDEX if index else D.COLOR_CONTOUR_OPS
+            full = D.COLOR_CONTOUR_OPS_INDEX if index else D.COLOR_CONTOUR_OPS
+        # A ramp of faded versions, so fading lines need no per-frame colour maths.
+        steps = D.CONTOUR_FADE_STEPS
+        colors[k] = [tuple(int(c * q / steps) for c in full) for q in range(steps + 1)]
     return colors
 
 
-def draw_contours(surface, contours, camera, tier, colors, chunk_tier_caps=None):
-    """Draw visible polylines at the given detail tier, capped per chunk by
-    chunk_tier_caps (survey knowledge). Returns the number of segments drawn."""
+def _smoothstep(t):
+    t = min(max(t, 0.0), 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def zoom_alphas(zoom, tier_specs=T.CONTOUR_TIERS):
+    """Visibility of each tier's levels at this zoom: tier 0 always, finer tiers
+    fade in between min_zoom / FADE_RATIO and min_zoom."""
+    out = []
+    for spec in tier_specs:
+        z1 = spec["min_zoom"]
+        if z1 <= 0:
+            out.append(1.0)
+        else:
+            z0 = z1 / T.CONTOUR_FADE_RATIO
+            out.append(_smoothstep((zoom - z0) / (z1 - z0)))
+    return out
+
+
+class ContourShading:
+    """Per-piece survey knowledge, cached until the survey changes."""
+
+    def __init__(self, survey):
+        self.survey = survey
+        self.version = -1
+        self.cache = {}
+        r = T.CONTOUR_SURVEY_BLUR_CELLS
+        steps = (-1.0, -0.5, 0.0, 0.5, 1.0)
+        self.offsets = [(dx * r, dy * r) for dx in steps for dy in steps]
+
+    def knowledge(self, pl):
+        """Average survey level around a piece, 0..2."""
+        if self.version != self.survey.version:
+            self.version = self.survey.version
+            self.cache.clear()
+        key = id(pl)
+        k = self.cache.get(key)
+        if k is None:
+            level_at = self.survey.level_at
+            k = sum(level_at(pl.mx + dx, pl.my + dy) for dx, dy in self.offsets) / len(self.offsets)
+            self.cache[key] = k
+        return k
+
+
+def draw_contours(surface, contours, camera, colors, shading=None):
+    """Draw visible contour pieces. Finer levels fade in with zoom and with the
+    survey knowledge around each piece. Returns the number of segments drawn."""
     z = camera.zoom
     ox, oy = camera.offset()
     vx0, vy0, vx1, vy1 = camera.visible_rect()
     aalines = pygame.draw.aalines
+    alphas = zoom_alphas(z, contours.tier_specs)
+    geometry = tier_for_zoom(z * T.CONTOUR_FADE_RATIO, contours.tier_specs)
+    steps = D.CONTOUR_FADE_STEPS
     count = 0
-    for ci, chunk in enumerate(contours.chunks):
+    for chunk in contours.chunks:
         if chunk.x1 < vx0 or chunk.x0 > vx1 or chunk.y1 < vy0 or chunk.y0 > vy1:
             continue
-        t = tier if chunk_tier_caps is None else min(tier, chunk_tier_caps[ci])
-        for k, lines in chunk.tiers[t]:
-            color = colors[k]
+        for k, lines in chunk.tiers[geometry]:
+            rank = level_rank(k, contours.tier_specs)
+            za = alphas[rank]
+            if za <= 0.02:
+                continue
+            ramp = colors[k]
             for pl in lines:
                 if pl.max_x < vx0 or pl.min_x > vx1 or pl.max_y < vy0 or pl.min_y > vy1:
                     continue
+                a = za
+                if shading is not None and rank > 0:
+                    a *= min(1.0, max(0.0, shading.knowledge(pl) - rank + 1))
+                q = int(a * steps + 0.5)
+                if q <= 0:
+                    continue
                 pts = [(x * z + ox, y * z + oy) for x, y in pl.points]
-                aalines(surface, color, False, pts)
+                aalines(surface, ramp[q], False, pts)
                 count += len(pts) - 1
     return count
 

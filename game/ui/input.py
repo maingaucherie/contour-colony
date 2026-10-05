@@ -7,7 +7,7 @@ from game.content import display as D
 # Actions that fire once per key press (the rest are held).
 _TRIGGERS = ("toggle_view", "toggle_glow", "toggle_stats", "new_site", "quit",
              "pause", "speed_up", "speed_down", "sell", "centre",
-             "build", "research", "priority", "cancel_site")
+             "build", "research", "priority", "cancel_site", "icons", "sound")
 
 
 class Input:
@@ -21,6 +21,8 @@ class Input:
         self.click = None  # screen position of a left click (press and release without dragging)
         self.right_click = None
         self.typed = []    # characters typed this frame (upper case), for menus
+        self.keys_down = []  # pygame key codes pressed this frame
+        self.mouse_moved = False
         self.panning_enabled = True
 
     def process(self, events, camera):
@@ -29,10 +31,13 @@ class Input:
         self.click = None
         self.right_click = None
         self.typed = []
+        self.keys_down = []
+        self.mouse_moved = False
         for event in events:
             if event.type == pygame.QUIT:
                 actions.append("quit")
             elif event.type == pygame.KEYDOWN:
+                self.keys_down.append(event.key)
                 if event.unicode and event.unicode.isalnum():
                     self.typed.append(event.unicode.upper())
                 for action in _TRIGGERS:
@@ -41,6 +46,7 @@ class Input:
                         actions.append("sell_all" if shifted else action)
             elif event.type == pygame.MOUSEMOTION:
                 self.mouse = event.pos
+                self.mouse_moved = True
                 self.mouse_inside = True
                 if self.dragging:
                     self.drag_px += abs(event.rel[0]) + abs(event.rel[1])

@@ -20,6 +20,8 @@ class Polyline:
     min_y: float
     max_x: float
     max_y: float
+    mx: float = 0.0  # midpoint, for sampling survey knowledge
+    my: float = 0.0
 
 
 @dataclass(slots=True)
@@ -223,7 +225,25 @@ def simplify(pts, tolerance):
 def _polyline(pts):
     xs = [p[0] for p in pts]
     ys = [p[1] for p in pts]
-    return Polyline(pts, min(xs), min(ys), max(xs), max(ys))
+    return Polyline(pts, min(xs), min(ys), max(xs), max(ys), sum(xs) / len(xs), sum(ys) / len(ys))
+
+
+def pieces(pts, max_segments=T.CONTOUR_PIECE_SEGMENTS):
+    """Cut a polyline into consecutive pieces sharing their end points."""
+    out = []
+    i = 0
+    while i < len(pts) - 1:
+        out.append(pts[i: i + max_segments + 1])
+        i += max_segments
+    return out
+
+
+def level_rank(k, tier_specs=T.CONTOUR_TIERS):
+    """The coarsest tier that contains level k (0 = every 4th level ... 2 = all)."""
+    for i, spec in enumerate(tier_specs):
+        if k % spec["level_step"] == 0:
+            return i
+    return len(tier_specs) - 1
 
 
 def build_chunk(heights, size, cx, cy, interval, tier_specs=T.CONTOUR_TIERS,
@@ -244,7 +264,7 @@ def build_chunk(heights, size, cx, cy, interval, tier_specs=T.CONTOUR_TIERS,
             for pts in lines:
                 s = simplify(pts, tol)
                 if s is not None and len(s) >= 2:
-                    kept.append(_polyline(s))
+                    kept.extend(_polyline(p) for p in pieces(s))
             if kept:
                 levels.append((k, kept))
         chunk.tiers.append(levels)

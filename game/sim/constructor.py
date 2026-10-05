@@ -96,11 +96,31 @@ def think(world, unit):
             UN.release_dock(world, unit)
             UN.set_path(unit, UN.path_to(world, unit, (site.x, site.y), f), "to_site", site.id)
             return
+    for s in sorted((s for s in world.structures.values() if s.built and s.deconstruct), key=lambda s: s.id):
+        if any(u.job == s.id and u is not unit for u in world.units.values()):
+            continue  # one constructor per teardown
+        remaining = s.spec["build_time_s"] * ST.S.DECONSTRUCT_TIME_FRACTION - s.teardown_s
+        energy = remaining / unit.spec["build_rate"] * unit.spec["build_drain_per_s"]
+        if not UN.can_afford(world, unit, f.dist[grid.node_at(s.x, s.y)] + UN.back_cost(world, s.x, s.y), energy):
+            continue
+        unit.job = s.id
+        UN.release_dock(world, unit)
+        goal = (s.x + s.spec["footprint_cells"] + 0.5, s.y)
+        UN.set_path(unit, UN.path_to(world, unit, goal, f) or [goal], "to_teardown", s.id)
+        return
     unit.job = None
     UN.head_home(world, unit)
 
 
 def arrived(world, unit):
+    if unit.activity == "to_teardown":
+        s = world.structures.get(unit.target)
+        if s is None or not s.deconstruct:
+            unit.target = unit.job = None
+            think(world, unit)
+        else:
+            UN.work(unit, "dismantling", 1.0)
+        return
     if unit.activity == "to_storage":
         UN.work(unit, "load", unit.spec["load_s"])
     elif unit.activity == "to_site":
@@ -124,6 +144,21 @@ def arrived(world, unit):
 
 
 def work_tick(world, unit):
+    if unit.activity == "dismantling":
+        s = world.structures.get(unit.target)
+        if s is None or not s.deconstruct:
+            unit.timer = 0
+            return
+        unit.timer = 1
+        dt = 1.0 / world.tick_rate
+        s.teardown_s += dt * unit.spec["build_rate"]
+        unit.battery = max(0.0, unit.battery - dt * unit.spec["build_drain_per_s"])
+        if s.teardown_progress() >= 1.0:
+            ST.dismantle(world, s)
+            unit.timer = 0
+        elif unit.battery < UN.reserve(world, unit):
+            unit.timer = 0
+        return
     if unit.activity != "building":
         return
     site = world.structures.get(unit.target)

@@ -47,8 +47,9 @@ def draw_running(surface, info):
     y = M + 4 + line_height(2) + 4
     draw_text(surface, f"CREDITS {info['credits']}   SCRAP {info['scrap']}   PARTS {info['parts']}", (M + 6, y), 1)
     supply, demand = info["power"]
-    draw_text(surface, f"POWER {demand:.0f}/{supply:.0f} KW", (M + 6 + 330, y), 1,
-              D.COLOR_ALERT if demand > supply else D.COLOR_POWER)
+    spare = supply - demand
+    text = f"POWER {spare:.0f} KW FREE OF {supply:.0f}" if spare >= 0 else f"POWER {-spare:.0f} KW SHORT"
+    draw_text(surface, text, (M + 6 + 330, y), 1, D.COLOR_ALERT if spare < 0 else D.COLOR_POWER)
     y += lh
     t = int(info["time_s"])
     clock = f"T+{t // 3600:02d}:{t // 60 % 60:02d}:{t % 60:02d}"
@@ -78,8 +79,8 @@ def draw_running(surface, info):
         x_km, y_km, elev, slope = cursor
         draw_text(surface, f"X {x_km:5.1f} KM   Y {y_km:5.1f} KM   ELEV {elev:+6.0f} M   SLOPE {slope:4.1f} DEG",
                   (M + 6, y), 1)
-    draw_text(surface, info.get("hint") or "B BUILD  R RESEARCH  CLICK SELECT  RIGHT CLICK ORDER  DRAG/WASD PAN"
-              "  WHEEL ZOOM  SPACE PAUSE  ,/. SPEED  TAB VIEW", (M + 6, y + lh), 1, D.COLOR_TEXT_DIM)
+    draw_text(surface, info.get("hint") or "B BUILD  R RESEARCH  CLICK SELECT  RIGHT CLICK ORDER  SPACE PAUSE"
+              "  ,/. SPEED  TAB VIEW  M SOUND  I ICONS", (M + 6, y + lh), 1, D.COLOR_TEXT_DIM)
 
     # Bottom right: scale bar.
     km_per_px = info["cell_m"] / 1000.0 / info["zoom"]

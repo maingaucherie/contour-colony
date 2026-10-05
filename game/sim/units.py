@@ -117,13 +117,63 @@ def back_cost(world, x, y):
 
 
 def path_to(world, unit, goal, from_field=None):
-    """Waypoints from the unit to goal, or None if unreachable."""
+    """Waypoints from the unit to goal, or None if unreachable. The path bends
+    around structures, except any whose footprint the start or goal is near
+    (the one being visited, or the one the unit is leaving)."""
     grid = world.grid
     f = from_field or here_field(world, unit)
     node = grid.node_at(*goal)
     if not f.reachable(node):
         return None
-    return grid.waypoints((unit.x, unit.y), f.nodes_from_source(node), goal)
+    points = grid.waypoints((unit.x, unit.y), f.nodes_from_source(node), goal)
+    return avoid_structures(world, (unit.x, unit.y), points)
+
+
+def _seg_point_dist(ax, ay, bx, by, px, py):
+    dx, dy = bx - ax, by - ay
+    l2 = dx * dx + dy * dy
+    t = 0.0 if l2 == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / l2))
+    cx, cy = ax + t * dx, ay + t * dy
+    return math.hypot(px - cx, py - cy), t
+
+
+def avoid_structures(world, start, points):
+    """Insert detour waypoints so path segments clear structure footprints."""
+    obstacles = []
+    gx, gy = points[-1] if points else start
+    for s in world.structures.values():
+        r = s.spec["footprint_cells"] + U.STRUCTURE_CLEARANCE_CELLS
+        reach = r + s.spec.get("dock_radius_cells", 0.0)
+        if math.hypot(gx - s.x, gy - s.y) <= reach or math.hypot(start[0] - s.x, start[1] - s.y) <= reach:
+            continue  # visiting or leaving it
+        obstacles.append((s.x, s.y, r))
+    if not obstacles:
+        return points
+    out = []
+    ax, ay = start
+    for bx, by in points:
+        for _ in range(3):  # a segment may need more than one detour
+            hit = None
+            for ox, oy, r in obstacles:
+                d, t = _seg_point_dist(ax, ay, bx, by, ox, oy)
+                if d < r and 0.0 < t < 1.0 and (hit is None or t < hit[3]):
+                    hit = (ox, oy, r, t)
+            if hit is None:
+                break
+            ox, oy, r, t = hit
+            cx, cy = ax + (bx - ax) * t, ay + (by - ay) * t
+            nx, ny = cx - ox, cy - oy
+            n = math.hypot(nx, ny)
+            if n < 1e-6:  # dead centre: go around on the left
+                nx, ny, n = -(by - ay), bx - ax, math.hypot(bx - ax, by - ay) or 1.0
+            wx, wy = ox + nx / n * (r + 0.3), oy + ny / n * (r + 0.3)
+            if not world.grid.open[world.grid.node_at(wx, wy)]:
+                wx, wy = ox - nx / n * (r + 0.3), oy - ny / n * (r + 0.3)  # other side
+            out.append((wx, wy))
+            ax, ay = wx, wy
+        out.append((bx, by))
+        ax, ay = bx, by
+    return out
 
 
 def set_path(unit, path, activity, target=None):
@@ -210,10 +260,13 @@ def try_charge(world, unit, below_fraction=U.TOP_UP_BELOW_FRACTION):
 
 
 def head_home(world, unit):
-    """Nothing to do: charge up if needed, otherwise park."""
+    """Nothing to do: charge up if needed, otherwise park.
+
+    Being docked somewhere that can't charge (a depot) doesn't count as home."""
     if try_charge(world, unit, 1.0):
         return
-    if unit.battery < capacity(world, unit) and not unit.docked and go_dock(world, unit, "charge"):
+    at_charger = "charge" in dock_roles(world, unit)
+    if unit.battery < capacity(world, unit) and not at_charger and go_dock(world, unit, "charge"):
         return
     idle(unit)
 
@@ -275,21 +328,25 @@ def _move(world, unit):
 
 
 def _wander(unit):
-    """Visual position: sway sideways on two sine waves, faded in and out at the ends."""
-    if unit.state != MOVING:
-        unit.vx, unit.vy = unit.x, unit.y
-        return
-    k = U.WOBBLE_TURN_SMOOTHING
-    tx, ty = -math.sin(unit.heading), math.cos(unit.heading)
-    sx, sy = unit.side_x + (tx - unit.side_x) * k, unit.side_y + (ty - unit.side_y) * k
-    n = math.hypot(sx, sy) or 1.0
-    unit.side_x, unit.side_y = sx / n, sy / n
-    ramp = U.WOBBLE_RAMP_CELLS
-    envelope = max(0.0, min(1.0, unit.odometer / ramp, unit.path_left / ramp))
-    t = 2 * math.pi * unit.odometer / unit.wobble_len
-    sway = math.sin(t + unit.wobble_phase) + U.WOBBLE_SECOND_HARMONIC * math.sin(2.7 * t + 2.1 * unit.wobble_phase)
-    off = unit.wobble_amp * sway * envelope
-    unit.vx, unit.vy = unit.x + unit.side_x * off, unit.y + unit.side_y * off
+    """Drawn position: steer toward the planned position plus a slow, shallow
+    weave. The lag rounds corners; at rest it settles onto the planned spot."""
+    target_x, target_y = unit.x, unit.y
+    if unit.state == MOVING:
+        k = U.WOBBLE_TURN_SMOOTHING
+        tx, ty = -math.sin(unit.heading), math.cos(unit.heading)
+        sx, sy = unit.side_x + (tx - unit.side_x) * k, unit.side_y + (ty - unit.side_y) * k
+        n = math.hypot(sx, sy) or 1.0
+        unit.side_x, unit.side_y = sx / n, sy / n
+        ramp = U.WOBBLE_RAMP_CELLS
+        envelope = max(0.0, min(1.0, unit.odometer / ramp, unit.path_left / ramp))
+        t = 2 * math.pi * unit.odometer / unit.wobble_len
+        sway = math.sin(t + unit.wobble_phase) + U.WOBBLE_SECOND_HARMONIC * math.sin(2.7 * t + 2.1 * unit.wobble_phase)
+        off = unit.wobble_amp * sway * envelope
+        target_x += unit.side_x * off
+        target_y += unit.side_y * off
+    f = U.STEER_FOLLOW
+    unit.vx += (target_x - unit.vx) * f
+    unit.vy += (target_y - unit.vy) * f
 
 
 def update(world, unit):
@@ -344,9 +401,12 @@ def update(world, unit):
             b.work_done(world, unit)
     elif state == CHARGING:
         s = world.structures.get(unit.dock)
-        if s is not None and (s.powered or s is world.lander):
+        if s is None:  # dismantled under it
+            unit.dock, unit.slot, unit.docked = None, -1, False
+            b.think(world, unit)
+        elif s.powered or s is world.lander:
             unit.battery = min(cap, unit.battery + s.spec["charge_per_s"] / W.TICK_RATE)
-        if unit.battery >= cap:
+        if unit.state == CHARGING and unit.battery >= cap:
             b.think(world, unit)
     elif state == IDLE:
         unit.timer -= 1
@@ -356,7 +416,9 @@ def update(world, unit):
     _wander(unit)
     if unit.state == MOVING or unit.trail:
         unit.trail.append((unit.vx, unit.vy))
-    if unit.state == MOVING:
-        dx, dy = unit.vx - unit.prev_vx, unit.vy - unit.prev_vy
-        if dx * dx + dy * dy > 1e-8:
-            unit.vis_heading = math.atan2(dy, dx)
+
+    dx, dy = unit.vx - unit.prev_vx, unit.vy - unit.prev_vy
+    if dx * dx + dy * dy > 1e-6:
+        target = math.atan2(dy, dx)
+        turn = (target - unit.vis_heading + math.pi) % (2 * math.pi) - math.pi
+        unit.vis_heading += turn * U.HEADING_SMOOTHING

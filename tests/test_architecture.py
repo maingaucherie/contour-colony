@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 class ArchitectureTests(unittest.TestCase):
     def test_simulation_and_contour_geometry_do_not_import_pygame(self):
         code = (
-            "import sys, game.sim.terrain, game.render.contours, game.content.terrain, game.content.display; "
+            "import sys, game.sim.world, game.sim.terrain, game.render.contours, game.audio.synth, game.content.terrain, game.content.display; "
             "sys.exit('pygame' in sys.modules)"
         )
         result = subprocess.run([sys.executable, "-c", code], cwd=ROOT)

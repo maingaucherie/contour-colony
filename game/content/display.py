@@ -41,6 +41,7 @@ SURVEY_PALETTE = (
     (0.75, (130, 230, 140)),
     (1.0, (235, 255, 235)),
 )
+CONTOUR_FADE_STEPS = 12           # brightness steps used when contours fade in and out
 SURVEY_INDEX_BRIGHTNESS = 1.0
 SURVEY_NORMAL_BRIGHTNESS = 0.7
 
@@ -75,6 +76,8 @@ KEY_BINDINGS = {
     "sell": ("x",),
     "centre": ("c",),
     "build": ("b",),
+    "icons": ("i",),
+    "sound": ("m",),
     "research": ("r",),
     "priority": ("p",),
     "cancel_site": ("delete", "backspace"),
@@ -96,6 +99,15 @@ ROVER_FACING_DEADBAND = 0.3       # |cos(heading)| needed before a rover turns a
 DEBRIS_SIZE_CELLS = 0.8
 DEBRIS_MIN_PX = 6
 BEACON_BLINK_HZ = 0.7
+
+# Icon style: "symbols" (top-down console marks, default) or "pictorial" (the
+# side-view rovers and oblique structures). I toggles between them.
+ICON_STYLES = ("symbols", "pictorial")
+SYMBOL_STRUCTURE_SCALE = 1.0      # symbol radius = footprint radius x this
+SYMBOL_STRUCTURE_MIN_PX = 4
+UNIT_SYMBOL_CELLS = 0.55          # unit marker radius in cells ...
+UNIT_SYMBOL_PX = (5, 9)           # ... clamped to this pixel range
+CARGO_DOT_PX = 2
 SELECT_PICK_RADIUS_PX = 14
 CLICK_MAX_DRAG_PX = 5
 
@@ -140,7 +152,8 @@ MENU_WIDTH = 470                  # build menu, top left under the HUD
 MENU_TOP = 112
 MENU_COLUMNS = (22, 170)          # x offsets: name, cost
 RESEARCH_WIDTH = 790
-RESEARCH_COLUMNS = (22, 205, 430) # x offsets: name, status, effect
+RESEARCH_COLUMNS = (6, 190, 415)  # x offsets: name, status, effect
+COLOR_MENU_CURSOR = (5, 28, 32)   # highlighted menu row
 RESEARCH_TOP = 90
 NEW_SITE_CONFIRM_S = 3.0          # press N twice within this to abandon the site
 SELL_BATCH = 10                   # scrap sold per press of the sell key

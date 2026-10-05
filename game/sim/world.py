@@ -55,6 +55,7 @@ class World:
         self.power_grids = {}
         self.dirty_power = True
         self.events = deque(maxlen=W.EVENT_LOG_LENGTH)
+        self.event_count = 0          # total events ever, so listeners can spot new ones
 
     def new_id(self):
         uid = self.next_id
@@ -63,6 +64,7 @@ class World:
 
     def event(self, text, kind="info"):
         self.events.append((self.tick_count, text, kind))
+        self.event_count += 1
 
     def time_s(self):
         return self.tick_count / W.TICK_RATE
@@ -148,6 +150,23 @@ class World:
             structures.cancel_site(self, s)
             return True
         return False
+
+    def toggle_deconstruct(self, structure_id):
+        """Mark a built structure for dismantling (or unmark it). Returns (ok, reason)."""
+        s = self.structures.get(structure_id)
+        if s is None or s is self.lander:
+            return False, "THE LANDER STAYS"
+        if not s.built:
+            return self.cancel(structure_id), ""
+        s.deconstruct = not s.deconstruct
+        s.teardown_s = 0.0
+        if not s.deconstruct:
+            for u in self.units.values():
+                if u.job == s.id:
+                    units.brain(u).drop_job(self, u)
+                    units.idle(u)
+        self.event(f"{s.spec['name'].upper()} " + ("MARKED FOR DECONSTRUCTION" if s.deconstruct else "KEPT"))
+        return True, ""
 
     def set_priority(self, structure_id, priority):
         s = self.structures.get(structure_id)
@@ -252,7 +271,8 @@ class World:
         return (
             self.tick_count, self.credits, self.scrap_spawned, self.scrap_sold, self.next_id,
             tuple(sorted(self.consumed.items())),
-            tuple((s.id, s.kind, s.x, s.y, s.built, s.work_done_s, s.powered, tuple(sorted(s.storage.items())))
+            tuple((s.id, s.kind, s.x, s.y, s.built, s.work_done_s, s.powered, s.deconstruct, s.teardown_s,
+                   tuple(sorted(s.storage.items())))
                   for s in self.structures.values()),
             tuple((d.id, d.x, d.y, d.kind, d.claimed_by) for d in self.debris.values()),
             tuple((u.id, u.kind, u.x, u.y, u.battery, u.state, u.activity, tuple(sorted(u.cargo.items())), u.target)
