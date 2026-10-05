@@ -9,13 +9,17 @@ import pygame
 from game.content import display as D
 from game.content import terrain as T
 from game.content import world as W
+from game.content.research import RESEARCH
+from game.content.structures import STRUCTURES
+from game.content.units import BAY_MENU
 from game.render import draw, entities
 from game.render.contours import build_contours, tier_for_zoom
 from game.render.glow import Glow
 from game.render.surfaces import new_surface
 from game.sim.terrain import generate_terrain
 from game.sim.world import build_world
-from game.ui import hud, panels
+from game.sim import structures as ST
+from game.ui import hud, menus, panels
 from game.ui.input import Input
 
 WEB = sys.platform == "emscripten"
@@ -61,6 +65,9 @@ class App:
         self.camera = None
         self.world = None
         self.selected = None
+        self.menu = None          # None, "build" or "research"
+        self.placing = None       # structure kind being placed
+        self.confirm_new_until = 0.0
         self.paused = False
         self.speed_index = 0
         self.accumulator = 0.0
@@ -106,9 +113,9 @@ class App:
             hud.draw_loading(self.screen, self.seed, self.stage, len(_STAGES),
                              _STAGES[self.stage - 1], self.progress)
         else:
+            self.input.panning_enabled = self.menu != "research"
             self.input.apply_held(self.camera, dt)
-            if self.input.click is not None:
-                self.selected = entities.pick(self.world, self.camera, self._alpha(), self.input.click)
+            self._handle_pointer_and_keys()
             self._advance(dt)
             self._draw_site()
         hud.draw_frame(self.screen)
@@ -119,8 +126,12 @@ class App:
         pygame.display.flip()
 
     def _do(self, action):
-        if action == "quit" and not WEB:
-            self.running = False
+        if action == "quit":
+            # Escape backs out of placement and menus first.
+            if self.placing or self.menu:
+                self.placing = self.menu = None
+            elif not WEB:
+                self.running = False
         elif action == "toggle_glow":
             self.glow_on = not self.glow_on
         elif action == "toggle_stats":
@@ -128,7 +139,12 @@ class App:
         elif action == "toggle_view":
             self.view = "survey" if self.view == "operations" else "operations"
         elif action == "new_site":
-            self.start_site()
+            now = time.perf_counter()
+            if self.world is None or now < self.confirm_new_until:
+                self.start_site()
+            else:
+                self.confirm_new_until = now + D.NEW_SITE_CONFIRM_S
+                self.world.event("PRESS N AGAIN TO ABANDON THIS SITE AND START A NEW ONE", "alert")
         elif self.world is None:
             return
         elif action == "pause":
@@ -145,6 +161,75 @@ class App:
             x, y = self._selected_xy()
             self.camera.x, self.camera.y = x, y
             self.camera.clamp()
+        elif action == "build":
+            self.menu = None if self.menu == "build" else "build"
+            self.placing = None
+        elif action == "research":
+            self.menu = None if self.menu == "research" else "research"
+            self.placing = None
+        elif action == "priority":
+            s = self._selected_structure()
+            if s is not None and s.spec.get("draw_kw"):
+                order = W.PRIORITIES
+                self.world.set_priority(s.id, order[(order.index(s.priority) + 1) % len(order)])
+        elif action == "cancel_site":
+            s = self._selected_structure()
+            if s is not None and not s.built:
+                self.world.cancel(s.id)
+                self.selected = None
+
+    def _selected_structure(self):
+        if self.selected and self.selected[0] == "structure":
+            return self.world.structures.get(self.selected[1])
+        return None
+
+    def _mouse_world(self):
+        return self.camera.screen_to_world(*self.input.mouse)
+
+    def _handle_pointer_and_keys(self):
+        world, inp = self.world, self.input
+        # Typed keys: menus first, then the selected rover bay.
+        for ch in inp.typed:
+            if self.menu == "build":
+                kind = menus.build_key(world, ch)
+                if kind:
+                    self.placing, self.menu = kind, None
+            elif self.menu == "research":
+                node = menus.research_key(ch)
+                if node:
+                    ok, reason = world.start_research(node)
+                    if not ok:
+                        world.event(f"{RESEARCH[node]['name'].upper()}: {reason}", "alert")
+            else:
+                s = self._selected_structure()
+                if s is not None and s.kind == "rover_bay" and s.built and ch.isdigit():
+                    i = int(ch) - 1
+                    if 0 <= i < len(BAY_MENU):
+                        ok, reason = world.order_unit(s.id, BAY_MENU[i])
+                        if not ok:
+                            world.event(reason, "alert")
+        # Pointer.
+        if self.placing:
+            if inp.click is not None:
+                x, y = self.camera.screen_to_world(*inp.click)
+                site, reason = world.place(self.placing, x, y)
+                if site is None:
+                    world.event(f"CAN'T BUILD HERE: {reason}", "alert")
+                elif not (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                    self.placing = None  # hold shift to place several
+            if inp.right_click is not None:
+                self.placing = None
+            return
+        if inp.click is not None:
+            self.selected = entities.pick(world, self.camera, self._alpha(), inp.click)
+        if inp.right_click is not None and self.selected and self.selected[0] == "unit":
+            x, y = self.camera.screen_to_world(*inp.right_click)
+            unit = world.units.get(self.selected[1])
+            if unit is not None:
+                kind = "survey" if unit.kind == "survey_rover" else "move"
+                ok, reason = world.command_unit(unit.id, kind, x, y)
+                world.event(("ORDER: " + ("SURVEY THERE" if kind == "survey" else "GO THERE")) if ok
+                            else f"ORDER REFUSED: {reason}", "info" if ok else "alert")
 
     # Simulation ---------------------------------------------------------------
 
@@ -176,11 +261,17 @@ class App:
     def _draw_site(self):
         cam, hm = self.camera, self.heightmap
         tier = tier_for_zoom(cam.zoom)
-        self.segments = draw.draw_contours(self.screen, self.contours, cam, tier, self.colors[self.view])
-        draw.draw_site_border(self.screen, cam)
         world = self.world
+        caps = [W.SURVEY_LEVEL_TO_TIER[level] for level in world.survey.chunk_levels()]
+        self.segments = draw.draw_contours(self.screen, self.contours, cam, tier, self.colors[self.view], caps)
+        draw.draw_site_border(self.screen, cam)
+        ghost = None
+        if self.placing and self.input.mouse_inside:
+            x, y = self._mouse_world()
+            ok, reason = ST.check_placement(world, self.placing, x, y)
+            ghost = (self.placing, x, y, ok, reason, STRUCTURES[self.placing])
         self.segments += entities.draw_world(self.screen, world, cam, self._alpha(),
-                                             time.perf_counter(), self.selected)
+                                             time.perf_counter(), self.selected, ghost)
 
         cursor = None
         if self.input.mouse_inside:
@@ -193,8 +284,26 @@ class App:
             "cursor": cursor, "cell_m": hm.cell_m, "zoom": cam.zoom, "tier": tier,
             "show_stats": self.show_stats, "fps": self.clock.get_fps(),
             "frame_ms": self.frame_ms, "segments": self.segments, "glow": self.glow_on,
-            "credits": world.credits, "scrap": world.lander.storage.get("scrap", 0),
-            "storage": world.lander.spec["storage"], "time_s": world.time_s(),
+            "credits": world.credits, "scrap": world.stock("scrap"), "parts": world.stock("parts"),
+            "power": self._power_summary(), "time_s": world.time_s(),
             "paused": self.paused, "speed": W.SIM_SPEEDS[self.speed_index],
+            "research": (RESEARCH[world.research.current]["name"], world.research.progress())
+            if world.research.current else None,
+            "events": [((world.tick_count - t) / world.tick_rate, text, kind) for t, text, kind in world.events],
+            "hint": self._hint(),
         })
         panels.draw_inspect(self.screen, world, self.selected, D.PANEL_TOP)
+        if self.menu == "build":
+            menus.draw_build_menu(self.screen, world, D.HUD_MARGIN + 6, D.MENU_TOP)
+        elif self.menu == "research":
+            menus.draw_research(self.screen, world)
+
+    def _power_summary(self):
+        grid = self.world.power_grids.get(self.world.lander.grid)
+        return (grid["supply"], grid["demand"]) if grid else (0.0, 0.0)
+
+    def _hint(self):
+        if self.placing:
+            return (f"PLACING {STRUCTURES[self.placing]['name'].upper()}:  CLICK TO PLACE  "
+                    "SHIFT+CLICK PLACE MORE  RIGHT CLICK/ESC CANCEL")
+        return None

@@ -40,3 +40,46 @@ DEBRIS_RIM_BONUS = 4.0
 DEBRIS_RIM_RANGE = (0.85, 1.35)      # crater rim band, in crater radii
 DEBRIS_PROXIMITY_SIGMA_CELLS = 20.0
 DEBRIS_PROXIMITY_FLOOR = 0.05
+
+# Starting stock. Machine parts only come from the lander's hold (and, from
+# Milestone 4, supply drops) until a machine shop runs.
+START_CREDITS = 60
+START_STORAGE = {"scrap": 20, "parts": 30}
+
+# Survey: levels are tracked on a grid of SURVEY_CELLS x SURVEY_CELLS terrain cells.
+SURVEY_CELLS = 2
+LANDING_SURVEY_RADIUS_CELLS = (16.0, 5.0)  # level 1, level 2 around the lander at touchdown
+SURVEY_LEVEL_TO_TIER = (0, 1, 2)           # highest contour detail tier shown per survey level
+
+# Resource fields (hidden until surveyed).
+ILMENITE_FIELD_COUNT = (4, 6)
+ICE_FIELD_COUNT = (2, 3)
+ILMENITE_RADIUS_CELLS = (4.0, 7.0)
+ICE_RADIUS_FRACTION = (0.2, 0.3)           # of the host crater's radius
+ICE_MIN_CRATER_RADIUS_CELLS = 6.0
+ICE_MIN_RADIUS_CELLS = 3.0
+ICE_FLOOR_RING = (0.2, 0.45)               # floor band between central peak and wall, in crater radii
+ICE_FLOOR_SAMPLES = 40
+FIELD_RICHNESS = (0.6, 1.5)
+FIELD_EDGE_WOBBLE = 0.25                   # boundary irregularity, fraction of radius
+FIELD_MAX_SLOPE_DEG = 5.0                  # a field's centre must be buildable
+FIELD_CANDIDATES = 400                     # random spots tried per field
+FIELD_NEAR_LANDER_CELLS = (15.0, 45.0)     # the first ilmenite field lies this far out
+FIELD_MIN_SPACING_CELLS = 10.0
+
+# Illumination: fixed sun, a horizon march toward it, and a slope-facing term.
+SUN_AZIMUTH_DEG = 135.0                    # direction the light comes from (0 = +x, 90 = +y)
+SUN_ELEVATION_DEG = 12.0
+ILLUMINATION_STEP_CELLS = 2
+ILLUMINATION_MAX_STEPS = 24
+ILLUMINATION_RANGE = (0.4, 1.0)            # shadowed .. fully lit
+ILLUMINATION_GRID = 2                      # computed every this many cells
+
+# Power.
+PRIORITIES = ("high", "normal", "low")
+
+# Debris now spawns around every charging point, not just the lander.
+
+# Event log.
+EVENT_LOG_LENGTH = 6
+EVENT_SHOW_S = 12.0

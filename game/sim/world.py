@@ -1,65 +1,128 @@
-"""World: terrain, structures, units, debris, credits, and the fixed-step tick.
+"""World: terrain, structures, units, debris, fields, survey, research, credits,
+and the fixed-step tick.
 
 Tick order follows the design: power -> production -> job board -> units ->
-wear -> contracts. Milestone 2 has debris spawning (environment) and units.
+wear -> contracts. Milestone 3 has power, production (research, rover bays),
+debris spawning and units; the rest arrive with later milestones.
+Commands (methods called by the UI between ticks) are the only way the
+player changes the world, so a replay of commands reproduces a run.
 """
 
 import math
 import random
-from dataclasses import dataclass, field
+from collections import deque
 
 from game.content import items as I
 from game.content import units as U
 from game.content import world as W
+from game.content.research import RESEARCH
 from game.content.structures import STRUCTURES
-from game.sim import debris, units
+from game.content.terrain import CONTOUR_CHUNK_CELLS
+from game.sim import debris, fields, power, structures, units
 from game.sim.pathing import PathGrid
-
-
-@dataclass(slots=True)
-class Structure:
-    id: int
-    kind: str
-    x: float
-    y: float
-    storage: dict = field(default_factory=dict)  # item -> count
-    docks: list = field(default_factory=list)     # dock points (x, y)
-    dock_users: list = field(default_factory=list)  # unit id or None per dock
-
-    @property
-    def spec(self):
-        return STRUCTURES[self.kind]
-
-    def stored(self):
-        return sum(self.storage.values())
+from game.sim.research import Research
+from game.sim.survey import SurveyMap
+from game.sim.terrain import illumination
 
 
 class World:
-    def __init__(self, seed, heightmap, slopes, grid):
+    def __init__(self, seed, heightmap, slopes, grid, light):
         self.seed = seed
         self.rng = random.Random(f"{seed}/world")
         self.heightmap = heightmap
         self.slopes = slopes
         self.grid = grid
+        self.illumination = light
+        self.tick_rate = W.TICK_RATE
         self.tick_count = 0
         self.next_id = 1
         self.structures = {}
         self.units = {}
         self.debris = {}
-        self.credits = 0
+        self.fields = []
+        self.credits = W.START_CREDITS
         self.scrap_spawned = 0
         self.scrap_sold = 0
+        self.consumed = {}            # items used up by construction and rover bays
         self.debris_timer = round(W.DEBRIS_SPAWN_INTERVAL_S * W.TICK_RATE)
         self.lander = None
         self.home_field = None
-        self.debris_weights = None
+        self.charge_field = None
+        self.charger_key = None
+        self.spawn_map = None
+        self.survey = SurveyMap(heightmap.size, CONTOUR_CHUNK_CELLS)
+        self.research = Research()
+        self.power_grids = {}
+        self.dirty_power = True
+        self.events = deque(maxlen=W.EVENT_LOG_LENGTH)
 
     def new_id(self):
         uid = self.next_id
         self.next_id += 1
         return uid
 
-    # Commands (applied between ticks) ----------------------------------------
+    def event(self, text, kind="info"):
+        self.events.append((self.tick_count, text, kind))
+
+    def time_s(self):
+        return self.tick_count / W.TICK_RATE
+
+    # Queries ----------------------------------------------------------------------
+
+    def illumination_at(self, x, y):
+        n = self.heightmap.size
+        return self.illumination[min(max(int(y), 0), n - 1) * n + min(max(int(x), 0), n - 1)]
+
+    def battery_capacity(self, kind):
+        return U.UNITS[kind]["battery"] * self.research.effect("battery_mult", 1.0)
+
+    def storages(self):
+        return [s for s in self.structures.values() if s.stores()]
+
+    def stock(self, item):
+        return sum(s.storage.get(item, 0) for s in self.storages())
+
+    def chargers(self):
+        return [s for s in self.structures.values() if s.charges() and (s.powered or s is self.lander)]
+
+    def unlocked(self, kind):
+        spec = STRUCTURES.get(kind) or U.UNITS.get(kind)
+        return self.research.unlocked(spec.get("unlocked_by"))
+
+    # Storage --------------------------------------------------------------------------
+
+    def store(self, s, item, amount):
+        """Move up to amount items into structure s. Returns how many fit."""
+        n = max(0, min(amount, s.spec["storage"] - s.stored()))
+        if n:
+            s.storage[item] = s.storage.get(item, 0) + n
+        return n
+
+    def take_items(self, cost):
+        """Take a whole cost {item: n} from storage (lander first), or nothing."""
+        if any(self.stock(k) < n for k, n in cost.items()):
+            return False
+        order = [self.lander] + [s for s in self.storages() if s is not self.lander]
+        for k, n in cost.items():
+            for s in order:
+                take = min(n, s.storage.get(k, 0))
+                if take:
+                    s.storage[k] -= take
+                    if not s.storage[k]:
+                        del s.storage[k]
+                    n -= take
+            self.consumed[k] = self.consumed.get(k, 0) + cost[k]
+        return True
+
+    def scrap_accounted(self):
+        """Every scrap ever spawned, wherever it is now (for conservation checks)."""
+        on_sites = sum(s.delivered.get("scrap", 0) for s in self.structures.values() if not s.built)
+        return (sum(d.value for d in self.debris.values())
+                + sum(u.cargo.get("scrap", 0) for u in self.units.values())
+                + self.stock("scrap") + on_sites + self.scrap_sold
+                + self.consumed.get("scrap", 0) - W.START_STORAGE.get("scrap", 0))
+
+    # Commands (applied between ticks) ------------------------------------------------
 
     def sell_scrap(self, amount):
         """Sell up to amount scrap from the lander. Returns how many were sold."""
@@ -70,46 +133,135 @@ class World:
             self.scrap_sold += n
         return n
 
-    # Helpers -------------------------------------------------------------------
+    def place(self, kind, x, y):
+        return structures.place_site(self, kind, x, y)
 
-    def lander_store(self, item, amount):
-        """Move up to amount items into lander storage. Returns how many fit."""
-        n = max(0, min(amount, self.lander.spec["storage"] - self.lander.stored()))
-        if n:
-            self.lander.storage[item] = self.lander.storage.get(item, 0) + n
-        return n
+    def cancel(self, structure_id):
+        s = self.structures.get(structure_id)
+        if s is not None and not s.built:
+            # Constructors carrying for it put their cargo back into storage later.
+            for u in self.units.values():
+                if u.job == structure_id:
+                    units.brain(u).drop_job(self, u)
+                    units.idle(u)
+            # Materials already delivered are refunded; count them as stock again.
+            structures.cancel_site(self, s)
+            return True
+        return False
 
-    def scrap_accounted(self):
-        """Every scrap ever spawned, wherever it is now (for conservation checks)."""
-        return (sum(d.value for d in self.debris.values())
-                + sum(u.cargo for u in self.units.values())
-                + self.lander.storage.get("scrap", 0)
-                + self.scrap_sold)
+    def set_priority(self, structure_id, priority):
+        s = self.structures.get(structure_id)
+        if s is not None and priority in W.PRIORITIES:
+            s.priority = priority
+            self.dirty_power = True
 
-    def time_s(self):
-        return self.tick_count / W.TICK_RATE
+    def start_research(self, node):
+        ok, reason = self.research.can_start(node, self.credits)
+        if ok:
+            self.credits -= RESEARCH[node]["cost"]
+            self.research.start(node)
+            self.event(f"RESEARCH STARTED: {RESEARCH[node]['name'].upper()}")
+        return ok, reason
 
-    # Tick ------------------------------------------------------------------------
+    def order_unit(self, bay_id, kind):
+        s = self.structures.get(bay_id)
+        if s is None or s.kind != "rover_bay" or not s.built:
+            return False, "NO ROVER BAY"
+        if not self.unlocked(kind):
+            return False, "NOT RESEARCHED"
+        if len(s.queue) >= 5:
+            return False, "QUEUE FULL"
+        s.queue.append(kind)
+        return True, ""
+
+    def command_unit(self, unit_id, kind, x, y):
+        u = self.units.get(unit_id)
+        if u is None or u.state == units.STRANDED:
+            return False, "UNAVAILABLE"
+        if kind == "survey" and u.kind != "survey_rover":
+            kind = "move"
+        return units.give_order(self, u, kind, x, y)
+
+    # Systems -----------------------------------------------------------------------
+
+    def survey_area(self, x, y, radius, level):
+        changed = self.survey.raise_area(x, y, radius, level)
+        if not changed:
+            return
+        res = self.survey.res
+        for f in self.fields:
+            if f.confirmed and f.hinted:
+                continue
+            for i in changed:
+                sy, sx = divmod(i, self.survey.n)
+                if f.contains((sx + 0.5) * res, (sy + 0.5) * res):
+                    if not f.hinted:
+                        f.hinted = True
+                        self.event(f"FIELD SIGNAL: POSSIBLE {f.kind.upper()} DEPOSIT", "field")
+                    if level >= 2 and not f.confirmed:
+                        f.confirmed = True
+                        self.event(f"{f.kind.upper()} FIELD CONFIRMED - RICHNESS {f.richness:.1f}X", "field")
+                    if f.confirmed:
+                        break
+
+    def spawn_unit(self, kind, x, y):
+        uid = self.new_id()
+        u = units.make_unit(self, uid, kind, x, y)
+        self.units[uid] = u
+        return u
+
+    def structures_changed(self):
+        self.dirty_power = True
+
+    def _refresh_chargers(self):
+        """Recompute the nearest-charger field and debris spawn area when chargers change."""
+        chargers = self.chargers()
+        key = tuple(sorted(s.id for s in chargers))
+        if key == self.charger_key:
+            return
+        self.charger_key = key
+        nodes = tuple(sorted({self.grid.node_at(s.x, s.y) for s in chargers}))
+        self.charge_field = self.grid.field(nodes)
+        scav = U.UNITS["scavenger"]
+        usable = (1.0 - U.LOW_BATTERY_FRACTION) * self.battery_capacity("scavenger") - scav["pickup_energy"]
+        max_round_trip = usable / (scav["drain_per_cost_cell"] * U.TRIP_SAFETY_FACTOR)
+        self.spawn_map.update(self.charge_field, [(s.x, s.y) for s in chargers], max_round_trip)
 
     def tick(self):
         self.tick_count += 1
+        # Power.
+        if self.dirty_power:
+            self.power_grids = power.compute(list(self.structures.values()))
+            self.dirty_power = False
+        self._refresh_chargers()
+        # Production.
+        done = self.research.tick()
+        if done:
+            self.event(f"RESEARCH COMPLETE: {RESEARCH[done]['name'].upper()}")
+            self.charger_key = None  # battery upgrades change debris range
+        for s in list(self.structures.values()):
+            if s.built and s.kind == "rover_bay":
+                structures.update_bay(self, s)
+        # Environment and units.
         debris.update(self)
-        for unit in self.units.values():
+        for unit in list(self.units.values()):
             units.update(self, unit)
 
     def digest(self):
         """Compact full-state snapshot for determinism checks."""
         return (
             self.tick_count, self.credits, self.scrap_spawned, self.scrap_sold, self.next_id,
-            tuple(sorted(self.lander.storage.items())),
+            tuple(sorted(self.consumed.items())),
+            tuple((s.id, s.kind, s.x, s.y, s.built, s.work_done_s, s.powered, tuple(sorted(s.storage.items())))
+                  for s in self.structures.values()),
             tuple((d.id, d.x, d.y, d.kind, d.claimed_by) for d in self.debris.values()),
-            tuple((u.id, u.x, u.y, u.battery, u.state, u.cargo, u.target, u.slot)
+            tuple((u.id, u.kind, u.x, u.y, u.battery, u.state, u.activity, tuple(sorted(u.cargo.items())), u.target)
                   for u in self.units.values()),
-            self.rng.getstate(),
+            bytes(self.survey.levels), tuple(sorted(self.research.done)), self.rng.getstate(),
         )
 
 
-def _place_lander(grid, size):
+def _place_lander(grid):
     """Cheapest open node near the centre whose reachable area is large enough."""
     n = grid.n
     centre = (n - 1) / 2
@@ -136,36 +288,48 @@ def _place_lander(grid, size):
 def build_world(seed, heightmap):
     """Generator: yields progress in [0, 1], returns a ready World."""
     slopes = heightmap.cell_slopes()
-    yield 0.25
+    yield 0.15
     grid = PathGrid(heightmap.size, slopes)
-    yield 0.5
-    world = World(seed, heightmap, slopes, grid)
+    yield 0.3
+    light = illumination(heightmap, W)
+    yield 0.45
+    world = World(seed, heightmap, slopes, grid, light)
 
-    node, home = _place_lander(grid, heightmap.size)
+    node, home = _place_lander(grid)
     lx, ly = grid.node_centre(node)
-    spec = STRUCTURES["lander"]
-    lander = Structure(world.new_id(), "lander", lx, ly)
-    for k in range(spec["charge_slots"]):
-        a = math.pi / 4 + k * 2 * math.pi / spec["charge_slots"]
-        r = spec["dock_radius_cells"]
-        lander.docks.append((lx + r * math.cos(a), ly + r * math.sin(a)))
-        lander.dock_users.append(None)
+    lander = structures.Structure(world.new_id(), "lander", lx, ly)
+    lander.output_kw = STRUCTURES["lander"]["power_kw"]
+    lander.storage = dict(W.START_STORAGE)
+    structures.make_docks(lander)
     world.structures[lander.id] = lander
     world.lander = lander
     world.home_field = home
-    yield 0.6
+    yield 0.55
 
-    scav = U.UNITS["scavenger"]
-    usable = (1.0 - U.LOW_BATTERY_FRACTION) * scav["battery"] - scav["pickup_energy"]
-    max_round_trip = usable / (scav["drain_per_cost_cell"] * U.TRIP_SAFETY_FACTOR)
-    world.debris_weights = debris.spawn_weights(heightmap, slopes, grid, home, (lx, ly), max_round_trip)
-    yield 0.9
+    world.fields = fields.generate(world, world.rng)
+    yield 0.65
+    world.spawn_map = debris.SpawnMap(heightmap, slopes, grid)
+    yield 0.85
+    world.power_grids = power.compute(list(world.structures.values()))
+    world.dirty_power = False
+    world._refresh_chargers()
+    lvl1, lvl2 = W.LANDING_SURVEY_RADIUS_CELLS
+    world.survey_area(lx, ly, lvl1, 1)
+    world.survey_area(lx, ly, lvl2, 2)
+    world.events.clear()
     for _ in range(W.DEBRIS_INITIAL):
         debris.try_spawn(world)
 
-    for i in range(scav["start_count"]):
-        uid = world.new_id()
-        stagger = round((i + 1) * scav["launch_stagger_s"] * W.TICK_RATE)
-        world.units[uid] = units.make_scavenger(world, uid, lander, i, stagger)
+    slot = 0
+    for kind in ("scavenger", "constructor"):
+        spec = U.UNITS[kind]
+        for i in range(spec["start_count"]):
+            x, y = lander.docks[slot]
+            u = world.spawn_unit(kind, x, y)
+            u.dock, u.slot, u.docked = lander.id, slot, True
+            lander.dock_users[slot] = u.id
+            u.timer = round((i + 1) * spec["launch_stagger_s"] * W.TICK_RATE) + slot
+            slot += 1
+    world.event("TOUCHDOWN. SCAVENGERS DEPLOYED")
     yield 1.0
     return world

@@ -207,3 +207,54 @@ def generate_terrain(seed: int, size: int = T.GRID_SIZE):
 
     heights = array("f", h)
     return Heightmap(size, T.CELL_SIZE_M, heights, min(heights), max(heights), tuple(craters))
+
+
+def illumination(heightmap, w):
+    """Sunlight factor per cell in w.ILLUMINATION_RANGE (static: no day/night).
+
+    Computed every w.ILLUMINATION_GRID cells: a cell is shadowed if terrain
+    toward the sun rises above the sun's elevation line; lit cells scale with
+    how squarely their slope faces the sun. w is the content.world module.
+    """
+    n, h, cell = heightmap.size, heightmap.heights, heightmap.cell_m
+    az, el = math.radians(w.SUN_AZIMUTH_DEG), math.radians(w.SUN_ELEVATION_DEG)
+    # Light comes *from* the sun direction; march toward it.
+    sx, sy = math.cos(az), math.sin(az)
+    rise_per_cell = math.tan(el) * cell
+    sun = (sx * math.cos(el), sy * math.cos(el), math.sin(el))
+    lo, hi = w.ILLUMINATION_RANGE
+    g = w.ILLUMINATION_GRID
+    coarse_n = (n + g - 1) // g
+    coarse = [hi] * (coarse_n * coarse_n)
+    step = w.ILLUMINATION_STEP_CELLS
+    for cy in range(coarse_n):
+        y = min(cy * g, n - 1)
+        for cx in range(coarse_n):
+            x = min(cx * g, n - 1)
+            h0 = h[y * n + x]
+            shadow = False
+            for k in range(1, w.ILLUMINATION_MAX_STEPS + 1):
+                px, py = int(x + sx * step * k), int(y + sy * step * k)
+                if not (0 <= px < n and 0 <= py < n):
+                    break
+                if h[py * n + px] > h0 + rise_per_cell * step * k:
+                    shadow = True
+                    break
+            if shadow:
+                coarse[cy * coarse_n + cx] = lo
+                continue
+            left, right = h[y * n + max(x - 1, 0)], h[y * n + min(x + 1, n - 1)]
+            up, down = h[max(y - 1, 0) * n + x], h[min(y + 1, n - 1) * n + x]
+            gx, gy = (right - left) / (2 * cell), (down - up) / (2 * cell)
+            norm = math.sqrt(gx * gx + gy * gy + 1.0)
+            facing = (-gx * sun[0] - gy * sun[1] + sun[2]) / norm
+            flat = sun[2]
+            # Relative to flat ground: facing the sun brightens, facing away dims.
+            k = max(0.0, min(1.0, 0.5 + 0.5 * (facing - flat) / max(1e-6, 1.0 - flat)))
+            coarse[cy * coarse_n + cx] = lo + (hi - lo) * (0.6 + 0.4 * k)
+    out = array("f", bytes(4 * n * n))
+    for y in range(n):
+        row = (y // g) * coarse_n
+        for x in range(n):
+            out[y * n + x] = coarse[row + x // g]
+    return out

@@ -3,10 +3,12 @@
 A small, systems-driven lunar mining game in Python, drawn as a CRT vector
 console. `DESIGN.md` is the design brief and the single source of truth.
 
-Status: **Milestone 2 (ant farm)**. On top of Milestone 1's terrain and
-contours: the lander, debris that spawns and respawns, two scavengers that
-collect it on batteries and recharge at the lander, slope-aware pathing,
-phosphor trails, an inspect panel, and selling scrap for credits.
+Status: **Milestone 3 (build and power)**. On top of the terrain, the
+scavenger ant farm and selling scrap: construction sites built by a
+constructor, solar arrays, pylons, charging pads, depots, rover bays and mines,
+power grids with priority allocation, a research tree, survey rovers, survey
+levels that sharpen the contour map, and hidden ilmenite and ice fields.
+Production (mines actually producing) arrives with Milestone 4.
 
 ## Play
 
@@ -26,18 +28,26 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 | Input | Action |
 | --- | --- |
-| WASD / arrows / left- or middle-drag | Pan |
-| Mouse wheel, Q / E (or - / =) | Zoom (wheel zooms toward the cursor) |
-| Tab or V | Operations / survey view |
-| G | Glow on / off |
-| F or F3 | Performance stats |
-| Left click | Inspect a unit or the lander |
-| C | Centre on the selection |
+| B, then 1-0 | Build menu, then pick a structure; click to place (Shift+click places more), right click or Esc cancels |
+| R, then A-N | Research panel, then start a project |
+| Left click | Select a unit or structure (inspect panel) |
+| Right click | Order the selected unit: go there, or for a survey rover, survey there |
+| 1-3 with a rover bay selected | Build a scavenger, constructor or survey rover |
+| P | Cycle the selected structure's power priority |
+| Del | Cancel the selected construction site (materials are refunded) |
 | X / Shift+X | Sell 10 scrap / all scrap from the lander |
-| Space | Pause |
-| , / . | Slower / faster (1x, 2x, 4x) |
-| N | Generate a new site |
-| Esc | Quit (desktop) |
+| C | Centre on the selection |
+| WASD / arrows / drag | Pan |
+| Mouse wheel, Q / E | Zoom |
+| Space, `,` / `.` | Pause, slower / faster (1x, 2x, 4x) |
+| Tab or V | Operations / survey view |
+| G, F | Glow, performance stats |
+| N twice | Abandon the site and generate a new one |
+| Esc | Close menus (desktop: quit when nothing is open) |
+
+A first goal: research Field Survey, build a rover bay near the lander, order a
+survey rover, let it confirm an ilmenite field (green outline), sell scrap for
+Extraction, then build a mine on the field.
 
 If the game crashes at startup, try `python main.py --no-scale` (a plain
 960x540 window without SDL's SCALED mode), then run
@@ -52,7 +62,9 @@ python3.12 -m unittest -v
 
 Tests cover the headless parts only (`game/sim`, `game/render/contours.py`),
 which never import pygame: terrain, contours, pathing, scrap conservation,
-debris reservations, battery safety and deterministic replay.
+debris reservations, battery safety, power allocation by priority, placement,
+construction, research, survey, and deterministic replay, plus an end-to-end
+test of the Milestone 3 exit (survey a field, then build a mine on it).
 
 ## Browser build
 
@@ -70,10 +82,12 @@ loads the Python WASM runtime at run time, both from `pygame-web.github.io`.
 ```
 main.py            async entry point (pygbag needs it at the root)
 game/app.py        loading and running states, one frame at a time
-game/sim/          simulation, no pygame: terrain, world + tick, pathing, units, debris
+game/sim/          simulation, no pygame: terrain, world + tick, pathing, power, research,
+                   survey, fields, structures, debris, units + one brain per unit kind
 game/content/      tunable numbers only, as plain data tables
-game/render/       contours (pure Python), camera + terrain, entities, glow, Hershey text
-game/ui/           HUD, inspect panel and input
+game/render/       contours (pure Python), camera + terrain, glyphs, entities, glow, Hershey text
+game/ui/           HUD, inspect panel, build and research menus, input
+web/contour.tmpl   page template for the browser build (pygbag 0.9.3's, restyled)
 tests/             unittest, headless
 tools/             hershey_convert.py regenerates game/render/hershey_data.py
 ```

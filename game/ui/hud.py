@@ -42,18 +42,34 @@ def draw_running(surface, info):
     w, h = surface.get_size()
     lh = D.HUD_LINE_HEIGHT
 
-    # Top left: site, economy, clock and view.
+    # Top left: site, economy, power, clock, research and view.
     draw_text(surface, f"SITE {info['seed']}", (M + 6, M + 4), 2)
     y = M + 4 + line_height(2) + 4
-    draw_text(surface, f"CREDITS {info['credits']}   SCRAP {info['scrap']}/{info['storage']}", (M + 6, y), 1)
+    draw_text(surface, f"CREDITS {info['credits']}   SCRAP {info['scrap']}   PARTS {info['parts']}", (M + 6, y), 1)
+    supply, demand = info["power"]
+    draw_text(surface, f"POWER {demand:.0f}/{supply:.0f} KW", (M + 6 + 330, y), 1,
+              D.COLOR_ALERT if demand > supply else D.COLOR_POWER)
+    y += lh
     t = int(info["time_s"])
     clock = f"T+{t // 3600:02d}:{t // 60 % 60:02d}:{t % 60:02d}"
     rate = "PAUSED" if info["paused"] else f"SPEED {info['speed']}X"
     draw_text(surface, f"{clock}   {rate}", (M + 6, y + lh), 1,
               D.COLOR_ALERT if info["paused"] else D.COLOR_TEXT_DIM)
+    research = info.get("research")
+    rtext = f"RESEARCH {research[0].upper()} {research[1] * 100:3.0f}%" if research else "RESEARCH IDLE (R)"
     view = "SURVEY VIEW" if info["view"] == "survey" else "OPERATIONS VIEW"
-    draw_text(surface, f"{view}   CONTOUR INTERVAL {info['interval']:g} M",
-              (M + 6, y + 2 * lh), 1, D.COLOR_TEXT_DIM)
+    draw_text(surface, f"{rtext}   {view}", (M + 6, y + 2 * lh), 1, D.COLOR_TEXT_DIM)
+
+    # Event log, newest at the bottom, fading out.
+    ey = h - M - 4 - 3 * lh
+    for age_s, text, kind in reversed(info.get("events", [])):
+        if age_s > D.EVENT_SHOW_S:
+            continue
+        fade = 1.0 - age_s / D.EVENT_SHOW_S
+        base = {"alert": D.COLOR_ALERT, "field": D.COLOR_FIELD}.get(kind, D.COLOR_TEXT)
+        color = tuple(int(c * (0.35 + 0.65 * fade)) for c in base)
+        draw_text(surface, "> " + text, (M + 6, ey), 1, color)
+        ey -= lh
 
     # Bottom left: cursor readout and controls.
     y = h - M - 4 - 2 * lh
@@ -62,8 +78,8 @@ def draw_running(surface, info):
         x_km, y_km, elev, slope = cursor
         draw_text(surface, f"X {x_km:5.1f} KM   Y {y_km:5.1f} KM   ELEV {elev:+6.0f} M   SLOPE {slope:4.1f} DEG",
                   (M + 6, y), 1)
-    draw_text(surface, "DRAG/WASD PAN  WHEEL ZOOM  CLICK INSPECT  C CENTRE  SPACE PAUSE  ,/. SPEED"
-              "  TAB VIEW  G GLOW  F STATS  N NEW", (M + 6, y + lh), 1, D.COLOR_TEXT_DIM)
+    draw_text(surface, info.get("hint") or "B BUILD  R RESEARCH  CLICK SELECT  RIGHT CLICK ORDER  DRAG/WASD PAN"
+              "  WHEEL ZOOM  SPACE PAUSE  ,/. SPEED  TAB VIEW", (M + 6, y + lh), 1, D.COLOR_TEXT_DIM)
 
     # Bottom right: scale bar.
     km_per_px = info["cell_m"] / 1000.0 / info["zoom"]

@@ -6,7 +6,8 @@ from game.content import display as D
 
 # Actions that fire once per key press (the rest are held).
 _TRIGGERS = ("toggle_view", "toggle_glow", "toggle_stats", "new_site", "quit",
-             "pause", "speed_up", "speed_down", "sell", "centre")
+             "pause", "speed_up", "speed_down", "sell", "centre",
+             "build", "research", "priority", "cancel_site")
 
 
 class Input:
@@ -18,15 +19,22 @@ class Input:
         self.mouse = (0, 0)
         self.mouse_inside = False
         self.click = None  # screen position of a left click (press and release without dragging)
+        self.right_click = None
+        self.typed = []    # characters typed this frame (upper case), for menus
+        self.panning_enabled = True
 
     def process(self, events, camera):
         """Handle this frame's events. Returns the triggered actions."""
         actions = []
         self.click = None
+        self.right_click = None
+        self.typed = []
         for event in events:
             if event.type == pygame.QUIT:
                 actions.append("quit")
             elif event.type == pygame.KEYDOWN:
+                if event.unicode and event.unicode.isalnum():
+                    self.typed.append(event.unicode.upper())
                 for action in _TRIGGERS:
                     if event.key in self.keys[action]:
                         shifted = action == "sell" and event.mod & pygame.KMOD_SHIFT
@@ -39,6 +47,8 @@ class Input:
                     # Small wobbles during a click don't pan.
                     if camera is not None and self.drag_px > D.CLICK_MAX_DRAG_PX:
                         camera.pan_pixels(*event.rel)
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                self.right_click = event.pos
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button in D.PAN_DRAG_BUTTONS:
                 self.dragging = True
                 self.drag_px = 0
@@ -53,6 +63,8 @@ class Input:
         return actions
 
     def apply_held(self, camera, dt):
+        if not self.panning_enabled:
+            return
         pressed = pygame.key.get_pressed()
 
         def held(action):

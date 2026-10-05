@@ -3,7 +3,6 @@ import unittest
 from game.content import units as U
 from game.content import world as W
 from game.content.items import ITEMS
-from game.sim import debris as DB
 from game.sim import units as US
 from game.sim.terrain import generate_terrain, run_to_completion
 from game.sim.world import build_world
@@ -21,13 +20,18 @@ def minutes(m):
     return int(m * 60 * W.TICK_RATE)
 
 
+def scavengers(w):
+    return [u for u in w.units.values() if u.kind == "scavenger"]
+
+
 class WorldSetupTests(unittest.TestCase):
     def test_lander_on_open_ground_with_starting_units_docked(self):
         w = make_world(1)
         self.assertTrue(w.grid.open[w.grid.node_at(w.lander.x, w.lander.y)])
-        scavengers = [u for u in w.units.values() if u.kind == "scavenger"]
-        self.assertEqual(len(scavengers), U.UNITS["scavenger"]["start_count"])
-        for u in scavengers:
+        for kind in ("scavenger", "constructor"):
+            units = [u for u in w.units.values() if u.kind == kind]
+            self.assertEqual(len(units), U.UNITS[kind]["start_count"])
+        for u in w.units.values():
             self.assertTrue(u.docked)
             self.assertEqual(w.lander.dock_users[u.slot], u.id)
 
@@ -36,12 +40,15 @@ class WorldSetupTests(unittest.TestCase):
         self.assertEqual(len(w.debris), W.DEBRIS_INITIAL)
         size = w.heightmap.size
         for d in w.debris.values():
-            i = int(d.y + 0.5) * size + int(d.x + 0.5)
-            i = min(i, len(w.debris_weights) - 1)
-            weight = w.debris_weights[i] - (w.debris_weights[i - 1] if i else 0.0)
             # Sampling jitters within half a cell, so check the sampled cell or a neighbour.
-            near = [w.debris_weights[j] - w.debris_weights[j - 1] for j in (i - 1, i, i + 1) if 0 < j < len(w.debris_weights)]
-            self.assertTrue(weight > 0 or any(v > 0 for v in near))
+            cells = [int(d.y + oy) * size + int(d.x + ox) for ox in (-0.5, 0, 0.5) for oy in (-0.5, 0, 0.5)]
+            self.assertTrue(any(w.spawn_map.cell_weight(i) > 0 for i in cells if 0 <= i < size * size))
+
+    def test_landing_area_is_surveyed(self):
+        w = make_world(1)
+        self.assertEqual(w.survey.level_at(w.lander.x, w.lander.y), 2)
+        self.assertGreater(w.survey.coverage(1), 0.0)
+        self.assertLess(w.survey.coverage(1), 0.2)
 
 
 class ConservationAndReservationTests(unittest.TestCase):
@@ -52,16 +59,17 @@ class ConservationAndReservationTests(unittest.TestCase):
             if t % 700 == 0:
                 w.sell_scrap(5)
             self.assertEqual(w.scrap_accounted(), w.scrap_spawned)
-            targets = [u.target for u in w.units.values() if u.target is not None]
+            targets = [u.target for u in scavengers(w) if u.activity in ("to_debris", "pickup")]
             self.assertEqual(len(targets), len(set(targets)))
-            for u in w.units.values():
-                if u.target is not None:
+            for u in scavengers(w):
+                if u.activity in ("to_debris", "pickup"):
                     self.assertEqual(w.debris[u.target].claimed_by, u.id)
             for d in w.debris.values():
                 if d.claimed_by is not None:
                     self.assertEqual(w.units[d.claimed_by].target, d.id)
             self.assertLessEqual(len(w.debris), W.DEBRIS_MAX)
-            self.assertLessEqual(w.lander.stored(), w.lander.spec["storage"])
+            for s in w.storages():
+                self.assertLessEqual(s.stored(), s.spec["storage"])
 
 
 class BatteryTests(unittest.TestCase):
@@ -76,21 +84,19 @@ class BatteryTests(unittest.TestCase):
                     self.assertNotEqual(u.state, US.STRANDED)
                     if u.state == US.CHARGING:
                         charged.add(u.id)
-            self.assertEqual(charged, set(w.units), f"seed {seed}: every scavenger should charge")
+            self.assertEqual(charged, {u.id for u in scavengers(w)}, f"seed {seed}: every scavenger should charge")
 
     def test_low_battery_drops_job_and_returns_home_before_dying(self):
         w = make_world(1)
-        unit = next(iter(w.units.values()))
+        unit = scavengers(w)[0]
         # Let it leave on a job, then drain it to just above the low threshold.
-        while unit.state != US.TO_DEBRIS:
+        while unit.activity != "to_debris":
             w.tick()
         target = unit.target
-        low = U.LOW_BATTERY_FRACTION * unit.spec["battery"]
-        unit.battery = low + 0.05
-        while unit.state == US.TO_DEBRIS:
+        unit.battery = U.LOW_BATTERY_FRACTION * US.capacity(w, unit) + 0.05
+        while unit.activity == "to_debris":
             w.tick()
-        self.assertEqual(unit.state, US.TO_DOCK)
-        self.assertIsNone(unit.target)
+        self.assertEqual(unit.activity, "to_charge")
         if target in w.debris:
             self.assertIsNone(w.debris[target].claimed_by)
         for _ in range(minutes(3)):
@@ -105,20 +111,22 @@ class BatteryTests(unittest.TestCase):
 class EconomyTests(unittest.TestCase):
     def test_scrap_accumulates_and_sells_for_credits(self):
         w = make_world(3)
+        start_scrap = w.lander.storage.get("scrap", 0)
         for _ in range(minutes(2)):
             w.tick()
         stored = w.lander.storage.get("scrap", 0)
-        self.assertGreater(stored, 0)
+        self.assertGreater(stored, start_scrap)
+        credits = w.credits
         sold = w.sell_scrap(stored + 100)
         self.assertEqual(sold, stored)
-        self.assertEqual(w.credits, stored * ITEMS["scrap"]["sell_price"])
+        self.assertEqual(w.credits - credits, stored * ITEMS["scrap"]["sell_price"])
         self.assertEqual(w.lander.storage.get("scrap", 0), 0)
         self.assertEqual(w.sell_scrap(1), 0)
 
     def test_debris_respawns_one_per_interval_up_to_cap(self):
         w = make_world(4)
         for unit in w.units.values():
-            unit.state, unit.timer = US.IDLE, 10 ** 9  # park the scavengers
+            unit.state, unit.timer = US.IDLE, 10 ** 9  # park everyone
         w.debris.clear()
         w.scrap_spawned = 0
         interval = round(W.DEBRIS_SPAWN_INTERVAL_S * W.TICK_RATE)
@@ -132,21 +140,22 @@ class EconomyTests(unittest.TestCase):
 
     def test_spawn_weights_zero_beyond_round_trip_range(self):
         w = make_world(1)
-        weights = w.debris_weights
         spec = U.UNITS["scavenger"]
         usable = (1.0 - U.LOW_BATTERY_FRACTION) * spec["battery"] - spec["pickup_energy"]
         max_trip = usable / (spec["drain_per_cost_cell"] * U.TRIP_SAFETY_FACTOR)
-        size = w.heightmap.size
-        for i in range(1, size * size, 97):
-            node = w.grid.node_at(i % size, i // size)
-            if 2 * w.home_field.dist[node] > max_trip:
-                self.assertEqual(weights[i], weights[i - 1])
+        cum = w.spawn_map.cumulative
+        for node in range(len(cum)):
+            weight = cum[node] - (cum[node - 1] if node else 0.0)
+            if 2 * w.charge_field.dist[node] > max_trip:
+                self.assertEqual(weight, 0.0)
 
 
 class DeterminismTests(unittest.TestCase):
     def run_world(self, seed, ticks):
         w = make_world(seed)
         for t in range(ticks):
+            if t == 50:
+                w.start_research("field_survey")
             if t in (1200, 3100):
                 w.sell_scrap(3)
             w.tick()

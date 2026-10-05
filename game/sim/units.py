@@ -1,9 +1,13 @@
-"""Unit state machines, battery and movement. Never imports pygame.
+"""Shared unit machinery: movement, wandering, battery, docking, orders.
 
-Scavenger loop: pick the nearest unclaimed debris it can reach and still get
-home from with battery to spare, drive there, pick it up, repeat until the
-cargo is full or nothing is in range, then dock at the lander to unload and
-charge. Below the low-battery threshold it drops its job and heads to dock.
+Each unit kind has a brain module (scavenger, constructor, surveyor) with:
+  think(world, unit)        choose the next activity
+  arrived(world, unit)      a MOVING unit reached the end of its path
+  work_done(world, unit)    a WORKING unit's timer ran out
+  work_tick(world, unit)    optional, every tick while WORKING
+  on_move(world, unit)      optional, every tick while MOVING
+  drop_job(world, unit)     release claims (low battery, new orders)
+Never imports pygame.
 """
 
 import math
@@ -14,12 +18,10 @@ from game.content import units as U
 from game.content import world as W
 from game.content.structures import STRUCTURES
 
-# States.
+# Core states. What a unit is doing within a state is its `activity`.
 IDLE = "idle"
-TO_DEBRIS = "to_debris"
-PICKUP = "pickup"
-TO_DOCK = "to_dock"
-UNLOAD = "unload"
+MOVING = "moving"
+WORKING = "working"
 CHARGING = "charging"
 STRANDED = "stranded"
 
@@ -28,20 +30,34 @@ STRANDED = "stranded"
 class Unit:
     id: int
     kind: str
-    x: float
+    x: float                         # position on the planned path
     y: float
     battery: float
     state: str = IDLE
-    cargo: int = 0
-    target: int | None = None        # debris id
+    activity: str = "idle"
+    cargo: dict = field(default_factory=dict)
+    target: int | None = None        # debris, structure or site id the activity is about
+    job: int | None = None           # constructor: the site it is supplying
+    order: tuple | None = None       # direct order: ("move" | "survey", x, y)
     path: list = field(default_factory=list)
-    timer: int = 0                   # ticks left in the current timed state
+    path_left: float = 0.0           # cells of path still to drive
+    odometer: float = 0.0            # cells driven on the current path
+    timer: int = 0
     dock: int | None = None          # structure id when holding a dock slot
     slot: int = -1
-    docked: bool = False             # at the dock point
-    prev_x: float = 0.0
-    prev_y: float = 0.0
-    heading: float = 0.0             # radians, last direction of travel
+    docked: bool = False
+    heading: float = 0.0             # radians, along the planned path
+    # Visual position: the planned position plus a sideways wander.
+    vx: float = 0.0
+    vy: float = 0.0
+    prev_vx: float = 0.0
+    prev_vy: float = 0.0
+    side_x: float = 0.0
+    side_y: float = 1.0
+    vis_heading: float = 0.0
+    wobble_amp: float = 0.3
+    wobble_len: float = 3.0
+    wobble_phase: float = 0.0
     collected: int = 0
     trail: deque = field(default_factory=lambda: deque(maxlen=U.TRAIL_POINTS))
 
@@ -49,102 +65,180 @@ class Unit:
     def spec(self):
         return U.UNITS[self.kind]
 
+    def cargo_total(self):
+        return sum(self.cargo.values())
 
-def _ticks(seconds):
+
+def ticks(seconds):
     return max(1, round(seconds * W.TICK_RATE))
 
 
-def make_scavenger(world, uid, lander, slot, stagger_ticks):
-    spec = U.UNITS["scavenger"]
-    x, y = lander.docks[slot]
-    unit = Unit(uid, "scavenger", x, y, spec["battery"], prev_x=x, prev_y=y,
-                dock=lander.id, slot=slot, docked=True, timer=stagger_ticks)
-    lander.dock_users[slot] = uid
-    return unit
+def make_unit(world, uid, kind, x, y):
+    rng = world.rng
+    u = Unit(uid, kind, x, y, world.battery_capacity(kind), vx=x, vy=y, prev_vx=x, prev_vy=y,
+             wobble_amp=rng.uniform(*U.WOBBLE_AMPLITUDE_CELLS),
+             wobble_len=rng.uniform(*U.WOBBLE_WAVELENGTH_CELLS),
+             wobble_phase=rng.uniform(0.0, 2 * math.pi))
+    return u
 
 
-# Docking --------------------------------------------------------------------
+def brain(unit):
+    from game.sim import constructor, scavenger, surveyor
+    return {"scavenger": scavenger, "constructor": constructor, "survey_rover": surveyor}[unit.kind]
 
-def _release_dock(world, unit):
-    if unit.dock is not None:
-        world.structures[unit.dock].dock_users[unit.slot] = None
+
+# Battery and planning ---------------------------------------------------------
+
+def capacity(world, unit):
+    return world.battery_capacity(unit.kind)
+
+
+def reserve(world, unit):
+    return U.LOW_BATTERY_FRACTION * capacity(world, unit)
+
+
+def trip_energy(unit, cost_cells, work_energy=0.0):
+    return cost_cells * unit.spec["drain_per_cost_cell"] * U.TRIP_SAFETY_FACTOR + work_energy
+
+
+def can_afford(world, unit, cost_cells, work_energy=0.0):
+    """Enough battery for a trip of cost_cells (that already includes getting back to a charger)."""
+    return unit.battery - trip_energy(unit, cost_cells, work_energy) >= reserve(world, unit)
+
+
+def here_field(world, unit):
+    grid = world.grid
+    return grid.field(grid.nearest_reachable(grid.node_at(unit.x, unit.y), world.home_field))
+
+
+def back_cost(world, x, y):
+    """Cost-cells from (x, y) to the nearest working charger."""
+    return world.charge_field.dist[world.grid.node_at(x, y)]
+
+
+def path_to(world, unit, goal, from_field=None):
+    """Waypoints from the unit to goal, or None if unreachable."""
+    grid = world.grid
+    f = from_field or here_field(world, unit)
+    node = grid.node_at(*goal)
+    if not f.reachable(node):
+        return None
+    return grid.waypoints((unit.x, unit.y), f.nodes_from_source(node), goal)
+
+
+def set_path(unit, path, activity, target=None):
+    unit.path = path
+    unit.path_left = 0.0
+    px, py = unit.x, unit.y
+    for x, y in path:
+        unit.path_left += math.hypot(x - px, y - py)
+        px, py = x, y
+    unit.odometer = 0.0
+    unit.state, unit.activity, unit.target = MOVING, activity, target
+
+
+def work(unit, activity, seconds):
+    unit.state, unit.activity, unit.timer = WORKING, activity, ticks(seconds)
+
+
+def idle(unit, activity="idle"):
+    unit.state, unit.activity, unit.timer = IDLE, activity, ticks(U.IDLE_RETHINK_S)
+
+
+# Docking ----------------------------------------------------------------------
+
+def release_dock(world, unit):
+    if unit.dock is not None and unit.dock in world.structures:
+        s = world.structures[unit.dock]
+        if unit.slot < len(s.dock_users) and s.dock_users[unit.slot] == unit.id:
+            s.dock_users[unit.slot] = None
     unit.dock, unit.slot, unit.docked = None, -1, False
 
 
-def _go_dock(world, unit):
-    """Reserve a dock slot at the lander and path to it (or to its centre if all are busy)."""
-    lander = world.lander
-    if unit.dock is None:
-        for slot, user in enumerate(lander.dock_users):
-            if user is None:
-                lander.dock_users[slot] = unit.id
-                unit.dock, unit.slot = lander.id, slot
-                break
-    goal = lander.docks[unit.slot] if unit.dock is not None else (lander.x, lander.y)
-    home = world.home_field
-    node = world.grid.nearest_reachable(world.grid.node_at(unit.x, unit.y), home)
-    chain = home.nodes_from_source(node)[::-1]
-    unit.path = world.grid.waypoints((unit.x, unit.y), chain, goal)
-    unit.docked = False
-    unit.state = TO_DOCK
+def dock_roles(world, unit):
+    if not unit.docked or unit.dock not in world.structures:
+        return set()
+    s = world.structures[unit.dock]
+    roles = set()
+    if s.charges():
+        roles.add("charge")
+    if s.stores():
+        roles.add("store")
+    return roles
 
 
-# Decisions -------------------------------------------------------------------
-
-def _choose_debris(world, unit):
-    """Nearest unclaimed debris (by travel cost) that leaves enough battery to get home."""
-    spec = unit.spec
+def go_dock(world, unit, role):
+    """Head for the nearest structure that can charge / store, reserving a dock
+    slot if one is free (otherwise drive to it and wait). False if none reachable."""
+    f = here_field(world, unit)
     grid = world.grid
-    here = grid.nearest_reachable(grid.node_at(unit.x, unit.y), world.home_field)
-    out = grid.field(here)
-    home = world.home_field
-    reserve = U.LOW_BATTERY_FRACTION * spec["battery"]
-    best, best_cost = None, None
-    for piece in world.debris.values():
-        if piece.claimed_by is not None:
+    best = None
+    for s in world.structures.values():
+        if role == "charge" and not (s.charges() and (s.powered or s is world.lander)):
             continue
-        node = grid.node_at(piece.x, piece.y)
-        travel = out.dist[node]
-        back = home.dist[node]
-        need = (travel + back) * spec["drain_per_cost_cell"] * U.TRIP_SAFETY_FACTOR + spec["pickup_energy"]
-        if unit.battery - need < reserve:
+        if role == "store" and not (s.stores() and s.stored() < s.spec["storage"]):
             continue
-        if best is None or travel < best_cost:
-            best, best_cost = piece, travel
+        d = f.dist[grid.node_at(s.x, s.y)]
+        if d == math.inf:
+            continue
+        free = None in s.dock_users or (unit.dock == s.id)
+        key = (not free, d)
+        if best is None or key < best[0]:
+            best = (key, s)
     if best is None:
-        return None
-    chain = out.nodes_from_source(grid.node_at(best.x, best.y))
-    return best, grid.waypoints((unit.x, unit.y), chain, (best.x, best.y))
+        return False
+    s = best[1]
+    if unit.dock != s.id:
+        release_dock(world, unit)
+        if None in s.dock_users:
+            slot = s.dock_users.index(None)
+            s.dock_users[slot] = unit.id
+            unit.dock, unit.slot = s.id, slot
+    goal = s.docks[unit.slot] if unit.dock == s.id else (s.x, s.y)
+    path = path_to(world, unit, goal, f) or [goal]
+    set_path(unit, path, "to_charge" if role == "charge" else "to_store", s.id)
+    unit.docked = False
+    return True
 
 
-def think(world, unit):
-    """Pick the next activity. Called whenever a unit finishes what it was doing."""
-    spec = unit.spec
-    if unit.docked:
-        if unit.cargo:
-            unit.state, unit.timer = UNLOAD, _ticks(spec["unload_s"])
-            return
-        if unit.battery < U.TOP_UP_BELOW_FRACTION * spec["battery"]:
-            unit.state = CHARGING
-            return
-    if unit.cargo < spec["cargo"]:
-        choice = _choose_debris(world, unit)
-        if choice is not None:
-            piece, path = choice
-            piece.claimed_by = unit.id
-            unit.target, unit.path = piece.id, path
-            _release_dock(world, unit)
-            unit.state = TO_DEBRIS
-            return
-    if not unit.docked:
-        _go_dock(world, unit)
-    elif unit.battery < spec["battery"]:
-        unit.state = CHARGING
-    else:
-        unit.state, unit.timer = IDLE, _ticks(U.IDLE_RETHINK_S)
+def try_charge(world, unit, below_fraction=U.TOP_UP_BELOW_FRACTION):
+    """If docked at a charger and below the threshold, start charging."""
+    if "charge" in dock_roles(world, unit) and unit.battery < below_fraction * capacity(world, unit):
+        unit.state, unit.activity = CHARGING, "charging"
+        return True
+    return False
 
 
-# Per-tick update ---------------------------------------------------------------
+def head_home(world, unit):
+    """Nothing to do: charge up if needed, otherwise park."""
+    if try_charge(world, unit, 1.0):
+        return
+    if unit.battery < capacity(world, unit) and not unit.docked and go_dock(world, unit, "charge"):
+        return
+    idle(unit)
+
+
+# Orders -----------------------------------------------------------------------
+
+def give_order(world, unit, kind, x, y):
+    """Direct order from the player. Returns (ok, reason)."""
+    f = here_field(world, unit)
+    node = world.grid.node_at(x, y)
+    if not f.reachable(node):
+        return False, "UNREACHABLE"
+    linger = unit.spec.get("linger_drain_per_s", 0.0) * unit.spec.get("linger_s", 0.0) if kind == "survey" else 0.0
+    if not can_afford(world, unit, f.dist[node] + back_cost(world, x, y), linger):
+        full = unit.battery >= capacity(world, unit)
+        return False, "OUT OF BATTERY RANGE" + ("" if full else " - CHARGE FIRST")
+    brain(unit).drop_job(world, unit)
+    release_dock(world, unit)
+    unit.order = (kind, x, y)
+    path = path_to(world, unit, (x, y), f)
+    set_path(unit, path, "to_order")
+    return True, ""
+
+
+# Movement -----------------------------------------------------------------------
 
 def _move(world, unit):
     """Advance along the path. Returns True when the path is finished."""
@@ -153,92 +247,116 @@ def _move(world, unit):
     size = world.heightmap.size
     cx = min(max(int(unit.x + 0.5), 0), size - 1)
     cy = min(max(int(unit.y + 0.5), 0), size - 1)
-    slope = world.slopes[cy * size + cx]
-    factor = 1.0 + slope / U.SLOPE_DIVISOR_DEG
+    factor = 1.0 + world.slopes[cy * size + cx] / U.SLOPE_DIVISOR_DEG
     remaining = spec["base_speed_cells_per_s"] * dt / factor
+    moved = 0.0
     while remaining > 0.0 and unit.path:
         tx, ty = unit.path[0]
         dx, dy = tx - unit.x, ty - unit.y
-        dist = (dx * dx + dy * dy) ** 0.5
+        dist = math.hypot(dx, dy)
         if dist > 0.0:
             unit.heading = math.atan2(dy, dx)
         if dist <= remaining:
             unit.x, unit.y = tx, ty
             unit.path.pop(0)
             remaining -= dist
+            moved += dist
         else:
             unit.x += dx / dist * remaining
             unit.y += dy / dist * remaining
+            moved += remaining
             remaining = 0.0
     # Battery drain is per cost-cell travelled, which is constant per tick of driving.
     used = spec["base_speed_cells_per_s"] * dt - remaining * factor
     unit.battery = max(0.0, unit.battery - used * spec["drain_per_cost_cell"])
+    unit.odometer += moved
+    unit.path_left = max(0.0, unit.path_left - moved)
     return not unit.path
 
 
+def _wander(unit):
+    """Visual position: sway sideways on two sine waves, faded in and out at the ends."""
+    if unit.state != MOVING:
+        unit.vx, unit.vy = unit.x, unit.y
+        return
+    k = U.WOBBLE_TURN_SMOOTHING
+    tx, ty = -math.sin(unit.heading), math.cos(unit.heading)
+    sx, sy = unit.side_x + (tx - unit.side_x) * k, unit.side_y + (ty - unit.side_y) * k
+    n = math.hypot(sx, sy) or 1.0
+    unit.side_x, unit.side_y = sx / n, sy / n
+    ramp = U.WOBBLE_RAMP_CELLS
+    envelope = max(0.0, min(1.0, unit.odometer / ramp, unit.path_left / ramp))
+    t = 2 * math.pi * unit.odometer / unit.wobble_len
+    sway = math.sin(t + unit.wobble_phase) + U.WOBBLE_SECOND_HARMONIC * math.sin(2.7 * t + 2.1 * unit.wobble_phase)
+    off = unit.wobble_amp * sway * envelope
+    unit.vx, unit.vy = unit.x + unit.side_x * off, unit.y + unit.side_y * off
+
+
 def update(world, unit):
-    unit.prev_x, unit.prev_y = unit.x, unit.y
-    spec = unit.spec
+    b = brain(unit)
+    unit.prev_vx, unit.prev_vy = unit.vx, unit.vy
     state = unit.state
+    cap = capacity(world, unit)
 
     if state == STRANDED:
         pass
-    elif state in (TO_DEBRIS, TO_DOCK):
+    elif state == MOVING:
         arrived = _move(world, unit)
+        if hasattr(b, "on_move"):
+            b.on_move(world, unit)
         if unit.battery <= 0.0:
-            _drop_job(world, unit)
-            unit.state = STRANDED
-        elif state == TO_DEBRIS and unit.battery < U.LOW_BATTERY_FRACTION * spec["battery"]:
-            _drop_job(world, unit)
-            _go_dock(world, unit)
-        elif arrived and state == TO_DEBRIS:
-            unit.state, unit.timer = PICKUP, _ticks(spec["pickup_s"])
+            b.drop_job(world, unit)
+            unit.state, unit.activity, unit.path = STRANDED, "stranded", []
+            world.event(f"{unit.spec['name'].upper()} STRANDED - BATTERY EMPTY", "alert")
+        elif unit.activity != "to_charge" and unit.battery < U.LOW_BATTERY_FRACTION * cap:
+            b.drop_job(world, unit)
+            unit.order = None
+            if not go_dock(world, unit, "charge"):
+                idle(unit)
         elif arrived:
-            if unit.dock is None:
-                _go_dock(world, unit)  # was waiting for a free slot
-                if unit.dock is None:
-                    unit.state, unit.timer = IDLE, _ticks(U.IDLE_RETHINK_S)
+            if unit.activity in ("to_charge", "to_store"):
+                s = world.structures.get(unit.target)
+                if s is None:
+                    b.think(world, unit)
+                elif unit.dock != s.id:
+                    # Arrived while every slot was taken: try again, else wait.
+                    if None in s.dock_users:
+                        go_dock(world, unit, "charge" if unit.activity == "to_charge" else "store")
+                    else:
+                        idle(unit, "waiting for a dock")
+                else:
+                    unit.docked = True
+                    b.think(world, unit)
+            elif unit.activity == "to_order":
+                kind = unit.order[0] if unit.order else "move"
+                if kind == "survey" and hasattr(b, "start_linger"):
+                    b.start_linger(world, unit)
+                else:
+                    unit.order = None
+                    b.think(world, unit)
             else:
-                unit.docked = True
-                think(world, unit)
-    elif state == PICKUP:
+                b.arrived(world, unit)
+    elif state == WORKING:
         unit.timer -= 1
-        if unit.timer <= 0:
-            piece = world.debris.pop(unit.target, None)
-            unit.target = None
-            if piece is not None:
-                unit.cargo += piece.value
-                unit.collected += piece.value
-                unit.battery = max(0.0, unit.battery - spec["pickup_energy"])
-            think(world, unit)
-    elif state == UNLOAD:
-        unit.timer -= 1
-        if unit.timer <= 0:
-            moved = world.lander_store("scrap", unit.cargo)
-            unit.cargo -= moved
-            if unit.cargo:
-                unit.timer = _ticks(spec["unload_s"])  # storage full: wait and retry
-            else:
-                think(world, unit)
+        if hasattr(b, "work_tick"):
+            b.work_tick(world, unit)
+        if unit.state == WORKING and unit.timer <= 0:
+            b.work_done(world, unit)
     elif state == CHARGING:
-        dock = world.structures[unit.dock]
-        rate = STRUCTURES[dock.kind]["charge_per_s"] / W.TICK_RATE
-        unit.battery = min(spec["battery"], unit.battery + rate)
-        if unit.battery >= spec["battery"]:
-            think(world, unit)
+        s = world.structures.get(unit.dock)
+        if s is not None and (s.powered or s is world.lander):
+            unit.battery = min(cap, unit.battery + s.spec["charge_per_s"] / W.TICK_RATE)
+        if unit.battery >= cap:
+            b.think(world, unit)
     elif state == IDLE:
         unit.timer -= 1
         if unit.timer <= 0:
-            think(world, unit)
+            b.think(world, unit)
 
-    unit.trail.append((unit.x, unit.y))
-
-
-def _drop_job(world, unit):
-    """Return the claimed debris to the pool."""
-    if unit.target is not None:
-        piece = world.debris.get(unit.target)
-        if piece is not None and piece.claimed_by == unit.id:
-            piece.claimed_by = None
-        unit.target = None
-    unit.path = []
+    _wander(unit)
+    if unit.state == MOVING or unit.trail:
+        unit.trail.append((unit.vx, unit.vy))
+    if unit.state == MOVING:
+        dx, dy = unit.vx - unit.prev_vx, unit.vy - unit.prev_vy
+        if dx * dx + dy * dy > 1e-8:
+            unit.vis_heading = math.atan2(dy, dx)

@@ -1,0 +1,286 @@
+"""Vector glyphs: shape data and drawing helpers.
+
+Shapes are lists of polylines in a unit box (about -1..1, y down). Structures
+and the lander are small oblique wireframes; rovers are side views facing +x
+(mirrored when driving left), drawn from parts so wheels can turn and bodies
+can bounce.
+"""
+
+import math
+
+import pygame
+
+
+def _ellipse(cx, cy, rx, ry, n=10, start=0.0, end=2 * math.pi):
+    pts = [(cx + rx * math.cos(start + (end - start) * k / n), cy + ry * math.sin(start + (end - start) * k / n))
+           for k in range(n + 1)]
+    return pts
+
+
+def _box(x0, y0, x1, y1):
+    return [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+
+
+# Lander: descent stage with splayed legs, angular ascent stage, antennas.
+LANDER = [
+    # descent stage: front face, side face, top edge, foil band
+    _box(-0.55, 0.0, 0.55, 0.35),
+    [(0.55, 0.0), (0.8, -0.12), (0.8, 0.23), (0.55, 0.35)],
+    [(-0.55, 0.0), (-0.3, -0.12), (0.8, -0.12)],
+    [(-0.55, 0.17), (0.55, 0.17), (0.8, 0.05)],
+    # legs, struts and footpads (front pair, then the back pair peeking out)
+    [(-0.55, 0.08), (-1.0, 0.74)], [(0.55, 0.08), (1.0, 0.74)],
+    [(-0.55, 0.32), (-0.86, 0.62)], [(0.55, 0.32), (0.88, 0.62)],
+    [(-1.13, 0.77), (-0.87, 0.77)], [(0.87, 0.77), (1.13, 0.77)],
+    [(-0.3, -0.06), (-0.62, 0.52)], [(0.8, 0.02), (1.12, 0.52)],
+    [(-0.72, 0.55), (-0.52, 0.55)], [(1.02, 0.55), (1.22, 0.55)],
+    [(-0.47, 0.14), (-0.88, 0.71)],                                   # ladder rail
+    # ascent stage
+    [(-0.42, -0.12), (-0.48, -0.42), (-0.22, -0.62), (0.3, -0.62), (0.5, -0.42), (0.46, -0.12)],
+    [(0.5, -0.42), (0.68, -0.52), (0.62, -0.18), (0.46, -0.12)],
+    [(0.3, -0.62), (0.52, -0.7), (0.68, -0.52)],
+    [(-0.27, -0.44), (-0.06, -0.44), (-0.16, -0.29), (-0.27, -0.44)],  # window
+    _box(0.1, -0.42, 0.3, -0.2),                                       # hatch
+    [(-0.56, -0.38), (-0.4, -0.38)], [(-0.48, -0.46), (-0.48, -0.3)],  # thruster quad
+    # antennas
+    [(0.32, -0.62), (0.45, -0.9)], [(0.3, -0.99), (0.45, -0.88), (0.62, -0.96)],
+    [(-0.3, -0.62), (-0.36, -0.86)],
+]
+LANDER_BEACON = (0.45, -0.92)
+
+STRUCTURE_SHAPES = {
+    "lander": LANDER,
+    "solar": [
+        [(0.0, 0.6), (0.0, 0.1)], [(-0.3, 0.6), (0.3, 0.6)],
+        [(-0.9, 0.1), (0.7, 0.1), (0.95, -0.45), (-0.65, -0.45), (-0.9, 0.1)],
+        [(-0.37, 0.1), (-0.12, -0.45)], [(0.17, 0.1), (0.42, -0.45)], [(-0.78, -0.17), (0.82, -0.17)],
+    ],
+    "pylon": [
+        [(-0.32, 0.7), (0.0, -0.8), (0.32, 0.7)],
+        [(-0.22, 0.38), (0.22, 0.38)], [(-0.12, 0.05), (0.12, 0.05)],
+        [(-0.22, 0.38), (0.12, 0.05)], [(0.22, 0.38), (-0.12, 0.05)],
+        [(-0.5, -0.55), (0.5, -0.55)], [(-0.44, -0.55), (-0.44, -0.42)], [(0.44, -0.55), (0.44, -0.42)],
+    ],
+    "charging_pad": [
+        [(-0.9, 0.2), (-0.6, -0.05), (0.6, -0.05), (0.95, 0.2), (0.6, 0.45), (-0.6, 0.45), (-0.9, 0.2)],
+        [(-0.55, 0.2), (-0.36, 0.06), (0.36, 0.06), (0.58, 0.2), (0.36, 0.34), (-0.36, 0.34), (-0.55, 0.2)],
+        [(0.08, 0.0), (-0.1, 0.22), (0.1, 0.22), (-0.06, 0.42)],
+    ],
+    "depot": [
+        _box(-0.7, -0.1, 0.4, 0.55),
+        [(0.4, -0.1), (0.75, -0.35), (0.75, 0.3), (0.4, 0.55)],
+        [(-0.7, -0.1), (-0.35, -0.35), (0.75, -0.35)],
+        [(-0.35, 0.55), (-0.35, 0.15), (0.05, 0.15), (0.05, 0.55)],
+    ],
+    "rover_bay": [
+        _ellipse(-0.15, 0.55, 0.7, 0.85, 8, math.pi, 2 * math.pi),       # front arch
+        [(-0.85, 0.55), (0.55, 0.55)],
+        _box(-0.42, 0.05, 0.12, 0.55),                                    # door
+        [(-0.15, -0.3), (0.2, -0.55)], [(0.55, 0.55), (0.9, 0.3)],
+        _ellipse(0.2, 0.3, 0.7, 0.85, 4, 1.5 * math.pi, 2 * math.pi),    # back arch, top half
+        [(-0.42, 0.25), (0.12, 0.25)],
+    ],
+    "ilmenite_mine": [
+        [(-0.5, 0.35), (0.0, -0.8), (0.5, 0.35)], [(-0.3, -0.1), (0.3, -0.1)],
+        _ellipse(0.0, -0.72, 0.16, 0.16, 8),
+        [(0.0, -0.56), (0.0, 0.35)],
+        _box(-0.85, 0.35, 0.85, 0.65),
+        [(0.55, 0.35), (0.75, 0.1), (0.95, 0.35)],                         # ore heap
+    ],
+    "ice_mine": [
+        _box(-0.85, 0.35, 0.4, 0.65),
+        [(-0.55, 0.35), (-0.3, -0.85), (-0.05, 0.35)], [(-0.48, 0.0), (-0.12, 0.0)], [(-0.4, -0.4), (-0.2, -0.4)],
+        _ellipse(0.65, 0.05, 0.25, 0.1, 8), [(0.4, 0.05), (0.4, 0.6)], [(0.9, 0.05), (0.9, 0.6)],
+        _ellipse(0.65, 0.6, 0.25, 0.1, 6, 0.0, math.pi),
+    ],
+    "crusher": [
+        [(-0.55, -0.65), (0.55, -0.65), (0.25, -0.2), (-0.25, -0.2), (-0.55, -0.65)],
+        _box(-0.6, -0.2, 0.6, 0.55),
+        [(0.6, 0.15), (0.95, 0.4)], [(0.6, 0.35), (0.85, 0.55)],
+        [(-0.35, 0.15), (0.35, 0.15)],
+    ],
+    "ice_melter": [
+        _ellipse(-0.15, -0.5, 0.45, 0.15, 10),
+        [(-0.6, -0.5), (-0.6, 0.45)], [(0.3, -0.5), (0.3, 0.45)],
+        _ellipse(-0.15, 0.45, 0.45, 0.15, 6, 0.0, math.pi),
+        [(0.3, 0.1), (0.75, 0.1), (0.75, 0.55)], [(-0.6, 0.0), (0.3, 0.0)],
+    ],
+    "sinter_kiln": [
+        _box(-0.85, -0.15, 0.6, 0.55),
+        [(0.6, -0.15), (0.85, -0.3), (0.85, 0.4), (0.6, 0.55)], [(-0.85, -0.15), (-0.6, -0.3), (0.85, -0.3)],
+        _box(0.25, -0.85, 0.45, -0.22),
+        _ellipse(-0.3, 0.2, 0.22, 0.16, 8),
+    ],
+}
+
+DEBRIS_SHAPES = {
+    "rock": [[(-0.9, 0.3), (-0.5, -0.6), (0.3, -0.8), (0.9, -0.1), (0.5, 0.7), (-0.4, 0.8), (-0.9, 0.3)]],
+    "panel": [_box(-0.9, -0.5, 0.9, 0.5), [(0.0, -0.5), (0.0, 0.5)]],
+    "fragment": [[(-0.8, 0.7), (0.0, -0.9), (0.6, 0.6), (-0.8, 0.7)], [(0.6, 0.6), (0.95, 0.95)]],
+}
+
+ROCK_PER_BOB = 1.6   # radians of body tilt per unit of bounce
+
+# Rovers: body polylines plus wheel (x, y, radius) or tread parts. Facing +x.
+ROVERS = {
+    "scavenger": {
+        "body": [
+            [(-0.8, -0.05), (0.7, -0.05), (0.8, 0.2), (-0.85, 0.2), (-0.8, -0.05)],
+            [(-0.76, -0.05), (-0.66, -0.42), (-0.12, -0.42), (-0.06, -0.05)],   # open cargo bin
+            [(0.55, -0.05), (0.92, -0.32), (1.08, 0.04)],                     # scoop arm
+            [(1.08, 0.04), (0.9, 0.2), (1.08, 0.24), (1.2, 0.08)],            # scoop
+            [(0.22, -0.05), (0.26, -0.55)],                                  # antenna stalk
+        ],
+        "knob": (0.27, -0.6, 0.07),
+        "wheels": [(-0.58, 0.38, 0.2), (0.0, 0.4, 0.23), (0.55, 0.38, 0.19)],
+        "cargo_at": (-0.39, -0.3),
+    },
+    "survey_rover": {
+        "body": [
+            [(-0.82, 0.0), (0.75, 0.0), (0.86, 0.18), (-0.86, 0.18), (-0.82, 0.0)],
+            [(-0.42, 0.0), (-0.36, -0.28), (0.3, -0.28), (0.46, 0.0)],          # cabin
+            [(-0.06, -0.28), (-0.12, -0.98)],                                # mast
+            [(-0.42, -1.12), (-0.34, -0.98), (-0.2, -0.9), (-0.02, -0.9), (0.12, -0.98), (0.2, -1.12)],  # dish
+            [(-0.11, -0.9), (-0.11, -1.2)], [(-0.16, -1.2), (-0.06, -1.2)],   # feed horn
+            [(0.75, 0.05), (0.88, -0.04), (0.98, 0.05), (0.88, 0.14), (0.75, 0.05)],  # sensor eye
+        ],
+        "knob": None,
+        "wheels": [(-0.62, 0.34, 0.16), (-0.2, 0.36, 0.17), (0.22, 0.35, 0.16), (0.62, 0.34, 0.17)],
+        "cargo_at": None,
+    },
+    "constructor": {
+        "body": [
+            [(-0.86, -0.1), (0.62, -0.1), (0.72, 0.18), (-0.92, 0.18), (-0.86, -0.1)],
+            [(0.14, -0.1), (0.2, -0.46), (0.56, -0.46), (0.62, -0.1)],          # cab
+            [(0.27, -0.4), (0.5, -0.4), (0.53, -0.2), (0.24, -0.2), (0.27, -0.4)],  # cab window
+            [(-0.6, -0.1), (-0.48, -0.26), (0.5, -0.98)],                     # crane boom
+            [(-0.48, -0.26), (-0.2, -0.1)],                                  # boom brace
+            [(0.5, -0.98), (0.5, -0.6)], [(0.42, -0.6), (0.56, -0.6), (0.56, -0.52)],  # hook
+        ],
+        "knob": None,
+        "treads": (-0.92, 0.22, 0.78, 0.56),   # x0, y0, x1, y1 of the tread loop
+        "wheels": [(-0.7, 0.39, 0.13), (-0.25, 0.4, 0.13), (0.2, 0.4, 0.13), (0.6, 0.39, 0.13)],
+        "cargo_at": (-0.25, -0.22),
+    },
+}
+
+
+def shape_segments(shape):
+    return sum(len(line) - 1 for line in shape)
+
+
+def draw_shape(surface, color, shape, cx, cy, scale, fraction=1.0):
+    """Draw a shape centred at (cx, cy); with fraction < 1 only the first part of
+    its segments, in drawing order, so a structure 'plots itself' as it's built."""
+    total = shape_segments(shape)
+    budget = total * fraction
+    drawn = 0
+    for line in shape:
+        if budget <= 0:
+            break
+        pts = [(cx + x * scale, cy + y * scale) for x, y in line]
+        n = len(pts) - 1
+        if budget >= n:
+            pygame.draw.aalines(surface, color, False, pts)
+            budget -= n
+            drawn += n
+        else:
+            whole = int(budget)
+            if whole:
+                pygame.draw.aalines(surface, color, False, pts[: whole + 1])
+            frac = budget - whole
+            if frac > 0 and whole < n:
+                (ax, ay), (bx, by) = pts[whole], pts[whole + 1]
+                pygame.draw.aaline(surface, color, (ax, ay), (ax + (bx - ax) * frac, ay + (by - ay) * frac))
+            drawn += whole
+            budget = 0
+    return drawn
+
+
+def draw_rover(surface, color, kind, cx, cy, scale, facing, odometer, bob, cargo_color=None, carrying=False):
+    """Side-view rover. facing is +1 (right) or -1 (left). The body bounces by
+    bob (in unit-box units) and the wheels' spokes turn with the odometer."""
+    spec = ROVERS[kind]
+    segs = 0
+    # The body rocks a little as it bounces, pivoting over the axles: clumsy on purpose.
+    tilt = bob * ROCK_PER_BOB
+    ct, st = math.cos(tilt), math.sin(tilt)
+
+    def P(x, y, lift=0.0):
+        if lift:
+            y += lift
+            x, y = x * ct - (y - 0.2) * st, x * st + (y - 0.2) * ct + 0.2
+        return (cx + facing * x * scale, cy + y * scale)
+
+    for line in spec["body"]:
+        pygame.draw.aalines(surface, color, False, [P(x, y, bob) for x, y in line])
+        segs += len(line) - 1
+    if spec.get("knob"):
+        kx, ky, kr = spec["knob"]
+        pts = [P(kx + kr * math.cos(a * math.pi / 3), ky + kr * math.sin(a * math.pi / 3), bob * 1.6) for a in range(7)]
+        pygame.draw.aalines(surface, color, False, pts)
+        segs += 6
+    if spec.get("treads"):
+        x0, y0, x1, y1 = spec["treads"]
+        r = (y1 - y0) / 2
+        loop = _ellipse(x0 + r, y0 + r, r, r, 6, 0.5 * math.pi, 1.5 * math.pi) + \
+            _ellipse(x1 - r, y0 + r, r, r, 6, -0.5 * math.pi, 0.5 * math.pi)
+        loop.append(loop[0])
+        pygame.draw.aalines(surface, color, False, [P(x, y) for x, y in loop])
+        segs += len(loop) - 1
+        # Tread lugs creep along the bottom run.
+        step = 0.22
+        shift = (odometer * 1.5) % step
+        x = x0 + r + shift
+        while x < x1 - r:
+            pygame.draw.aaline(surface, color, P(x, y1), P(x - 0.06, y1 - 0.08))
+            segs += 1
+            x += step
+    for wx, wy, wr in spec["wheels"]:
+        pts = [P(wx + wr * math.cos(a * math.pi / 3), wy + wr * math.sin(a * math.pi / 3)) for a in range(7)]
+        pygame.draw.aalines(surface, color, False, pts)
+        spin = -facing * odometer / max(wr, 0.05) * 0.5
+        pygame.draw.aaline(surface, color, P(wx, wy), P(wx + wr * 0.9 * math.cos(spin), wy + wr * 0.9 * math.sin(spin)))
+        segs += 7
+    if carrying and spec.get("cargo_at") and cargo_color:
+        ax, ay = spec["cargo_at"]
+        pts = [P(ax - 0.16, ay - 0.1, bob), P(ax + 0.16, ay - 0.1, bob), P(ax + 0.16, ay + 0.14, bob),
+               P(ax - 0.16, ay + 0.14, bob), P(ax - 0.16, ay - 0.1, bob)]
+        pygame.draw.aalines(surface, cargo_color, False, pts)
+        segs += 4
+    return segs
+
+
+def dotted(surface, color, a, b, spacing):
+    (ax, ay), (bx, by) = a, b
+    n = max(1, int(math.hypot(bx - ax, by - ay) / spacing))
+    for i in range(n + 1):
+        t = i / n
+        surface.set_at((int(ax + (bx - ax) * t), int(ay + (by - ay) * t)), color)
+
+
+def dashed(surface, color, points, dash, gap):
+    on, left = True, dash
+    for (ax, ay), (bx, by) in zip(points, points[1:]):
+        length = math.hypot(bx - ax, by - ay)
+        pos = 0.0
+        while pos < length:
+            step = min(left, length - pos)
+            if on:
+                f0, f1 = pos / length, (pos + step) / length
+                pygame.draw.aaline(surface, color, (ax + (bx - ax) * f0, ay + (by - ay) * f0),
+                                   (ax + (bx - ax) * f1, ay + (by - ay) * f1))
+            pos += step
+            left -= step
+            if left <= 0:
+                on = not on
+                left = dash if on else gap
+
+
+def dotted_circle(surface, color, cx, cy, r, spacing, phase=0.0):
+    n = max(8, int(2 * math.pi * r / spacing))
+    for k in range(n):
+        a = phase + 2 * math.pi * k / n
+        x, y = int(cx + r * math.cos(a)), int(cy + r * math.sin(a))
+        if 0 <= x < surface.get_width() and 0 <= y < surface.get_height():
+            surface.set_at((x, y), color)

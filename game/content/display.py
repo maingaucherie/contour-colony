@@ -74,6 +74,10 @@ KEY_BINDINGS = {
     "speed_down": (",",),
     "sell": ("x",),
     "centre": ("c",),
+    "build": ("b",),
+    "research": ("r",),
+    "priority": ("p",),
+    "cancel_site": ("delete", "backspace"),
     "quit": ("escape",),
 }
 # Mouse button used to drag-pan (1 left, 2 middle, 3 right).
@@ -81,12 +85,17 @@ PAN_DRAG_BUTTONS = (1, 2)
 
 # Entities. Sizes are in cells, with a minimum on-screen size in pixels.
 START_ZOOM = 9.0                  # opening camera, centred on the lander
-LANDER_SIZE_CELLS = 3.0
-LANDER_MIN_PX = 20
-UNIT_SIZE_CELLS = 1.2
-UNIT_MIN_PX = 10
+STRUCTURE_SCALE = 1.25            # glyph half-size = footprint radius x this
+STRUCTURE_MIN_PX = 13
+LANDER_MIN_PX = 26
+ROVER_SIZE_CELLS = 1.0            # glyph half-size
+ROVER_MIN_PX = 13
+ROVER_BOB = 0.06                  # body bounce, in glyph units
+ROVER_BOB_WAVELENGTH_CELLS = 0.45
+ROVER_FACING_DEADBAND = 0.3       # |cos(heading)| needed before a rover turns around
 DEBRIS_SIZE_CELLS = 0.8
 DEBRIS_MIN_PX = 6
+BEACON_BLINK_HZ = 0.7
 SELECT_PICK_RADIUS_PX = 14
 CLICK_MAX_DRAG_PX = 5
 
@@ -97,6 +106,15 @@ COLOR_POWER = (255, 176, 40)      # amber: power links, charging
 COLOR_FLOW = (70, 220, 235)       # cyan: item flow, routes, buffer gauges
 COLOR_ALERT = (255, 70, 60)       # red: broken, stranded, deadlines
 COLOR_SELECT = (255, 255, 255)
+COLOR_FIELD = (90, 235, 120)      # green: resource fields and survey data
+COLOR_FIELD_ICE = (120, 235, 205)
+COLOR_SITE = (150, 160, 150)      # construction sites
+COLOR_GHOST_OK = (200, 255, 210)
+COLOR_GRID_LINK = (170, 115, 30)  # dim amber
+UNPOWERED_FLICKER = (0.25, 0.55)  # brightness range of an unpowered structure
+FIELD_HINT_FLICKER_HZ = 3.0
+FIELD_LONG_DASH_PX = 10
+FIELD_GAP_PX = 4
 
 # Unit state cues.
 IDLE_BLINK_HZ = 1.0
@@ -116,7 +134,17 @@ GAP_PX = 4
 DOT_SPACING_PX = 5
 
 # Panels.
-PANEL_WIDTH = 230
+PANEL_WIDTH = 340
 PANEL_TOP = 100                   # below the stats block
+MENU_WIDTH = 470                  # build menu, top left under the HUD
+MENU_TOP = 112
+MENU_COLUMNS = (22, 170)          # x offsets: name, cost
+RESEARCH_WIDTH = 790
+RESEARCH_COLUMNS = (22, 205, 430) # x offsets: name, status, effect
+RESEARCH_TOP = 90
+NEW_SITE_CONFIRM_S = 3.0          # press N twice within this to abandon the site
 SELL_BATCH = 10                   # scrap sold per press of the sell key
 PANEL_BATTERY_BAR = (120, 8)
+
+# Event log.
+EVENT_SHOW_S = 14.0               # an event fades out over this long

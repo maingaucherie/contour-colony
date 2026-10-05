@@ -78,17 +78,19 @@ def contour_colors(contours, min_h, max_h, view):
     return colors
 
 
-def draw_contours(surface, contours, camera, tier, colors):
-    """Draw visible polylines of one tier. Returns the number of segments drawn."""
+def draw_contours(surface, contours, camera, tier, colors, chunk_tier_caps=None):
+    """Draw visible polylines at the given detail tier, capped per chunk by
+    chunk_tier_caps (survey knowledge). Returns the number of segments drawn."""
     z = camera.zoom
     ox, oy = camera.offset()
     vx0, vy0, vx1, vy1 = camera.visible_rect()
     aalines = pygame.draw.aalines
     count = 0
-    for chunk in contours.chunks:
+    for ci, chunk in enumerate(contours.chunks):
         if chunk.x1 < vx0 or chunk.x0 > vx1 or chunk.y1 < vy0 or chunk.y0 > vy1:
             continue
-        for k, lines in chunk.tiers[tier]:
+        t = tier if chunk_tier_caps is None else min(tier, chunk_tier_caps[ci])
+        for k, lines in chunk.tiers[t]:
             color = colors[k]
             for pl in lines:
                 if pl.max_x < vx0 or pl.min_x > vx1 or pl.max_y < vy0 or pl.min_y > vy1:

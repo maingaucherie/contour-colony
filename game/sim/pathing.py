@@ -94,17 +94,25 @@ class PathGrid:
     # Searches -----------------------------------------------------------------
 
     def field(self, source):
-        """Full Dijkstra field from a node, cached (terrain is static for now)."""
+        """Full Dijkstra field from a node, cached (terrain is static for now).
+
+        source may also be a tuple of nodes: a multi-source field giving the
+        cost to the nearest of them (its .source is the first)."""
         cached = self._cache.get(source)
         if cached is not None:
             self._cache.move_to_end(source)
             return cached
+        sources = source if isinstance(source, tuple) else (source,)
         dist = [math.inf] * (self.n * self.n)
         prev = [-1] * (self.n * self.n)
-        result = Field(source, dist, prev)
-        if self.open[source]:
-            dist[source] = 0.0
-            heap = [(0.0, source)]
+        result = Field(sources[0] if sources else -1, dist, prev)
+        heap = []
+        for s in sources:
+            if self.open[s]:
+                dist[s] = 0.0
+                heap.append((0.0, s))
+        if heap:
+            heapq.heapify(heap)
             cost, scale = self.cost, self.node_cells * 0.5
             while heap:
                 d, node = heapq.heappop(heap)
