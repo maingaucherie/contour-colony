@@ -4,6 +4,7 @@ import pygame
 
 from game.content import display as D
 from game.content import terrain as T
+from game.content import world as W
 from game.render.contours import level_rank, tier_for_zoom
 
 
@@ -181,3 +182,48 @@ def draw_site_border(surface, camera):
     e = camera.extent
     corners = [camera.world_to_screen(x, y) for x, y in ((0, 0), (e, 0), (e, e), (0, e))]
     pygame.draw.lines(surface, D.COLOR_SITE_BORDER, True, corners)
+
+
+def draw_slope_marks(surface, world, camera, max_slope, centre=None, radius=None, impassable_only=False):
+    """Mark ground by slope: a green dot where something with max_slope can be
+    built, a red cross where it's too steep. Around centre within radius (cells),
+    or across the whole view at a spacing that keeps the count bounded. With
+    impassable_only, crosses mark only ground rovers can't cross at all."""
+    hm = world.heightmap
+    n = hm.size
+    slopes = world.slopes
+    z = camera.zoom
+    if centre is not None:
+        cx, cy = centre
+        x0, x1 = int(cx - radius), int(cx + radius) + 1
+        y0, y1 = int(cy - radius), int(cy + radius) + 1
+        step = 1
+    else:
+        vx0, vy0, vx1, vy1 = camera.visible_rect()
+        x0, y0, x1, y1 = int(vx0), int(vy0), int(vx1) + 1, int(vy1) + 1
+        area = max(1, (x1 - x0) * (y1 - y0))
+        step = max(1, int((area / D.SLOPE_MARK_MAX) ** 0.5 + 0.999))
+    x0, y0 = max(0, x0 - x0 % step), max(0, y0 - y0 % step)
+    x1, y1 = min(n - 1, x1), min(n - 1, y1)
+    ox, oy = camera.offset()
+    arm = max(1.5, min(3.0, z * 0.12))
+    blocked = W.SLOPE_IMPASSABLE_DEG if impassable_only else max_slope
+    for y in range(y0, y1 + 1, step):
+        row = y * n
+        for x in range(x0, x1 + 1, step):
+            if centre is not None:
+                d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+                if d > radius:
+                    continue
+                k = 1.0 - d / radius
+            else:
+                k = 1.0
+            sx, sy = x * z + ox, y * z + oy
+            s = slopes[row + x]
+            if s <= max_slope:
+                c = tuple(int(v * (0.35 + 0.65 * k)) for v in D.COLOR_BUILDABLE)
+                surface.set_at((int(sx), int(sy)), c)
+            elif s > blocked:
+                c = tuple(int(v * (0.35 + 0.65 * k)) for v in D.COLOR_TOO_STEEP)
+                pygame.draw.line(surface, c, (sx - arm, sy - arm), (sx + arm, sy + arm))
+                pygame.draw.line(surface, c, (sx - arm, sy + arm), (sx + arm, sy - arm))

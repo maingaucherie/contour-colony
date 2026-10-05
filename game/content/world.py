@@ -49,8 +49,8 @@ DEBRIS_PROXIMITY_FLOOR = 0.05
 
 # Starting stock. Machine parts only come from the lander's hold (and, from
 # Milestone 4, supply drops) until a machine shop runs.
-START_CREDITS = 60
-START_STORAGE = {"scrap": 20, "parts": 30}
+START_CREDITS = 300
+START_STORAGE = {"scrap": 100, "parts": 40}
 
 # Survey: levels are tracked on a grid of SURVEY_CELLS x SURVEY_CELLS terrain cells.
 SURVEY_CELLS = 2
@@ -64,11 +64,14 @@ ILMENITE_RADIUS_CELLS = (4.0, 7.0)
 ICE_RADIUS_FRACTION = (0.2, 0.3)           # of the host crater's radius
 ICE_MIN_CRATER_RADIUS_CELLS = 6.0
 ICE_MIN_RADIUS_CELLS = 3.0
-ICE_FLOOR_RING = (0.2, 0.45)               # floor band between central peak and wall, in crater radii
-ICE_FLOOR_SAMPLES = 40
+ICE_FIRST_MIN_CRATER_RADIUS_CELLS = 3.5     # the first ice field may sit in a smaller crater ...
+ICE_FIRST_PATH_COST = (40.0, 130.0)        # ... a drive of about this (cost-cells) from the lander
+ICE_FLOOR_RING = (0.2, 1.5)                # searched band around a crater's centre, in crater radii (floor, wall foot, rim)
+ICE_FLOOR_SAMPLES = 80
 FIELD_RICHNESS = (0.6, 1.5)
 FIELD_EDGE_WOBBLE = 0.25                   # boundary irregularity, fraction of radius
-FIELD_MAX_SLOPE_DEG = 5.0                  # a field's centre must be buildable
+FIELD_MAX_SLOPE_DEG = 5.0                  # a field's centre must be buildable ...
+FIELD_FLAT_RADIUS_CELLS = 1.3             # ... over this radius, so a mine fits there
 FIELD_CANDIDATES = 400                     # random spots tried per field
 FIELD_NEAR_LANDER_CELLS = (15.0, 45.0)     # the first ilmenite field lies this far out
 FIELD_MIN_SPACING_CELLS = 10.0
@@ -89,6 +92,20 @@ PRIORITIES = ("high", "normal", "low")
 
 # Debris now spawns around every charging point, not just the lander.
 
+# Storage warning: checked every STORAGE_CHECK_S; warns once it passes this fraction.
+STORAGE_CHECK_S = 5
+STORAGE_FULL_FRACTION = 0.95
+
 # Event log.
 EVENT_LOG_LENGTH = 6
 EVENT_SHOW_S = 12.0
+
+# Job board (haulers). Production outputs are offered once they hold at least
+# JOB_OFFER_MIN items (or are full). Score = amount / (trip cost + JOB_DISTANCE_BIAS)
+# x a multiplier: the destination's priority, low for plain storage, high for
+# goods an open contract needs.
+JOB_OFFER_MIN = 5
+JOB_DISTANCE_BIAS = 10.0
+JOB_PRIORITY_MULT = {"high": 2.0, "normal": 1.0, "low": 0.5}
+JOB_STORAGE_MULT = 0.25
+JOB_EXPORT_MULT = 3.0

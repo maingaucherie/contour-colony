@@ -81,9 +81,12 @@ def generate(world, rng):
     def ok_spot(x, y, radius):
         if not (radius < x < size - 1 - radius and radius < y < size - 1 - radius):
             return False
-        ix, iy = int(x), int(y)
-        if slopes[iy * size + ix] > W.FIELD_MAX_SLOPE_DEG:
-            return False
+        # A mine must fit at the centre: its whole footprint on buildable ground.
+        r = W.FIELD_FLAT_RADIUS_CELLS
+        for cy in range(int(y - r), int(y + r) + 2):
+            for cx in range(int(x - r), int(x + r) + 2):
+                if math.hypot(cx - x, cy - y) <= r + 0.5 and slopes[cy * size + cx] > W.FIELD_MAX_SLOPE_DEG:
+                    return False
         node = grid.node_at(x, y)
         if not (grid.open[node] and world.home_field.reachable(node)):
             return False
@@ -112,15 +115,16 @@ def generate(world, rng):
                 fields.append(_make(len(fields) + 1, "ilmenite", x, y, radius, rng))
                 break
 
-    # Ice: on the flat floor ring of large craters (between the central peak and
-    # the wall), at the most shadowed reachable spot found.
+    # Ice: in and around craters (floor, foot of the wall, rim: wherever a mine
+    # fits), at the most shadowed reachable spot found. The first one is
+    # the darkest crater floor within a modest drive of the lander (smaller
+    # craters allowed), so the chain can always be started; the rest go in the
+    # largest craters.
     want = rng.randint(*W.ICE_FIELD_COUNT)
-    hosts = sorted((c for c in craters if c[2] >= W.ICE_MIN_CRATER_RADIUS_CELLS), key=lambda c: -c[2])
     lo_r, hi_r = W.ICE_FLOOR_RING
-    for cx, cy, r in hosts:
-        if sum(1 for f in fields if f.kind == "ice") >= want:
-            break
-        radius = max(W.ICE_MIN_RADIUS_CELLS, r * rng.uniform(*W.ICE_RADIUS_FRACTION))
+    home = world.home_field
+
+    def floor_spot(cx, cy, r, radius):
         best = None
         for _ in range(W.ICE_FLOOR_SAMPLES):
             a = rng.uniform(0, 2 * math.pi)
@@ -130,6 +134,28 @@ def generate(world, rng):
                 light = world.illumination_at(x, y)
                 if best is None or light < best[0]:
                     best = (light, x, y)
+        return best
+
+    first = []
+    lo_p, hi_p = W.ICE_FIRST_PATH_COST
+    for cx, cy, r in craters:
+        if r < W.ICE_FIRST_MIN_CRATER_RADIUS_CELLS:
+            continue
+        radius = max(W.ICE_MIN_RADIUS_CELLS, r * rng.uniform(*W.ICE_RADIUS_FRACTION))
+        best = floor_spot(cx, cy, r, radius)
+        if best is not None:
+            path = home.dist[grid.node_at(best[1], best[2])]
+            first.append((0 if lo_p <= path <= hi_p else 1, path if not lo_p <= path <= hi_p else best[0],
+                          best[1], best[2], radius))
+    if first:
+        _, _, x, y, radius = min(first)
+        fields.append(_make(len(fields) + 1, "ice", x, y, radius, rng))
+    hosts = sorted((c for c in craters if c[2] >= W.ICE_MIN_CRATER_RADIUS_CELLS), key=lambda c: -c[2])
+    for cx, cy, r in hosts:
+        if sum(1 for f in fields if f.kind == "ice") >= want:
+            break
+        radius = max(W.ICE_MIN_RADIUS_CELLS, r * rng.uniform(*W.ICE_RADIUS_FRACTION))
+        best = floor_spot(cx, cy, r, radius)
         if best is not None:
             fields.append(_make(len(fields) + 1, "ice", best[1], best[2], radius, rng))
     return fields

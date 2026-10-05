@@ -3,6 +3,7 @@
 import pygame
 
 from game.content import display as D
+from game.content import world as W
 from game.render.hershey import draw_text, line_height
 
 M = D.HUD_MARGIN
@@ -79,8 +80,16 @@ def draw_running(surface, info):
     cursor = info.get("cursor")
     if cursor:
         x_km, y_km, elev, slope = cursor
-        draw_text(surface, f"X {x_km:5.1f} KM   Y {y_km:5.1f} KM   ELEV {elev:+6.0f} M   SLOPE {slope:4.1f} DEG",
-                  (M + 6, y), 1)
+        if slope <= W.SLOPE_BUILDABLE_DEG:
+            kind, color = "BUILDABLE", D.COLOR_BUILDABLE
+        elif slope <= W.SLOPE_ROAD_ONLY_DEG:
+            kind, color = "TOO STEEP TO BUILD", D.COLOR_TEXT
+        elif slope <= W.SLOPE_IMPASSABLE_DEG:
+            kind, color = "TOO STEEP TO BUILD, HARD GOING", D.COLOR_TEXT
+        else:
+            kind, color = "CLIFF - IMPASSABLE", D.COLOR_ALERT
+        draw_text(surface, f"X {x_km:5.1f} KM   Y {y_km:5.1f} KM   ELEV {elev:+6.0f} M   SLOPE {slope:4.1f} DEG  {kind}",
+                  (M + 6, y), 1, color)
     draw_text(surface, info.get("hint") or "B BUILD  R RESEARCH  CLICK SELECT  RIGHT CLICK ORDER  SPACE PAUSE"
               "  ,/. SPEED  TAB VIEW  M SOUND  I ICONS", (M + 6, y + lh), 1, D.COLOR_TEXT_DIM)
 

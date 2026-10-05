@@ -134,10 +134,9 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
 
 
 def _draw_scan_beam(surface, s, camera):
-    """Radar sweep: the beam and a fading trail behind it, plus a faint range ring."""
+    """Radar sweep: a faint beam with a short fading trail."""
     sx, sy = camera.world_to_screen(s.x, s.y)
     r = s.spec["scan_radius_cells"] * camera.zoom
-    G.dotted_circle(surface, _scale(D.COLOR_SCAN, 0.35), sx, sy, r, D.DOT_SPACING_PX * 3)
     n = D.SCAN_BEAM_TRAIL
     for i in range(n):
         a = s.sweep_angle - i * D.SCAN_BEAM_TRAIL_STEP

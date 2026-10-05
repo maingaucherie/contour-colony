@@ -127,13 +127,14 @@ class ScannerAndSightTests(unittest.TestCase):
         scanner = build(w, "scanner", (w.lander.x, w.lander.y), 3, 8)
         radius = scanner.spec["scan_radius_cells"]
         period = int(scanner.spec["sweep_period_s"] * W.TICK_RATE)
+        present = set(w.debris)  # pieces spawned behind the beam wait for its next pass
         for _ in range(period + 2):
             w.tick()
         for d in w.debris.values():
-            if math.hypot(d.x - scanner.x, d.y - scanner.y) <= radius - 0.5 and d.claimed_by is None:
+            if d.id in present and math.hypot(d.x - scanner.x, d.y - scanner.y) <= radius - 0.5:
                 self.assertTrue(d.seen, (d.x, d.y))
         in_range = [f for f in w.fields if math.hypot(f.cx - scanner.x, f.cy - scanner.y) <= radius]
-        for _ in range(period * (W.FIELD_SIGNAL_PASSES + 1)):
+        for _ in range(period * (W.FIELD_SIGNAL_PASSES + 1) + 2):
             w.tick()
         for f in in_range:
             self.assertTrue(f.hinted, f"{f.kind} field at {f.cx:.0f},{f.cy:.0f} not signalled")
@@ -181,3 +182,15 @@ class DebrisReachabilityTests(unittest.TestCase):
                 node = w.grid.node_at(d.x, d.y)
                 self.assertTrue(w.grid.open[node], f"seed {seed}: debris on blocked ground")
                 self.assertTrue(w.charge_field.reachable(node), f"seed {seed}: debris out of reach")
+
+
+
+class FieldDiscoveryTests(unittest.TestCase):
+    def test_ground_surveys_never_discover_fields(self):
+        w = make_world(1)
+        f = next(f for f in w.fields if f.kind == "ilmenite")
+        w.survey_area(f.cx, f.cy, f.radius * 2, 2)
+        self.assertFalse(f.hinted or f.confirmed)
+        w.hint_field(f)
+        w.survey_area(f.cx, f.cy, 2.0, 2)
+        self.assertTrue(f.confirmed)

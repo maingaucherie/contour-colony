@@ -49,6 +49,18 @@ UNITS = {
         "launch_stagger_s": 0.0,
         "bay_cost": {"scrap": 10, "parts": 4}, "bay_time_s": 20.0, "unlocked_by": "field_survey",
     },
+    "hauler": {
+        "name": "hauler",
+        "start_count": 0,
+        "base_speed_cells_per_s": 2.8,
+        "battery": 100.0,
+        "drain_per_cost_cell": 0.4,
+        "cargo": 10,                 # items of one type
+        "sight_cells": 2.5,
+        "load_s": 1.5,
+        "launch_stagger_s": 0.0,
+        "bay_cost": {"scrap": 12, "parts": 4}, "bay_time_s": 20.0, "unlocked_by": "logistics_1",
+    },
 }
 
 # Scavengers with no known debris search: they drive to a random reachable
@@ -57,14 +69,21 @@ SEARCH_DISTANCE_CELLS = (6.0, 18.0)
 SEARCH_ATTEMPTS = 12
 
 # Order of the rover bay's build list.
-BAY_MENU = ("scavenger", "constructor", "survey_rover")
+BAY_MENU = ("scavenger", "constructor", "survey_rover", "hauler")
 
 # Shared unit rules.
 SLOPE_DIVISOR_DEG = 5.0              # speed = base / (1 + slope / SLOPE_DIVISOR_DEG)
 LOW_BATTERY_FRACTION = 0.2           # below this, drop the job and go charge
 TOP_UP_BELOW_FRACTION = 0.6          # when docked below this, charge to full before the next job
 TRIP_SAFETY_FACTOR = 1.25            # planned energy is multiplied by this before checking range
+RELAY_PLANNING_FRACTION = 0.9        # a far job is taken via a charger near it if it fits in this much of a full battery
 IDLE_RETHINK_S = 2.0                 # idle units look for work this often
+# Units with nothing to unload prefer a charging pad over a storage dock (the
+# lander) up to this much extra drive (cost-cells), and move off a storage dock
+# to a free pad within it, so docks stay open for units bringing cargo.
+PARK_AWAY_FROM_STORAGE_COST = 40.0
+TOP_UP_IDLE_FRACTION = 0.9           # an idle unit away from a charger goes to charge below this
+PARK_OFFSET_CELLS = 1.2              # a charged, idle unit gives up its dock and waits this far further out
 TRAIL_POINTS = 40                    # trail history kept per unit, one point per tick
 
 # Driving feel (cosmetic: planning, battery and arrival use the planned path).

@@ -5,6 +5,7 @@ import pygame
 from game.content import display as D
 from game.content import structures as S
 from game.content import units as U
+from game.content import world as W
 from game.content.items import ITEMS
 from game.render.hershey import draw_text, line_height
 from game.sim import units as US
@@ -119,7 +120,7 @@ def _structure_lines(world, s):
     if s.kind == "scanner":
         lines.append((f"RADAR     {spec['scan_radius_cells'] * world.heightmap.cell_m / 1000:.0f} KM RANGE, "
                       f"SWEEP EVERY {spec['sweep_period_s']:.0f} S", 1, D.COLOR_TEXT_DIM))
-        lines.append(("REVEALS DEBRIS; FIELDS AFTER 3 SWEEPS", 1, D.COLOR_TEXT_DIM))
+        lines.append((f"REVEALS DEBRIS; FLAGS FIELDS AFTER {W.FIELD_SIGNAL_PASSES} SWEEPS", 1, D.COLOR_TEXT_DIM))
     if s.kind == "lander":
         price = ITEMS["scrap"]["sell_price"]
         lines.append((f"X  SELL {D.SELL_BATCH} SCRAP FOR {D.SELL_BATCH * price} CR", 1, D.COLOR_FLOW))

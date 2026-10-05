@@ -38,6 +38,15 @@ class Structure:
     bay_ticks_left: int = 0
     created_tick: int = 0
     sweep_angle: float = 0.0                        # scanner beam direction, radians
+    # Production (see production.py) and the job board (see jobs.py).
+    inputs: dict = field(default_factory=dict)
+    outputs: dict = field(default_factory=dict)
+    reserved_in: dict = field(default_factory=dict)   # items haulers are bringing
+    reserved_out: dict = field(default_factory=dict)  # items haulers will collect
+    cycle_left_s: float = 0.0
+    cycles: int = 0
+    status: str = "idle"
+    richness: float = 1.0
     deconstruct: bool = False                       # marked for a constructor to dismantle
     teardown_s: float = 0.0                         # dismantling seconds done
 
@@ -135,6 +144,10 @@ def complete(world, s):
         world.consumed[k] = world.consumed.get(k, 0) + n
     s.delivered.clear()
     s.incoming.clear()
+    need = s.spec.get("requires_field")
+    if need:
+        f = F.field_at(world.fields, s.x, s.y, need)
+        s.richness = f.richness if f else 1.0
     if s.kind == "solar":
         s.output_kw = s.spec["power_kw"] * world.illumination_at(s.x, s.y)
     else:
@@ -191,7 +204,9 @@ def dismantle(world, s):
         world.consumed[k] = world.consumed.get(k, 0) - n
     refund_items(world, refund)
     refund_items(world, s.storage)
-    s.storage = {}
+    refund_items(world, s.inputs)
+    refund_items(world, s.outputs)
+    s.storage, s.inputs, s.outputs = {}, {}, {}
     if s.building_unit:  # a rover bay mid-build gives its materials back
         refund_items(world, U.UNITS[s.building_unit]["bay_cost"])
         for k, n in U.UNITS[s.building_unit]["bay_cost"].items():

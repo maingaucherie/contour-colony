@@ -356,8 +356,12 @@ class App:
             self.shading = draw.ContourShading(world.survey)
         self.segments = draw.draw_contours(self.screen, self.contours, cam, self.colors[self.view], self.shading)
         draw.draw_site_border(self.screen, cam)
+        if self.view == "survey" and not self.placing:
+            draw.draw_slope_marks(self.screen, world, cam, W.SLOPE_BUILDABLE_DEG, impassable_only=True)
         ghost = None
         if self.placing and self.input.mouse_inside:
+            draw.draw_slope_marks(self.screen, world, cam, STRUCTURES[self.placing]["max_slope_deg"],
+                                  self._mouse_world(), D.SLOPE_MARK_RADIUS_CELLS)
             x, y = self._mouse_world()
             ok, reason = ST.check_placement(world, self.placing, x, y)
             ghost = (self.placing, x, y, ok, reason, STRUCTURES[self.placing])

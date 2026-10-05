@@ -65,6 +65,12 @@ def think(world, unit):
             UN.release_dock(world, unit)
             UN.set_path(unit, UN.path_to(world, unit, (site.x, site.y), f), "to_site", site.id)
             return
+        # Out of range from here: top up at the charger nearest a site that needs it.
+        for site in _sites(world):
+            if any(unit.cargo.get(k, 0) for k in site.materials_needed()):
+                r = UN.relay(world, unit, site.x, site.y, UN.back_cost(world, site.x, site.y))
+                if r is not None and UN.stage(world, unit, r):
+                    return
         if "store" in roles:
             UN.work(unit, "unload", unit.spec["load_s"])
             return
@@ -80,9 +86,12 @@ def think(world, unit):
             if found is None:
                 continue
             d_store, store = found
-            leg = grid.field(grid.node_at(store.x, store.y)).dist[site_node]
-            if not UN.can_afford(world, unit, d_store + leg + back):
-                continue
+            from_store = grid.field(grid.node_at(store.x, store.y))
+            if not UN.can_afford(world, unit, d_store + from_store.dist[site_node] + back):
+                # Maybe via a charger near the site: load here, top up there.
+                left = unit.battery - UN.trip_energy(unit, d_store)
+                if UN.relay(world, unit, site.x, site.y, back, start=(store.x, store.y), battery=left) is None:
+                    continue
             unit.job = site.id
             UN.release_dock(world, unit)
             UN.set_path(unit, UN.path_to(world, unit, (store.x, store.y), f), "to_storage", store.id)
@@ -91,6 +100,10 @@ def think(world, unit):
             remaining = site.spec["build_time_s"] - site.work_done_s
             energy = remaining / unit.spec["build_rate"] * unit.spec["build_drain_per_s"]
             if not UN.can_afford(world, unit, f.dist[site_node] + back, energy):
+                r = UN.relay(world, unit, site.x, site.y, back, energy)
+                if r is not None and UN.stage(world, unit, r):
+                    unit.job = site.id
+                    return
                 continue
             unit.job = site.id
             UN.release_dock(world, unit)
@@ -192,8 +205,12 @@ def work_done(world, unit):
                     site.incoming[k] = site.incoming.get(k, 0) + take
                     space -= take
             if unit.cargo_total():
-                UN.set_path(unit, UN.path_to(world, unit, (site.x, site.y)), "to_site", site.id)
-                return
+                f = UN.here_field(world, unit)
+                back = UN.back_cost(world, site.x, site.y)
+                if UN.can_afford(world, unit, f.dist[world.grid.node_at(site.x, site.y)] + back):
+                    UN.set_path(unit, UN.path_to(world, unit, (site.x, site.y), f), "to_site", site.id)
+                    return
+                drop_job(world, unit)  # top up on the way first; think() re-reserves when it sets off
         think(world, unit)
     elif unit.activity == "unload":
         s = world.structures[unit.dock]

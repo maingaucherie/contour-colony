@@ -18,7 +18,10 @@ from game.content import world as W
 from game.content.research import RESEARCH
 from game.content.structures import STRUCTURES
 from game.content.terrain import CONTOUR_CHUNK_CELLS
-from game.sim import debris, fields, power, structures, units
+from game.content import contracts as CT
+from game.sim import debris, fields, power, production, structures, units
+from game.sim.contracts import Contracts
+from game.sim.orbit import Orbit
 from game.sim.pathing import PathGrid
 from game.sim.research import Research
 from game.sim.survey import SurveyMap
@@ -43,7 +46,14 @@ class World:
         self.credits = W.START_CREDITS
         self.scrap_spawned = 0
         self.scrap_sold = 0
-        self.consumed = {}            # items used up by construction and rover bays
+        self.consumed = {}            # items used up: construction, rover bays, recipes, contracts
+        self.produced = {}            # items made: recipes, supply drops
+        self.contracts = Contracts(seed)
+        self.orbit = Orbit()
+        self.outcome = None           # None, "won" or "lost"
+        self.storage_full = False
+        self.outcome_text = ""
+        self.end_s = None
         self.debris_timer = round(W.DEBRIS_SPAWN_INTERVAL_S * W.TICK_RATE)
         self.lander = None
         self.home_field = None
@@ -99,6 +109,21 @@ class World:
         if n:
             s.storage[item] = s.storage.get(item, 0) + n
         return n
+
+    def deliver(self, s, item, amount):
+        """A hauler unloading at s: into a recipe's input buffer, straight to the
+        contracts at an export bay (capacity doesn't apply to goods that ship),
+        or into storage. Returns how many were accepted."""
+        r = s.spec.get("recipe")
+        if r and item in r["in"]:
+            put = max(0, min(amount, production.input_cap(s, item) - s.inputs.get(item, 0)))
+            if put:
+                s.inputs[item] = s.inputs.get(item, 0) + put
+            return put
+        put = self.contracts.receive(self, item, amount) if s.spec.get("export_bay") else 0
+        if s.stores():
+            put += self.store(s, item, amount - put)
+        return put
 
     def take_items(self, cost):
         """Take a whole cost {item: n} from storage (lander first), or nothing."""
@@ -217,26 +242,28 @@ class World:
         if not f.hinted:
             f.hinted = True
             self.event(f"FIELD SIGNAL: POSSIBLE {f.kind.upper()} DEPOSIT", "field")
+            # Ground already surveyed in detail confirms it straight away.
+            if any(self.survey.level_at(x, y) >= 2 for x, y in f.sample_points(1.0)):
+                f.confirmed = True
+                self.event(f"{f.kind.upper()} FIELD CONFIRMED - RICHNESS {f.richness:.1f}X", "field")
 
-    def survey_area(self, x, y, radius, level, signal=True):
-        """Raise survey levels. With signal, ground surveyed this way also picks up
-        fields (the landing survey only sharpens the map)."""
+    def survey_area(self, x, y, radius, level):
+        """Raise survey levels. Ground surveys never discover fields: only the
+        scanner (or an orbital scan) flags them. A detailed (level 2) survey
+        over a flagged field confirms it."""
         changed = self.survey.raise_area(x, y, radius, level)
-        if not changed or not signal:
+        if not changed or level < 2:
             return
         res = self.survey.res
         for f in self.fields:
-            if f.confirmed and f.hinted:
+            if f.confirmed or not f.hinted:
                 continue
             for i in changed:
                 sy, sx = divmod(i, self.survey.n)
                 if f.contains((sx + 0.5) * res, (sy + 0.5) * res):
-                    self.hint_field(f)
-                    if level >= 2 and not f.confirmed:
-                        f.confirmed = True
-                        self.event(f"{f.kind.upper()} FIELD CONFIRMED - RICHNESS {f.richness:.1f}X", "field")
-                    if f.confirmed:
-                        break
+                    f.confirmed = True
+                    self.event(f"{f.kind.upper()} FIELD CONFIRMED - RICHNESS {f.richness:.1f}X", "field")
+                    break
 
     def spawn_unit(self, kind, x, y):
         uid = self.new_id()
@@ -261,7 +288,46 @@ class World:
         max_round_trip = usable / (scav["drain_per_cost_cell"] * U.TRIP_SAFETY_FACTOR)
         self.spawn_map.update(self.charge_field, [(s.x, s.y) for s in chargers], max_round_trip)
 
+    def _check_storage(self):
+        stored = sum(s.stored() for s in self.storages())
+        capacity = sum(s.spec["storage"] for s in self.storages())
+        full = stored >= W.STORAGE_FULL_FRACTION * capacity
+        if full and not self.storage_full:
+            self.event("STORAGE FULL - BUILD A DEPOT", "alert")
+        self.storage_full = full
+
+    def finish(self, outcome, text):
+        if self.outcome is None:
+            self.outcome, self.outcome_text, self.end_s = outcome, text, self.time_s()
+            self.event(text, "won" if outcome == "won" else "alert")
+
+    def score(self):
+        c = self.contracts
+        minutes = (self.end_s if self.end_s is not None else self.time_s()) / 60.0
+        bonus = max(0.0, CT.SCORE_TIME_TARGET_MIN - minutes) * CT.SCORE_TIME_BONUS_PER_MIN if self.outcome == "won" else 0.0
+        return int(c.credits_earned + c.reputation * CT.SCORE_REPUTATION + bonus)
+
+    def item_total(self, item):
+        """Every unit of an item that physically exists on site (for ledger checks)."""
+        n = 0
+        for s in self.structures.values():
+            n += s.storage.get(item, 0) + s.inputs.get(item, 0) + s.outputs.get(item, 0)
+            if not s.built:
+                n += s.delivered.get(item, 0)
+        n += sum(u.cargo.get(item, 0) for u in self.units.values())
+        if item == "scrap":
+            n += sum(d.value for d in self.debris.values())
+        return n
+
+    def order_supply(self, index):
+        return self.orbit.order(self, index)
+
+    def orbital_scan(self, x, y):
+        return self.orbit.scan(self, x, y)
+
     def tick(self):
+        if self.outcome is not None:
+            return
         self.tick_count += 1
         # Power.
         if self.dirty_power:
@@ -278,10 +344,17 @@ class World:
                 structures.update_bay(self, s)
             elif s.built and s.kind == "scanner":
                 structures.update_scanner(self, s)
+            elif s.built:
+                production.update(self, s)
+        self.orbit.update(self)
         # Environment and units.
         debris.update(self)
         for unit in list(self.units.values()):
             units.update(self, unit)
+        # Contracts last, as in the design's tick order.
+        self.contracts.update(self)
+        if self.tick_count % (W.STORAGE_CHECK_S * W.TICK_RATE) == 0:
+            self._check_storage()
 
     def digest(self):
         """Compact full-state snapshot for determinism checks."""
@@ -295,6 +368,10 @@ class World:
             tuple((u.id, u.kind, u.x, u.y, u.battery, u.state, u.activity, tuple(sorted(u.cargo.items())), u.target)
                   for u in self.units.values()),
             bytes(self.survey.levels), tuple(sorted(self.research.done)), self.rng.getstate(),
+            tuple((s.id, tuple(sorted(s.inputs.items())), tuple(sorted(s.outputs.items())), s.cycle_left_s)
+                  for s in self.structures.values()),
+            tuple((c.id, c.good, c.qty, c.delivered) for c in self.contracts.open),
+            round(self.contracts.reputation, 6), self.outcome,
         )
 
 
@@ -351,8 +428,8 @@ def build_world(seed, heightmap):
     world.dirty_power = False
     world._refresh_chargers()
     lvl1, lvl2 = W.LANDING_SURVEY_RADIUS_CELLS
-    world.survey_area(lx, ly, lvl1, 1, signal=False)
-    world.survey_area(lx, ly, lvl2, 2, signal=False)
+    world.survey_area(lx, ly, lvl1, 1)
+    world.survey_area(lx, ly, lvl2, 2)
     world.events.clear()
     for _ in range(W.DEBRIS_INITIAL):
         debris.try_spawn(world)

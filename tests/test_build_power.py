@@ -89,6 +89,7 @@ class PlacementTests(unittest.TestCase):
         w = make_world(1)
         w.research.done.update({"field_survey", "extraction"})
         f = next(f for f in w.fields if f.kind == "ilmenite")
+        w.hint_field(f)  # the scanner's job
         saved = bytes(w.survey.levels)
         w.survey_area(f.cx, f.cy, f.radius * 2, 2)
         self.assertTrue(f.hinted and f.confirmed)
@@ -212,7 +213,8 @@ class ExitCriterionTest(unittest.TestCase):
         bay, _ = w.place("rover_bay", *find_spot(w, "rover_bay", (L.x, L.y), 3, 5))
         self.assertTrue(run_until(w, lambda: bay.built, 300))
         w.order_unit(bay.id, "survey_rover")
-        # The survey rover finds and confirms an ilmenite field on its own.
+        scanner, _ = w.place("scanner", *find_spot(w, "scanner", (L.x, L.y), 3, 8))
+        # The scanner flags fields; the survey rover confirms an ilmenite one on its own.
         self.assertTrue(run_until(w, lambda: any(f.kind == "ilmenite" and f.confirmed for f in w.fields), 600))
         w.credits += 100  # skip waiting for scrap sales
         self.assertTrue(w.start_research("extraction")[0])

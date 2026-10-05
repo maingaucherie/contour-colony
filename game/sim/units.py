@@ -38,6 +38,7 @@ class Unit:
     cargo: dict = field(default_factory=dict)
     target: int | None = None        # debris, structure or site id the activity is about
     job: int | None = None           # constructor: the site it is supplying
+    haul: tuple | None = None        # hauler: (source id, dest id, item, amount)
     order: tuple | None = None       # direct order: ("move" | "survey", x, y)
     path: list = field(default_factory=list)
     path_left: float = 0.0           # cells of path still to drive
@@ -83,8 +84,9 @@ def make_unit(world, uid, kind, x, y):
 
 
 def brain(unit):
-    from game.sim import constructor, scavenger, surveyor
-    return {"scavenger": scavenger, "constructor": constructor, "survey_rover": surveyor}[unit.kind]
+    from game.sim import constructor, hauler, scavenger, surveyor
+    return {"scavenger": scavenger, "constructor": constructor, "survey_rover": surveyor,
+            "hauler": hauler}[unit.kind]
 
 
 # Battery and planning ---------------------------------------------------------
@@ -217,13 +219,14 @@ def dock_roles(world, unit):
     return roles
 
 
-def go_dock(world, unit, role):
-    """Head for the nearest structure that can charge / store, reserving a dock
-    slot if one is free (otherwise drive to it and wait). False if none reachable."""
+def go_dock(world, unit, role, only=None):
+    """Head for the nearest structure that can charge / store (or for `only`),
+    reserving a dock slot if one is free (otherwise drive to it and wait).
+    False if none reachable."""
     f = here_field(world, unit)
     grid = world.grid
     best = None
-    for s in world.structures.values():
+    for s in ([only] if only is not None else world.structures.values()):
         if role == "charge" and not (s.charges() and (s.powered or s is world.lander)):
             continue
         if role == "store" and not (s.stores() and s.stored() < s.spec["storage"]):
@@ -232,6 +235,8 @@ def go_dock(world, unit, role):
         if d == math.inf:
             continue
         free = None in s.dock_users or (unit.dock == s.id)
+        if role == "charge" and s.stores() and not unit.cargo_total():
+            d += U.PARK_AWAY_FROM_STORAGE_COST  # leave storage docks to units with cargo
         key = (not free, d)
         if best is None or key < best[0]:
             best = (key, s)
@@ -259,16 +264,107 @@ def try_charge(world, unit, below_fraction=U.TOP_UP_BELOW_FRACTION):
     return False
 
 
+def relay(world, unit, x, y, rest_cost=0.0, work_energy=0.0, start=None, battery=None):
+    """The next charger to top up at, for a trip to (x, y) (then rest_cost more
+    cost-cells and work_energy) that is out of range from here but in range
+    on a full battery from the charger nearest the destination. Hops from
+    charger to charger when that one is out of reach too. None if there's no
+    way. start/battery plan from somewhere else (e.g. after loading cargo)."""
+    grid = world.grid
+    cf = world.charge_field
+    node = grid.node_at(x, y)
+    if cf.dist[node] == math.inf:
+        return None
+    usable = U.RELAY_PLANNING_FRACTION * capacity(world, unit) - reserve(world, unit)
+    if trip_energy(unit, cf.dist[node] + rest_cost, work_energy) > usable:
+        return None
+    goal_node = cf.nodes_from_source(node)[0]
+    chargers = sorted(world.chargers(), key=lambda s: s.id)
+    if not any(grid.node_at(s.x, s.y) == goal_node for s in chargers):
+        return None
+    sx, sy = start if start is not None else (unit.x, unit.y)
+    battery = unit.battery if battery is None else battery
+    here = grid.field(grid.nearest_reachable(grid.node_at(sx, sy), world.home_field))
+
+    def reachable_now(s):
+        if start is None and unit.docked and unit.dock == s.id:
+            return True
+        return battery - trip_energy(unit, here.dist[grid.node_at(s.x, s.y)]) >= reserve(world, unit)
+
+    # Breadth-first over chargers a full battery can get between.
+    first = {s.id: s for s in chargers if reachable_now(s)}
+    frontier = sorted(first.values(), key=lambda s: here.dist[grid.node_at(s.x, s.y)])
+    seen = set(first)
+    while frontier:
+        nxt = []
+        for s in frontier:
+            if grid.node_at(s.x, s.y) == goal_node:
+                return first[s.id]
+            hop = grid.field(grid.node_at(s.x, s.y))
+            for t in chargers:
+                if t.id not in seen and trip_energy(unit, hop.dist[grid.node_at(t.x, t.y)]) <= usable:
+                    seen.add(t.id)
+                    first[t.id] = first[s.id]
+                    nxt.append(t)
+        frontier = nxt
+    return None
+
+
+def in_charger_range(world, unit, x, y):
+    """Can a unit on a full battery get from the nearest charger to (x, y) and back?"""
+    d = world.charge_field.dist[world.grid.node_at(x, y)]
+    usable = U.RELAY_PLANNING_FRACTION * capacity(world, unit) - reserve(world, unit)
+    return d < math.inf and trip_energy(unit, 2 * d) <= usable
+
+
+def stage(world, unit, s):
+    """Go and charge to full at charger s (already there: start charging).
+    False if that can't help: already there on a full battery."""
+    if unit.docked and unit.dock == s.id:
+        if unit.battery >= capacity(world, unit) - 1e-6:
+            return False
+        unit.state, unit.activity = CHARGING, "charging"
+        return True
+    return go_dock(world, unit, "charge", only=s)
+
+
 def head_home(world, unit):
     """Nothing to do: charge up if needed, otherwise park.
 
     Being docked somewhere that can't charge (a depot) doesn't count as home."""
     if try_charge(world, unit, 1.0):
         return
-    at_charger = "charge" in dock_roles(world, unit)
-    if unit.battery < capacity(world, unit) and not at_charger and go_dock(world, unit, "charge"):
+    roles = dock_roles(world, unit)
+    at_charger = "charge" in roles
+    if unit.battery < U.TOP_UP_IDLE_FRACTION * capacity(world, unit) and not at_charger \
+            and go_dock(world, unit, "charge"):
+        return
+    # Parked empty at a storage dock (the lander): move to a free charging pad
+    # nearby if there is one, so units bringing cargo can unload.
+    if "store" in roles and not unit.cargo_total() and _free_pad_near(world, unit):
+        go_dock(world, unit, "charge")
+        return
+    # Charged and nothing to do: give the dock slot back and wait beside it.
+    if unit.docked and unit.dock in world.structures and not unit.cargo_total() \
+            and unit.battery >= capacity(world, unit) - 1e-6:
+        s = world.structures[unit.dock]
+        dx, dy = unit.x - s.x, unit.y - s.y
+        d = math.hypot(dx, dy) or 1.0
+        r = d + U.PARK_OFFSET_CELLS
+        goal = (s.x + dx / d * r, s.y + dy / d * r)
+        release_dock(world, unit)
+        set_path(unit, [goal], "to_park")
         return
     idle(unit)
+
+
+def _free_pad_near(world, unit):
+    f = here_field(world, unit)
+    for s in world.structures.values():
+        if (s.charges() and not s.stores() and s.powered and None in s.dock_users
+                and f.dist[world.grid.node_at(s.x, s.y)] <= U.PARK_AWAY_FROM_STORAGE_COST):
+            return True
+    return False
 
 
 # Orders -----------------------------------------------------------------------
@@ -388,6 +484,8 @@ def update(world, unit):
                 else:
                     unit.docked = True
                     b.think(world, unit)
+            elif unit.activity == "to_park":
+                idle(unit)
             elif unit.activity == "to_order":
                 kind = unit.order[0] if unit.order else "move"
                 if kind == "survey" and hasattr(b, "start_linger"):

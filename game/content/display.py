@@ -125,9 +125,9 @@ COLOR_GHOST_OK = (200, 255, 210)
 COLOR_GRID_LINK = (170, 115, 30)  # dim amber
 UNPOWERED_FLICKER = (0.25, 0.55)  # brightness range of an unpowered structure
 FIELD_HINT_FLICKER_HZ = 3.0
-SCAN_BEAM_TRAIL = 10              # fading copies of the radar beam behind it
-SCAN_BEAM_TRAIL_STEP = 0.06       # radians between them
-COLOR_SCAN = (60, 200, 90)        # green: survey data
+SCAN_BEAM_TRAIL = 4               # faint copies of the radar beam behind it
+SCAN_BEAM_TRAIL_STEP = 0.025      # radians between them
+COLOR_SCAN = (40, 120, 60)        # dim green: a quiet, map-wide sweep
 FIELD_LONG_DASH_PX = 10
 FIELD_GAP_PX = 4
 
@@ -142,6 +142,13 @@ CARGO_PIP_PX = 2
 # Phosphor trails: colour by age from fresh to old, fading out.
 TRAIL_COLOR_FRESH = (200, 255, 210)
 TRAIL_COLOR_OLD = (20, 70, 35)
+
+# Buildable-ground marks: in placement mode around the cursor, and across the
+# screen in survey view.
+SLOPE_MARK_RADIUS_CELLS = 10      # placement mode
+SLOPE_MARK_MAX = 1400             # survey view: marks per frame at most (sets the spacing)
+COLOR_BUILDABLE = (70, 200, 100)
+COLOR_TOO_STEEP = (170, 50, 45)
 
 # Line styles that back up colour meaning.
 DASH_PX = 6

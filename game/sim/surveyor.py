@@ -1,9 +1,11 @@
-"""Survey rover brain: map the ground and confirm resource fields. Never imports pygame.
+"""Survey rover brain: scout for scrap and confirm flagged fields. Never imports pygame.
 
-While driving it raises everything within sweep_radius to survey level 1.
-Standing still for linger_s raises the spot to level 2. On its own it
-confirms hinted fields first, then pushes the surveyed frontier outward; a
-player order ("survey here") overrides that.
+While driving it raises everything within sweep_radius to survey level 1 and
+spots debris within its sight. Standing still for linger_s raises the spot to
+level 2. It can't discover fields itself: once the scanner flags one, the
+rover goes and surveys it in detail until the whole outline is confirmed.
+Otherwise it pushes the surveyed frontier outward, finding scrap for the
+scavengers. A player order ("survey here") overrides that.
 """
 
 import math
