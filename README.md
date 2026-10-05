@@ -3,13 +3,15 @@
 A small, systems-driven lunar mining game in Python, drawn as a CRT vector
 console. `DESIGN.md` is the design brief and the single source of truth.
 
-Status: **Milestone 4 (the chain)**. A full site can be won and lost:
+Status: **Milestone 5 (depth)**. A full site can be won and lost:
 mines, crushers, melters, kilns, electrolyzers, reduction furnaces and machine
 shops run recipes with input and output buffers; haulers work a job board with
-reservations; consortium contracts pay credits and reputation; the ship's
-orbital passes bring supply drops and a free orbital scan. Fill the standing
-contract for machine parts twice in a row without ordering a drop and the site
-is handed off (won). Let reputation reach zero and it is lost.
+reservations, and conveyors and graded roads speed the busiest links;
+buildings wear and get repaired; consortium contracts pay credits and
+reputation; the ship's orbital passes bring supply drops and a free orbital
+scan. Fill the standing contract for machine parts twice in a row without
+ordering a drop and the site is handed off (won). Let reputation reach zero
+and it is lost.
 
 ## Play
 
@@ -29,7 +31,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 | Input | Action |
 | --- | --- |
-| B | Build menu: Up/Down (or W/S) + Enter, click a row, or press 1-0; then click to place (Shift+click places more), right click or Esc cancels |
+| B | Build menu: Up/Down (or W/S) + Enter, click a row, or press 1-0; then click to place (Shift+click places more), right click or Esc cancels. Conveyors: click the building to send from, then the one to send to. Roads: click one end, then the other (Shift+click carries on from there) |
 | R | Research panel: Up/Down + Enter or click a row to start a project |
 | K | Contract offers: accept one (or click an offer on the board) |
 | O | Orbit and market: order supply drops (crates or ready-built units, land during the next pass), aim the free orbital scan while the ship is overhead, or sell 10 of any stored good |
@@ -44,7 +46,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | WASD / arrows / drag | Pan |
 | Mouse wheel, Q / E | Zoom |
 | Space, `,` / `.` | Pause, slower / faster (1x up to 64x for testing; the HUD shows the speed actually managed) |
-| Tab or V | Operations / survey view |
+| Tab or V | Cycle views: operations, survey, power, flow (output per minute, hauler routes), wear |
 | G, F | Glow, performance stats (off by default) |
 | M | Sound: all, effects only, off |
 | I | Icons: console symbols or pictorial rovers and structures |
@@ -89,6 +91,19 @@ panels (faster in sunlight) and drives home when it can.
 Buildings wear as they work: past 50% they slow down and ask for a repair (a
 machine part per 10%). Constructors repair when idle; maintenance drones
 (after Maintenance research) fly straight to them from their hangar.
+
+Conveyors (after the Conveyors research) are belts between two buildings up
+to 16 cells apart: a producer to a building that uses its output, a producer
+to storage, or storage to a building that uses what it holds. They cost a
+sinter block per cell, run on the source's power and move an item a second.
+Roads cost credits per cell (more on steep ground) and any constructor grades
+them; rovers drive twice as fast on them on less battery, find them on their
+own, and can climb a road up ground too steep to drive otherwise.
+
+Tab cycles views. The power view shows what is powered and each grid's reach;
+the flow view shows working buildings with their output per minute and the
+routes haulers are driving; the wear view colours buildings from fresh
+(green) to worn out (red).
 
 Zoom right in to hear the site: machinery thumping, process plant humming,
 rovers whining past.

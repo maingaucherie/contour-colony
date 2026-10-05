@@ -373,7 +373,6 @@ Decisions made while playtesting Milestones 2–4, recorded here so this documen
 
 - **Finding things.** Debris is hidden until something sees it: scavengers (short sight), survey rovers (wider), the lander, and the **scanner**, a powered structure whose slow, faint radar sweep reaches most of the map. Fields are never found by ground units: the scanner flags a field after three sweeps (or an orbital scan does), then a survey rover confirms it with a detailed survey. Parts of a field behind cliffs are surveyed from the nearest reachable spot; a field whose remaining ground is unreachable counts as fully surveyed.
 - **Storage is one colony-wide pool** (the lander plus depots). No single good may fill more than 30% of it (scrap 60%); haulers stop adding a good at its cap, so the producer backs up instead of the colony clogging. Scrap that doesn't fit is sold on arrival. Hydrogen and oxygen are vented when nothing takes them. Every good can be sold on the market (orbit menu) at 30% of its contract value; scrap at 2 credits. Input buffers hold at least a full hauler load (10).
-- **Stranded units recover.** A unit that runs flat trickle-charges from emergency panels (faster in sunlight) until it can reach a charger, then drives home: a delay, never a loss.
 - **Stranded units recover.** A unit that runs flat trickle-charges from emergency panels (faster in sunlight) until it can reach a charger, then drives home: a delay, never a loss. Going to charge, a unit never picks a charger beyond its remaining battery; a busy one counts as slightly further away. Docks always sit on drivable ground.
 - **Range.** Units top up at chargers on the way to jobs beyond one battery's reach, hopping charger to charger; charging pads are how the colony reaches far fields. Idle units give their dock back, and units without cargo prefer charging pads to the lander's docks.
 - **Feel.** Units are distinct top-down silhouettes that turn with their heading (no ship-like arrows); frequently driven ground wears visible tracks that fade when unused; the landing opens with the lander coming down and a briefing on the body (a generated moon, dwarf planet or asteroid); drop pods fall with a trail, retro flare and dust ring.
@@ -387,6 +386,9 @@ Decisions made while playtesting Milestones 2–4, recorded here so this documen
 - **Wear (Milestone 5), calm by default.** Production buildings wear with each cycle; past 50% they slow (to half speed at 100%) and post a repair, one machine part per 10%. Only in pressure mode do they break at 100%. Constructors repair at half speed whenever they have nothing to build; after Maintenance, drones from a maintenance hangar (which stores only parts) fly straight over any terrain to repair. Worn buildings draw a shaky double image.
 - **Clock speed.** Any production building can run at 50% (45% power, 40% wear) from the start, or 150% (double power and wear) after Overclocking: J cycles it.
 - **Starting kit.** 300 credits, 100 scrap, 40 parts (the scrap trickle alone can't pay for the opening).
+- **Conveyors (Milestone 5)** are one-to-one belts placed by clicking a source building, then a destination up to 16 cells away (edge to edge): producer to consumer, producer to storage (everything it makes; contract goods at the lander ship), or storage to consumer. 1 sinter per cell, 0.5 kW from the source's grid (else the destination's), 1 item/s, never touching reserved items. The ground under them must be under 5°; up to 15° is graded for credits. Removing either building removes its conveyors. No splitters or mergers: direct feed plus one-to-one belts keeps logistics readable.
+- **Roads** are straight strips (up to 24 cells; Shift chains them end to end) paid in credits per cell plus grading, graded by a constructor with no materials. Rovers go 2x faster with half the slope penalty and half the battery per cell, routes use them on their own, and a road may climb ground up to 25°, so it can open a pass. Contour-snapping roads are left for later.
+- **Views.** Tab cycles operations, survey, power, flow and wear. Overlays recolour what is drawn instead of adding layers; flow shows output per minute (also in the inspect panel) and hauler routes.
 
 ## Later: touch screens and teaching
 
@@ -401,7 +403,7 @@ These are deliberately unresolved; decide them by playtesting, not up front.
 
 - [x] Is the reputation drain (−1/min) plus contract deadlines too stressful for a systems game? Yes: calm mode (offers you accept, no drain) is the default; the drain lives on in pressure mode.
 - [ ] Should orbital passes also gate direct unit orders (comms only while overhead)? More flavor, but possibly just frustrating.
-- [ ] Do conveyors need splitters/mergers, or is one-to-one enough? Start with one-to-one.
+- [x] Do conveyors need splitters/mergers, or is one-to-one enough? One-to-one, plus direct feed between touching buildings.
 - [ ] Day/night and batteries: worth adding in Milestone 6, or keep power static?
 - [ ] Campaign: after one site works, is the next step a chain of sites with carried-over research, or a single long site with expansion?
 - [ ] Does the scavenger trickle need to taper off over time so players can't stall forever on scrap alone?
