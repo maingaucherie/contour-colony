@@ -33,6 +33,26 @@ def draw_loading(surface, seed, stage_index, stage_count, stage, progress):
     draw_text(surface, label, (w // 2, y + bh + 10), 1, D.COLOR_TEXT_DIM, "center")
 
 
+def draw_continue(surface, info, mouse=None):
+    """Start-up offer to continue last time's site. Returns [continue rect, new site rect]."""
+    w, h = surface.get_size()
+    draw_text(surface, "CONTOUR COLONY", (w // 2, h // 2 - 90), 2, align="center")
+    t = int(info["time_s"])
+    state = "COMPLETE, KEPT RUNNING" if info["outcome"] == "won" else f"{info['mode'].upper()} PACE"
+    draw_text(surface, f"SITE {info['seed']}   T+{t // 3600:02d}:{t // 60 % 60:02d}   {info['credits']} CR   {state}",
+              (w // 2, h // 2 - 46), 1, D.COLOR_TEXT_DIM, "center")
+    rects = []
+    for i, label in enumerate(("CONTINUE  (ENTER)", "NEW SITE  (N)")):
+        r = pygame.Rect(w // 2 - 120, h // 2 - 10 + i * 36, 240, 26)
+        hover = mouse is not None and r.collidepoint(mouse)
+        if hover:
+            pygame.draw.rect(surface, D.COLOR_MENU_CURSOR, r)
+        pygame.draw.rect(surface, D.COLOR_FLOW if i == 0 else D.COLOR_FRAME, r, 1)
+        draw_text(surface, label, r.center, 1, D.COLOR_TEXT if i == 0 else D.COLOR_TEXT_DIM, "center", additive=True)
+        rects.append(r)
+    return rects
+
+
 def _scale_bar_km(km_per_px):
     target = D.SCALE_BAR_TARGET_PX * km_per_px
     return min(D.SCALE_BAR_NICE_KM, key=lambda km: abs(km - target))
@@ -45,6 +65,8 @@ def draw_running(surface, info):
 
     # Top left: site, economy, power, clock, research and view.
     draw_text(surface, f"SITE {info['seed']}", (M + 6, M + 4), 2)
+    if info.get("complete"):
+        draw_text(surface, f"COMPLETE - SCORE {info['complete']}", (M + 6 + 190, M + 10), 1, D.COLOR_FIELD)
     y = M + 4 + line_height(2) + 4
     rep = info["reputation"]
     credits = f"CREDITS {info['credits']}"
@@ -68,6 +90,8 @@ def draw_running(surface, info):
     rate = "PAUSED" if info["paused"] else f"SPEED {info['speed']}X"
     if not info["paused"] and info["speed"] > 1 and info.get("actual_speed", info["speed"]) < info["speed"] * 0.85:
         rate += f" (MANAGING {info['actual_speed']:.0f}X)"
+    if info.get("saved"):
+        rate += "   SAVED"
     draw_text(surface, f"{clock}   {rate}", (M + 6, y + lh), 1,
               D.COLOR_ALERT if info["paused"] else D.COLOR_TEXT_DIM)
     supply, demand = info["power"]

@@ -48,7 +48,13 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | M | Sound: all, effects only, off |
 | I | Icons: console symbols or pictorial rovers and structures |
 | N twice | Abandon the site and generate a new one (once, after a site ends) |
+| K on the win screen | Keep playing: the site runs on as a sandbox, the score stays as it was |
 | Esc | Close menus (desktop: quit when nothing is open) |
+
+The game saves itself every minute and as each orbital pass begins (a file
+in `~/.contour_colony` on desktop, browser storage on the web). Next time it
+offers to continue the site. Sound, glow, icon style and pace are
+remembered too.
 
 How a site goes: the landing briefing names the body you're on and lets you
 pick the pace (P). In calm mode (the default) contracts arrive as offers on

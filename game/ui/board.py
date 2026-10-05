@@ -204,7 +204,8 @@ def draw_orbit_menu(surface, world, cursor=None):
 
 # End of site ------------------------------------------------------------------------
 
-def draw_end(surface, world):
+def draw_end(surface, world, mouse=None):
+    """Site complete / lost. Returns the clickable choices: [(rect, "keep" | "next")]."""
     w, h = surface.get_size()
     won = world.outcome == "won"
     cs = world.contracts
@@ -219,8 +220,6 @@ def draw_end(surface, world):
         f"REPUTATION          {cs.reputation:.0f}",
         "",
         f"SCORE               {world.score()}",
-        "",
-        "N: NEXT SITE" if won else "N: TRY A NEW SITE",
     ]
     lh = D.HUD_LINE_HEIGHT + 2
     bw, bh = D.END_PANEL_SIZE
@@ -234,7 +233,18 @@ def draw_end(surface, world):
     ty = y + 14 + line_height(2) + 12
     for i, text in enumerate(lines):
         col = D.COLOR_TEXT if i == 0 or text.startswith("SCORE") else D.COLOR_TEXT_DIM
-        if text.startswith("N:"):
-            col = D.COLOR_FLOW
         draw_text(surface, text, (x + 24, ty), 1, col)
         ty += lh
+    choices = [("keep", "K: KEEP PLAYING"), ("next", "N: NEXT SITE")] if won else [("next", "N: TRY A NEW SITE")]
+    out = []
+    bx = x + 24
+    by = y + bh - 34
+    for key, label in choices:
+        r = pygame.Rect(bx - 6, by - 5, 180, lh + 6)
+        if mouse is not None and r.collidepoint(mouse):
+            pygame.draw.rect(surface, D.COLOR_MENU_CURSOR, r)
+        pygame.draw.rect(surface, D.COLOR_FLOW, r, 1)
+        draw_text(surface, label, (bx, by), 1, D.COLOR_FLOW, additive=True)
+        out.append((r, key))
+        bx += 200
+    return out

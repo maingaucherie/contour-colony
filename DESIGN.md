@@ -383,6 +383,7 @@ Decisions made while playtesting Milestones 2–4, recorded here so this documen
 - **Outposts** (Logistics I): a self-powered hub with two charging docks and a little storage, placeable anywhere reachable, so the colony spreads to distant fields without pylon chains.
 - **A larger-looking world.** The site stays 256 × 256 cells, but a band of coarse, never-simulated scenery terrain surrounds it, matching the site's heights at its edge and fading out with distance; the camera can look a little past the edge.
 - **Close-up sound.** Zoomed in, working machines and moving rovers near the middle of the screen are heard: thumping machinery (mines, crusher), humming process plant (melter, kiln, electrolyzer, furnace, shop) and rover motors.
+- **Saves and the sandbox.** The game autosaves (every minute, as each pass begins, and on winning or losing) and offers to continue at start-up. A save is the seed plus a snapshot of everything that changes; terrain is rebuilt from the seed. No save conversion between versions until the game is finished. After winning, "keep playing" lets the site run on as a sandbox with the score fixed at the win.
 - **Starting kit.** 300 credits, 100 scrap, 40 parts (the scrap trickle alone can't pay for the opening).
 
 ## Later: touch screens and teaching

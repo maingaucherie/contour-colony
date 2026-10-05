@@ -53,6 +53,8 @@ class World:
         self.contracts = Contracts(seed, mode)
         self.orbit = Orbit()
         self.outcome = None           # None, "won" or "lost"
+        self.endless = False          # won, and kept playing: the site runs on as a sandbox
+        self.final_score = None
         self.storage_full = False
         self._feeds = None
         self.autosold = 0             # scrap sold on arrival since the last report
@@ -368,9 +370,14 @@ class World:
     def finish(self, outcome, text):
         if self.outcome is None:
             self.outcome, self.outcome_text, self.end_s = outcome, text, self.time_s()
+            self.final_score = self._score_now()
             self.event(text, "won" if outcome == "won" else "alert")
 
     def score(self):
+        """The site's score, fixed at the moment it was won or lost."""
+        return self.final_score if self.final_score is not None else self._score_now()
+
+    def _score_now(self):
         c = self.contracts
         minutes = (self.end_s if self.end_s is not None else self.time_s()) / 60.0
         bonus = max(0.0, CT.SCORE_TIME_TARGET_MIN - minutes) * CT.SCORE_TIME_BONUS_PER_MIN if self.outcome == "won" else 0.0
@@ -398,7 +405,7 @@ class World:
         return self.orbit.scan(self, x, y)
 
     def tick(self):
-        if self.outcome is not None:
+        if self.outcome is not None and not self.endless:
             return
         self.tick_count += 1
         # Power.

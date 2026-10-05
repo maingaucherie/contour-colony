@@ -117,6 +117,9 @@ TRACK_FADE_EVERY_S = 30
 TRACK_FADE = 0.95                    # wear kept per fade: an unused track fades over ~20 minutes
 TRACK_FORGET = 5.0
 
+# Saves: a save from another version is refused (no conversion until the game is finished).
+SAVE_VERSION = 1
+
 # Storage warning: checked every STORAGE_CHECK_S; warns once it passes this fraction.
 STORAGE_CHECK_S = 5
 STORAGE_FULL_FRACTION = 0.95

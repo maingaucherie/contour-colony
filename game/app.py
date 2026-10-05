@@ -1,5 +1,6 @@
 """Application shell: loading state, running state, one frame at a time."""
 
+import json
 import random
 import sys
 import time
@@ -27,7 +28,8 @@ from game.sim import structures as ST
 from game.content import audio as AUDIO
 from game.content import contracts as CT
 from game.sim.orbit import Orbit
-from game.sim import body
+from game import storage
+from game.sim import body, save
 from game.ui import board, hud, menus, panels
 from game.ui.intro import Intro
 from game.ui.input import Input
@@ -65,11 +67,73 @@ class App:
         self.events_heard = 0
         self.segments = 0
         self.frame_ms = 0.0
-        self.start_site(seed)
+        self.world = None
+        self.last_outcome = None
+        self.last_overhead = False
+        self.last_save = 0.0
+        self.saved_at = -99.0         # real time of the last save, for the HUD's "SAVED" blink
+        self._load_settings()
+        # A site left unfinished last time is offered first (unless a seed was asked for).
+        self.continue_offer = None
+        if seed is None:
+            text = storage.load_text(D.SAVE_KEY)
+            info = save.summary(text) if text else None
+            if info and info["outcome"] != "lost":
+                self.continue_offer = (info, text)
+        if self.continue_offer:
+            self.world = self.loader = self.camera = None
+            self.intro = None
+        else:
+            self.start_site(seed)
+
+    # Settings and saves -------------------------------------------------------
+
+    def _load_settings(self):
+        try:
+            data = json.loads(storage.load_text(D.SETTINGS_KEY) or "{}")
+        except ValueError:
+            data = {}
+        if data.get("sound") in AUDIO.MODES:
+            while self.audio.mode != data["sound"]:
+                self.audio.cycle_mode()
+        self.glow_on = bool(data.get("glow", self.glow_on))
+        self.show_stats = bool(data.get("stats", self.show_stats))
+        if data.get("icons") in D.ICON_STYLES:
+            entities.style = data["icons"]
+        if data.get("pace") in CT.MODES:
+            self.mode = data["pace"]
+
+    def _save_settings(self):
+        storage.save_text(D.SETTINGS_KEY, json.dumps({
+            "sound": self.audio.mode, "glow": self.glow_on, "stats": self.show_stats,
+            "icons": entities.style, "pace": self.mode}))
+
+    def _autosave(self, force=False):
+        """Save the site every AUTOSAVE_S of real time (and when asked)."""
+        world = self.world
+        if world is None or self.loader is not None or self.intro is not None:
+            return
+        now = time.perf_counter()
+        if not force and now - self.last_save < D.AUTOSAVE_S:
+            return
+        self.last_save = now
+        if world.outcome == "lost":
+            storage.delete(D.SAVE_KEY)  # nothing to come back to
+            return
+        if storage.save_text(D.SAVE_KEY, save.dumps(world)):
+            self.saved_at = now
 
     # Site loading -------------------------------------------------------
 
-    def start_site(self, seed=None):
+    def start_site(self, seed=None, resume=None):
+        """Begin loading a site: a new one, or (resume = save text) a saved one."""
+        self.continue_offer = None
+        self.resume = save.read(resume) if resume else None
+        if self.resume:
+            seed = self.resume["seed"]
+            self.mode = self.resume["mode"]
+        elif self.world is not None or seed is None:
+            storage.delete(D.SAVE_KEY)   # a new site replaces the saved one
         if seed is None:
             # Seed from the clock: the browser build's default random source
             # gave every visitor the same site.
@@ -85,6 +149,7 @@ class App:
         self.menu = None          # None, "build", "research" or "orbit"
         self.targeting = False    # choosing where an orbital scan goes
         self.board_rects = []     # clickable offers on the contracts board
+        self.end_rects = None     # clickable choices on the site complete / lost screen
         self.last_tick_sound = 0.0
         self.menu_cursor = 0
         self.menu_rects = None    # (panel rect, row rects) from the last draw
@@ -97,6 +162,7 @@ class App:
         self.stage = 0
         self.progress = 0.0
         self.intro = None
+        self.resuming = False
         self.loader = self._load()
 
     def _load(self):
@@ -115,7 +181,11 @@ class App:
         self.scenery = yield from build_scenery(hm, self.contours.interval, self.seed)
         self.stage = 5
         self.world = yield from build_world(self.seed, hm, self.mode)
-        self.events_heard = 0
+        if self.resume:
+            save.apply(self.world, self.resume)
+            self.resume = None
+            self.resuming = True
+        self.events_heard = self.world.event_count
         self.camera = draw.Camera(D.SCREEN_SIZE, hm.size - 1)
         self.camera.x, self.camera.y = self.world.lander.x, self.world.lander.y
         self.camera.zoom = D.START_ZOOM
@@ -128,7 +198,12 @@ class App:
                 self.progress = next(self.loader)
             except StopIteration:
                 self.loader = None
-                self.intro = Intro(time.perf_counter(), body.briefing_lines(self.seed, body.generate(self.seed)))
+                self.last_save = time.perf_counter()
+                if self.resuming:
+                    self.resuming = False
+                    self.world.event("SITE RESTORED - WELCOME BACK")
+                else:
+                    self.intro = Intro(time.perf_counter(), body.briefing_lines(self.seed, body.generate(self.seed)))
                 return
 
     # Frame ----------------------------------------------------------------
@@ -137,6 +212,9 @@ class App:
         dt = self.clock.tick(D.FRAME_RATE_CAP) / 1000.0
         start = time.perf_counter()
         actions = self.input.process(pygame.event.get(), self.camera)
+        if self.continue_offer is not None:
+            self._continue_screen(actions)
+            return
         if self.intro is not None and self.loader is None:
             actions = self._intro_input(actions)
         for action in actions:
@@ -154,6 +232,11 @@ class App:
                 self._handle_pointer_and_keys()
                 self._advance(dt)
             self._draw_site()
+            overhead = self.world.orbit.was_overhead
+            if self.world.outcome != self.last_outcome or (overhead and not self.last_overhead):
+                self._autosave(force=True)   # on winning or losing, and as each orbital pass begins
+            self.last_outcome, self.last_overhead = self.world.outcome, overhead
+            self._autosave()
         if self.world is not None and self.loader is None:
             self._sounds_for_events()
             supply, demand = self._power_summary()
@@ -165,6 +248,33 @@ class App:
         self.window.blit(self.screen, (0, 0))
         pygame.display.flip()
 
+    def _continue_screen(self, actions):
+        """Start-up: offer the site left unfinished last time."""
+        info, text = self.continue_offer
+        self.screen.fill(D.COLOR_BACKGROUND)
+        rects = hud.draw_continue(self.screen, info, self.input.mouse)
+        inp = self.input
+        go_on = any(k in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_c) for k in inp.keys_down)
+        fresh = "new_site" in actions
+        if inp.click is not None:
+            go_on = go_on or rects[0].collidepoint(inp.click)
+            fresh = fresh or rects[1].collidepoint(inp.click)
+        if "quit" in actions and not WEB:
+            self.running = False
+        if go_on:
+            try:
+                self.start_site(resume=text)
+            except save.SaveError as exc:
+                print("could not load:", exc)
+                self.start_site()
+        elif fresh:
+            self.start_site()
+        hud.draw_frame(self.screen)
+        if self.glow_on:
+            self.glow.apply(self.screen)
+        self.window.blit(self.screen, (0, 0))
+        pygame.display.flip()
+
     def _intro_input(self, actions):
         """During the landing briefing: P switches pace, a click, Enter or Space
         skips ahead, then begins. Other actions (sound, glow, quit) pass through."""
@@ -173,6 +283,7 @@ class App:
         if any(ch == "P" for ch in inp.typed):
             self.mode = "pressure" if self.mode == "calm" else "calm"
             self.world.contracts.set_mode(self.mode)
+            self._save_settings()
             self.audio.play("menu")
         go = inp.click is not None or "pause" in actions or any(
             k in (pygame.K_RETURN, pygame.K_KP_ENTER) for k in inp.keys_down)
@@ -198,8 +309,10 @@ class App:
                 self.running = False
         elif action == "toggle_glow":
             self.glow_on = not self.glow_on
+            self._save_settings()
         elif action == "toggle_stats":
             self.show_stats = not self.show_stats
+            self._save_settings()
         elif action == "toggle_view":
             self.view = "survey" if self.view == "operations" else "operations"
         elif action == "new_site":
@@ -211,6 +324,8 @@ class App:
                 self.world.event("PRESS N AGAIN TO ABANDON THIS SITE AND START A NEW ONE", "alert")
         elif self.world is None:
             return
+        elif action == "contracts" and self.world.outcome == "won" and not self.world.endless:
+            self._keep_playing()
         elif action == "pause":
             self.paused = not self.paused
         elif action == "speed_up":
@@ -226,11 +341,13 @@ class App:
             self.camera.clamp()
         elif action == "sound":
             mode = self.audio.cycle_mode()
+            self._save_settings()
             if self.world is not None:
                 self.world.event({"all": "SOUND ON", "sfx": "MUSIC OFF, EFFECTS ON", "off": "SOUND OFF"}[mode])
         elif action == "icons":
             styles = D.ICON_STYLES
             entities.style = styles[(styles.index(entities.style) + 1) % len(styles)]
+            self._save_settings()
         elif action in ("build", "research", "orbit", "contracts"):
             self.menu = None if self.menu == action else action
             self.menu_cursor = 0
@@ -389,6 +506,14 @@ class App:
             if inp.right_click is not None:
                 self.placing = None
             return
+        if inp.click is not None and self.end_rects:
+            for rect, choice in self.end_rects:
+                if rect.collidepoint(inp.click):
+                    if choice == "keep":
+                        self._keep_playing()
+                    else:
+                        self.start_site()
+                    return
         if inp.click is not None:
             for rect, offer_id in self.board_rects:
                 if rect.collidepoint(inp.click):
@@ -498,6 +623,8 @@ class App:
             if world.research.current else None,
             "events": [((world.tick_count - t) / world.tick_rate, text, kind) for t, text, kind in world.events],
             "hint": self._hint(),
+            "saved": time.perf_counter() - self.saved_at < D.SAVED_BLINK_S,
+            "complete": world.score() if world.endless else None,
         })
         now = time.perf_counter()
         board_bottom, self.board_rects = board.draw_board(self.screen, world, now,
@@ -512,8 +639,9 @@ class App:
             self.menu_rects = board.draw_orbit_menu(self.screen, world, self.menu_cursor)
         elif self.menu == "contracts":
             self.menu_rects = board.draw_contracts_menu(self.screen, world, self.menu_cursor)
-        if world.outcome is not None:
-            board.draw_end(self.screen, world)
+        self.end_rects = None
+        if world.outcome is not None and not world.endless:
+            self.end_rects = board.draw_end(self.screen, world, self.input.mouse)
         # A ticking clock while a contract is close to its deadline.
         if (not self.paused and world.outcome is None and now - self.last_tick_sound >= 1.0
                 and any(board.contract_urgent(world, c) for c in world.contracts.open)):
@@ -593,6 +721,13 @@ class App:
     def _power_summary(self):
         grid = self.world.power_grids.get(self.world.lander.grid)
         return (grid["supply"], grid["demand"]) if grid else (0.0, 0.0)
+
+    def _keep_playing(self):
+        """After the win: the site runs on as a sandbox; the score stays as it was."""
+        self.world.endless = True
+        self.world.event("SITE HANDED OFF - YOU STAY ON AS CARETAKER. BUILD AS YOU LIKE", "won")
+        self.audio.play("confirm")
+        self._autosave(force=True)
 
     def _hint(self):
         if self.targeting:
