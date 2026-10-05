@@ -26,7 +26,7 @@ def _panel(surface, x, y, w, lines, title, cursor=None, selectable=0):
     ty = y + line_height(2) + 12
     rows = []
     for i, (text, color) in enumerate(lines):
-        row = pygame.Rect(x + 4, ty - 2, w - 8, lh)
+        row = pygame.Rect(x + 4, ty, w - 8, lh)  # capitals sit centred on ty + 7
         if i < selectable:
             rows.append(row)
             if i == cursor:
@@ -41,8 +41,10 @@ def _panel(surface, x, y, w, lines, title, cursor=None, selectable=0):
 
 
 def build_entries(world):
+    """Every buildable structure; the first ten also get a number key."""
     out = []
-    for key, kind in zip(BUILD_KEYS, BUILD_MENU):
+    for i, kind in enumerate(BUILD_MENU):
+        key = BUILD_KEYS[i] if i < len(BUILD_KEYS) else " "
         spec = STRUCTURES[kind]
         out.append((key, kind, spec, world.unlocked(kind)))
     return out

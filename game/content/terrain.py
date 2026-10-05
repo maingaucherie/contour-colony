@@ -50,16 +50,19 @@ CONTOUR_CHUNK_CELLS = 32
 # camera zoom (screen pixels per cell) from which the tier is used.
 CONTOUR_TIERS = (
     {"level_step": 4, "tolerance_cells": 0.75, "min_zoom": 0.0},
-    {"level_step": 2, "tolerance_cells": 0.5, "min_zoom": 5.0},
-    {"level_step": 1, "tolerance_cells": 0.25, "min_zoom": 10.0},
+    {"level_step": 2, "tolerance_cells": 0.5, "min_zoom": 6.5},
+    {"level_step": 1, "tolerance_cells": 0.25, "min_zoom": 13.0},
 )
 # Contour lines are cut into pieces of at most this many segments so each piece
 # can fade on its own (with zoom and with survey knowledge around it).
 CONTOUR_PIECE_SEGMENTS = 6
 # A tier fades in between min_zoom / FADE_RATIO and min_zoom.
-CONTOUR_FADE_RATIO = 1.6
+CONTOUR_FADE_RATIO = 1.4
 # Survey knowledge around a piece is averaged over a square of this half-size (cells).
 CONTOUR_SURVEY_BLUR_CELLS = 6.0
+# Brightness of contours over ground nobody has surveyed, relative to fully
+# surveyed ground. Survey only brightens: it never hides lines, so none end.
+CONTOUR_UNSURVEYED_BRIGHTNESS = 0.55
 
 # Every INDEX_STEP-th level is an index contour, drawn slightly brighter.
 CONTOUR_INDEX_STEP = 4

@@ -125,6 +125,9 @@ COLOR_GHOST_OK = (200, 255, 210)
 COLOR_GRID_LINK = (170, 115, 30)  # dim amber
 UNPOWERED_FLICKER = (0.25, 0.55)  # brightness range of an unpowered structure
 FIELD_HINT_FLICKER_HZ = 3.0
+SCAN_BEAM_TRAIL = 10              # fading copies of the radar beam behind it
+SCAN_BEAM_TRAIL_STEP = 0.06       # radians between them
+COLOR_SCAN = (60, 200, 90)        # green: survey data
 FIELD_LONG_DASH_PX = 10
 FIELD_GAP_PX = 4
 

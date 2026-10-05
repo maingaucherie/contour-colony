@@ -1,8 +1,9 @@
 """Simulation-wide tables: tick rate, slope rules, pathing, debris. Plain data."""
 
 TICK_RATE = 10                       # simulation ticks per second
-MAX_TICKS_PER_FRAME = 5              # catch-up limit when a frame runs long
-SIM_SPEEDS = (1, 2, 4)               # player-selectable time multipliers
+MAX_TICKS_PER_FRAME = 5              # catch-up limit when a frame runs long (x speed)
+SIM_BUDGET_MS = 24.0                 # most simulation time per frame; fast speeds slow down past it
+SIM_SPEEDS = (1, 2, 4, 8, 16, 32, 64)  # player-selectable time multipliers (, and .)
 
 # Slope rules (degrees).
 SLOPE_BUILDABLE_DEG = 5.0
@@ -16,6 +17,11 @@ PATH_NODE_CELLS = 4
 PATH_BLOCKED_FRACTION = 0.5
 PATH_CACHE_SIZE = 256
 PATH_LOS_STEP_NODES = 0.25           # sampling step for straight-line shortcut checks
+# Steep ground (over SLOPE_ROAD_ONLY_DEG) costs this much extra per cell, so
+# routes curve around cliff bands when there's a reasonable way round.
+PATH_STEEP_CELL_PENALTY = 10.0
+PATH_SHORTCUT_TOLERANCE = 0.05       # a straight shortcut may cost this much more than the route it replaces
+PATH_COST_SAMPLE_CELLS = 0.5         # sampling step when costing a straight segment
 
 # Lander placement: lowest-cost open node near the centre that can reach
 # at least LANDER_MIN_REACH_FRACTION of all nodes.
@@ -74,6 +80,9 @@ ILLUMINATION_STEP_CELLS = 2
 ILLUMINATION_MAX_STEPS = 24
 ILLUMINATION_RANGE = (0.4, 1.0)            # shadowed .. fully lit
 ILLUMINATION_GRID = 2                      # computed every this many cells
+
+# Scanner: a field becomes a "signal" (hinted) after the beam passes over it this often.
+FIELD_SIGNAL_PASSES = 3
 
 # Power.
 PRIORITIES = ("high", "normal", "low")

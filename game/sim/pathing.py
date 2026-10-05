@@ -48,6 +48,7 @@ class Field:
 class PathGrid:
     def __init__(self, size, slopes, node_cells=W.PATH_NODE_CELLS):
         self.size = size
+        self.slopes = slopes
         self.node_cells = node_cells
         self.n = math.ceil(size / node_cells)
         self.cost = [0.0] * (self.n * self.n)
@@ -59,13 +60,35 @@ class PathGrid:
                     row = y * size
                     for x in range(nx * node_cells, min((nx + 1) * node_cells, size)):
                         s = slopes[row + x]
-                        total += 1.0 + s / U.SLOPE_DIVISOR_DEG
+                        total += self.cell_cost(s)
                         steep += s > W.SLOPE_ROAD_ONLY_DEG
                         count += 1
                 i = ny * self.n + nx
                 self.cost[i] = total / count
                 self.open[i] = steep / count <= W.PATH_BLOCKED_FRACTION
         self._cache = OrderedDict()
+
+    @staticmethod
+    def cell_cost(slope):
+        """Planning cost of crossing one cell: slope slows rovers, cliffs are avoided."""
+        cost = 1.0 + slope / U.SLOPE_DIVISOR_DEG
+        if slope > W.SLOPE_ROAD_ONLY_DEG:
+            cost += W.PATH_STEEP_CELL_PENALTY
+        return cost
+
+    def segment_cost(self, a, b):
+        """Cost of driving straight from a to b, sampled along the line."""
+        (ax, ay), (bx, by) = a, b
+        length = math.hypot(bx - ax, by - ay)
+        steps = max(1, int(length / W.PATH_COST_SAMPLE_CELLS))
+        n = self.size
+        total = 0.0
+        for i in range(steps):
+            t = (i + 0.5) / steps
+            x = min(max(int(ax + (bx - ax) * t + 0.5), 0), n - 1)
+            y = min(max(int(ay + (by - ay) * t + 0.5), 0), n - 1)
+            total += self.cell_cost(self.slopes[y * n + x])
+        return total * length / steps
 
     # Geometry ---------------------------------------------------------------
 
@@ -158,15 +181,24 @@ class PathGrid:
 
     def waypoints(self, start, nodes, goal):
         """Turn a node chain into world waypoints from start to goal, shortcutting
-        corners wherever the straight line stays on open ground."""
+        corners where the straight line stays on open ground and costs no more."""
         points = [start] + [self.node_centre(n) for n in nodes[1:-1]] + [goal]
         last = len(points) - 1
+        # Cumulative cost along the node route, to judge shortcuts against.
+        along = [0.0]
+        for p, q in zip(points, points[1:]):
+            along.append(along[-1] + self.segment_cost(p, q))
         out = []
         i = 0
         while i < last:
             j = i + 1
-            while j < last and self.line_open(points[i], points[j + 1]):
-                j += 1
+            while j < last:
+                k = j + 1
+                if not self.line_open(points[i], points[k]):
+                    break
+                if self.segment_cost(points[i], points[k]) > (along[k] - along[i]) * (1 + W.PATH_SHORTCUT_TOLERANCE):
+                    break  # the straight line would climb something the route goes round
+                j = k
             out.append(points[j])
             i = j
         return out  # the unit is already at start

@@ -79,6 +79,7 @@ class App:
         self.paused = False
         self.speed_index = 0
         self.accumulator = 0.0
+        self.actual_speed = 1.0
         self.stage = 0
         self.progress = 0.0
         self.loader = self._load()
@@ -324,13 +325,18 @@ class App:
         speed = W.SIM_SPEEDS[self.speed_index]
         self.accumulator += dt * speed
         ticks = 0
+        deadline = time.perf_counter() + W.SIM_BUDGET_MS / 1000.0
         while self.accumulator >= _TICK_S:
-            if ticks >= W.MAX_TICKS_PER_FRAME * speed:
+            if ticks >= W.MAX_TICKS_PER_FRAME * speed or time.perf_counter() > deadline:
                 self.accumulator = 0.0  # too far behind: drop time rather than spiral
                 break
             self.world.tick()
             self.accumulator -= _TICK_S
             ticks += 1
+        # Achieved speed (sim seconds per real second), smoothed, for the HUD.
+        if dt > 0:
+            achieved = ticks * _TICK_S / dt
+            self.actual_speed += (achieved - self.actual_speed) * 0.05
 
     def _alpha(self):
         return min(self.accumulator / _TICK_S, 1.0)
@@ -371,7 +377,7 @@ class App:
             "frame_ms": self.frame_ms, "segments": self.segments, "glow": self.glow_on,
             "credits": world.credits, "scrap": world.stock("scrap"), "parts": world.stock("parts"),
             "power": self._power_summary(), "time_s": world.time_s(),
-            "paused": self.paused, "speed": W.SIM_SPEEDS[self.speed_index],
+            "paused": self.paused, "speed": W.SIM_SPEEDS[self.speed_index], "actual_speed": self.actual_speed,
             "research": (RESEARCH[world.research.current]["name"], world.research.progress())
             if world.research.current else None,
             "events": [((world.tick_count - t) / world.tick_rate, text, kind) for t, text, kind in world.events],

@@ -90,3 +90,25 @@ class PathGridTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CliffRoutingTests(unittest.TestCase):
+    def test_route_curves_around_a_passable_cliff_band(self):
+        # Steep (20 deg) stripe two nodes wide but only half steep, so the nodes stay
+        # open; a flat gap below it. The straight line crosses the cliff.
+        s = array("f", [0.0] * (SIZE * SIZE))
+        for y in range(0, 24):
+            for x in (14, 15, 16, 17):
+                s[y * SIZE + x] = 20.0
+        g = PathGrid(SIZE, s, NODE)
+        start, goal = (2.0, 10.0), (29.0, 10.0)
+        f = g.field(g.node_at(*start))
+        points = [start] + g.waypoints(start, f.nodes_from_source(g.node_at(*goal)), goal)
+        worst = 0.0
+        for (ax, ay), (bx, by) in zip(points, points[1:]):
+            steps = int(math.hypot(bx - ax, by - ay) * 4) + 1
+            for i in range(steps + 1):
+                x = int(ax + (bx - ax) * i / steps + 0.5)
+                y = int(ay + (by - ay) * i / steps + 0.5)
+                worst = max(worst, s[min(y, SIZE - 1) * SIZE + min(x, SIZE - 1)])
+        self.assertLess(worst, 15.0, f"route crosses the cliff: {points}")

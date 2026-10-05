@@ -6,6 +6,8 @@ is full or nothing is in range, then unload at the nearest storage and top
 up at a charger.
 """
 
+import math
+
 from game.content import units as U
 from game.sim import units as UN
 
@@ -15,7 +17,7 @@ def _choose_debris(world, unit):
     grid = world.grid
     best = None
     for piece in world.debris.values():
-        if piece.claimed_by is not None:
+        if piece.claimed_by is not None or not piece.seen:
             continue
         node = grid.node_at(piece.x, piece.y)
         travel = f.dist[node]
@@ -49,11 +51,38 @@ def think(world, unit):
             return
     if unit.cargo_total() and UN.go_dock(world, unit, "store"):
         return
+    if unit.cargo_total() < unit.spec["cargo"] and _search(world, unit):
+        return
     UN.head_home(world, unit)
 
 
+def _search(world, unit):
+    """Nothing known in range: drive somewhere random nearby and look around."""
+    f = UN.here_field(world, unit)
+    grid, rng = world.grid, world.rng
+    for _ in range(U.SEARCH_ATTEMPTS):
+        a = rng.uniform(0.0, 2 * math.pi)
+        d = rng.uniform(*U.SEARCH_DISTANCE_CELLS)
+        x, y = unit.x + d * math.cos(a), unit.y + d * math.sin(a)
+        size = world.heightmap.size
+        if not (1 <= x < size - 1 and 1 <= y < size - 1):
+            continue
+        node = grid.node_at(x, y)
+        if not grid.open[node] or not f.reachable(node):
+            continue
+        if not UN.can_afford(world, unit, f.dist[node] + world.charge_field.dist[node], unit.spec["pickup_energy"]):
+            continue
+        UN.release_dock(world, unit)
+        UN.set_path(unit, UN.path_to(world, unit, (x, y), f), "searching")
+        return True
+    return False
+
+
 def arrived(world, unit):
-    UN.work(unit, "pickup", unit.spec["pickup_s"])
+    if unit.activity == "searching":
+        think(world, unit)
+    else:
+        UN.work(unit, "pickup", unit.spec["pickup_s"])
 
 
 def work_done(world, unit):

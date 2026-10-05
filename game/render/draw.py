@@ -102,33 +102,47 @@ def zoom_alphas(zoom, tier_specs=T.CONTOUR_TIERS):
 
 
 class ContourShading:
-    """Per-piece survey knowledge, cached until the survey changes."""
+    """Per-piece survey knowledge, cached. When the survey changes, only pieces
+    near the changed areas are recomputed (a survey rover changes it every tick)."""
 
     def __init__(self, survey):
         self.survey = survey
-        self.version = -1
-        self.cache = {}
+        self.version = survey.version
+        self.cache = {}   # id(piece) -> (piece, knowledge)
         r = T.CONTOUR_SURVEY_BLUR_CELLS
+        self.reach = r
         steps = (-1.0, -0.5, 0.0, 0.5, 1.0)
         self.offsets = [(dx * r, dy * r) for dx in steps for dy in steps]
+
+    def _invalidate(self):
+        survey = self.survey
+        rects = [c[1:] for c in survey.changes if c[0] > self.version]
+        if survey.changes and survey.changes[0][0] > self.version + 1:
+            self.cache.clear()  # missed some changes: start over
+        else:
+            r = self.reach
+            stale = [key for key, (pl, _) in self.cache.items()
+                     if any(x0 - r <= pl.mx <= x1 + r and y0 - r <= pl.my <= y1 + r for x0, y0, x1, y1 in rects)]
+            for key in stale:
+                del self.cache[key]
+        self.version = survey.version
 
     def knowledge(self, pl):
         """Average survey level around a piece, 0..2."""
         if self.version != self.survey.version:
-            self.version = self.survey.version
-            self.cache.clear()
-        key = id(pl)
-        k = self.cache.get(key)
-        if k is None:
+            self._invalidate()
+        hit = self.cache.get(id(pl))
+        if hit is None:
             level_at = self.survey.level_at
             k = sum(level_at(pl.mx + dx, pl.my + dy) for dx, dy in self.offsets) / len(self.offsets)
-            self.cache[key] = k
-        return k
+            self.cache[id(pl)] = (pl, k)
+            return k
+        return hit[1]
 
 
 def draw_contours(surface, contours, camera, colors, shading=None):
-    """Draw visible contour pieces. Finer levels fade in with zoom and with the
-    survey knowledge around each piece. Returns the number of segments drawn."""
+    """Draw visible contour pieces. Finer levels fade in with zoom; survey
+    knowledge around a piece brightens it. Returns the number of segments drawn."""
     z = camera.zoom
     ox, oy = camera.offset()
     vx0, vy0, vx1, vy1 = camera.visible_rect()
@@ -150,8 +164,10 @@ def draw_contours(surface, contours, camera, colors, shading=None):
                 if pl.max_x < vx0 or pl.min_x > vx1 or pl.max_y < vy0 or pl.min_y > vy1:
                     continue
                 a = za
-                if shading is not None and rank > 0:
-                    a *= min(1.0, max(0.0, shading.knowledge(pl) - rank + 1))
+                if shading is not None:
+                    known = min(1.0, shading.knowledge(pl) / 2.0)  # survey levels 0..2
+                    dim = T.CONTOUR_UNSURVEYED_BRIGHTNESS
+                    a *= dim + (1.0 - dim) * known
                 q = int(a * steps + 0.5)
                 if q <= 0:
                     continue

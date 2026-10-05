@@ -37,6 +37,8 @@ STRUCTURES = {
               [(-0.95, 0.0), (0.95, 0.0)]],
     # A tower: small square with cross-arms.
     "pylon": [_box(-0.35, -0.35, 0.35, 0.35), [(-0.9, 0.0), (0.9, 0.0)], [(0.0, -0.9), (0.0, 0.9)]],
+    # A radar: dish circle with a beam stub and a centre pivot.
+    "scanner": [_poly(12, 0.95), _poly(6, 0.18), [(0.0, 0.0), (0.0, -0.95)], [(-0.5, -0.55), (0.0, -0.95), (0.5, -0.55)]],
     # A pad: octagon with a bolt.
     "charging_pad": [_poly(8, 0.95, math.pi / 8), [(0.15, -0.55), (-0.2, 0.05), (0.2, 0.0), (-0.15, 0.55)]],
     # Storage: square with a shelf line and a door notch.

@@ -112,3 +112,72 @@ class DeconstructionTests(unittest.TestCase):
         for _ in range(int(60 * W.TICK_RATE)):
             w.tick()
         self.assertIn(pad.id, w.structures)
+
+
+class ScannerAndSightTests(unittest.TestCase):
+    def test_debris_starts_hidden_except_near_the_lander(self):
+        w = make_world(1)
+        sight = w.lander.spec["sight_cells"]
+        for d in w.debris.values():
+            near = math.hypot(d.x - w.lander.x, d.y - w.lander.y) <= sight
+            self.assertEqual(d.seen, near)
+
+    def test_scanner_reveals_debris_and_signals_fields(self):
+        w = make_world(2)
+        scanner = build(w, "scanner", (w.lander.x, w.lander.y), 3, 8)
+        radius = scanner.spec["scan_radius_cells"]
+        period = int(scanner.spec["sweep_period_s"] * W.TICK_RATE)
+        for _ in range(period + 2):
+            w.tick()
+        for d in w.debris.values():
+            if math.hypot(d.x - scanner.x, d.y - scanner.y) <= radius - 0.5 and d.claimed_by is None:
+                self.assertTrue(d.seen, (d.x, d.y))
+        in_range = [f for f in w.fields if math.hypot(f.cx - scanner.x, f.cy - scanner.y) <= radius]
+        for _ in range(period * (W.FIELD_SIGNAL_PASSES + 1)):
+            w.tick()
+        for f in in_range:
+            self.assertTrue(f.hinted, f"{f.kind} field at {f.cx:.0f},{f.cy:.0f} not signalled")
+
+    def test_landing_survey_does_not_signal_fields(self):
+        for seed in (1, 2, 3):
+            w = make_world(seed)
+            self.assertFalse(any(f.hinted for f in w.fields), f"seed {seed}")
+
+    def test_scavengers_search_when_nothing_is_known(self):
+        w = make_world(3)
+        for d in w.debris.values():
+            d.seen = False
+        start = w.stock("scrap")
+        searched = False
+        for _ in range(int(6 * 60 * W.TICK_RATE)):
+            w.tick()
+            searched |= any(u.activity == "searching" for u in w.units.values())
+        self.assertTrue(searched)
+        self.assertGreater(w.stock("scrap"), start)
+
+
+class SurveyCompletenessTests(unittest.TestCase):
+    def test_rover_confirms_a_whole_field_outline(self):
+        w = make_world(1)
+        field = min((f for f in w.fields if f.kind == "ilmenite"),
+                    key=lambda f: math.hypot(f.cx - w.lander.x, f.cy - w.lander.y))
+        w.hint_field(field)
+        w.spawn_unit("survey_rover", w.lander.x + 2, w.lander.y + 2)
+        mids = [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(field.boundary, field.boundary[1:])]
+        reachable = [p for p in mids if w.home_field.reachable(w.grid.node_at(*p))]
+
+        def done():
+            return all(w.survey.level_at(*p) >= 2 for p in reachable)
+        self.assertTrue(run_until(w, done, 15 * 60), "outline left partly unsurveyed")
+
+
+class DebrisReachabilityTests(unittest.TestCase):
+    def test_debris_only_on_reachable_open_ground(self):
+        for seed in (1, 2, 3, 4):
+            w = make_world(seed)
+            for _ in range(int(5 * 60 * W.TICK_RATE)):
+                w.tick()
+            for d in w.debris.values():
+                node = w.grid.node_at(d.x, d.y)
+                self.assertTrue(w.grid.open[node], f"seed {seed}: debris on blocked ground")
+                self.assertTrue(w.charge_field.reachable(node), f"seed {seed}: debris out of reach")

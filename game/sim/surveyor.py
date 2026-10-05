@@ -32,7 +32,10 @@ def _targets(world, unit, f):
     for fld in world.fields:
         if not fld.hinted:
             continue
-        for x, y in fld.sample_points(unit.spec["linger_radius_cells"] * 1.2):
+        # Interior points and the boundary itself: a field is fully confirmed only
+        # once every piece of its outline has been surveyed in detail.
+        edge = [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(fld.boundary, fld.boundary[1:])]
+        for x, y in fld.sample_points(unit.spec["linger_radius_cells"]) + edge:
             if world.survey.level_at(x, y) >= 2:
                 continue
             node = grid.node_at(x, y)

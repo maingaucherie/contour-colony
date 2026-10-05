@@ -88,10 +88,13 @@ def draw_fields(surface, world, camera, now_s):
             G.dashed(surface, color, run, D.FIELD_LONG_DASH_PX, D.FIELD_GAP_PX)
         if revealed < len(f.boundary) - 1:
             # Still uncertain: a flickering dotted ring around roughly the right place.
+            hx, hy = to_screen(f.cx + f.hint_dx, f.cy + f.hint_dy)
             if int(now_s * D.FIELD_HINT_FLICKER_HZ * 2 + f.id) % 3:
-                hx, hy = to_screen(f.cx + f.hint_dx, f.cy + f.hint_dy)
                 G.dotted_circle(surface, _scale(color, 0.7), hx, hy, f.radius * 1.3 * z, D.DOT_SPACING_PX,
                                 phase=now_s * 0.3)
+            if not f.confirmed:
+                draw_text(surface, f"{f.kind.upper()} SIGNAL?", (hx, hy - 6), 1, _scale(color, 0.8), "center",
+                          additive=True)
         if f.confirmed or show_richness_at_1:
             sx, sy = to_screen(f.cx, f.cy)
             label = f"{f.kind.upper()} {f.richness:.1f}X" if (f.confirmed or show_richness_at_1) else f.kind.upper()
@@ -130,6 +133,19 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
     return segs
 
 
+def _draw_scan_beam(surface, s, camera):
+    """Radar sweep: the beam and a fading trail behind it, plus a faint range ring."""
+    sx, sy = camera.world_to_screen(s.x, s.y)
+    r = s.spec["scan_radius_cells"] * camera.zoom
+    G.dotted_circle(surface, _scale(D.COLOR_SCAN, 0.35), sx, sy, r, D.DOT_SPACING_PX * 3)
+    n = D.SCAN_BEAM_TRAIL
+    for i in range(n):
+        a = s.sweep_angle - i * D.SCAN_BEAM_TRAIL_STEP
+        k = (1 - i / n) ** 2
+        pygame.draw.aaline(surface, _scale(D.COLOR_SCAN, k), (sx, sy), (sx + r * math.cos(a), sy + r * math.sin(a)))
+    return n
+
+
 def _rover_facing(unit):
     c = math.cos(unit.vis_heading)
     f = _facing.get(unit.id, 1 if c >= 0 else -1)
@@ -153,11 +169,15 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
 
     size = max(D.DEBRIS_SIZE_CELLS * z, D.DEBRIS_MIN_PX) / 2
     for piece in world.debris.values():
+        if not piece.seen:
+            continue
         sx, sy = to_screen(piece.x, piece.y)
         if _on_screen(sx, sy, size, w, h):
             segments += G.draw_shape(surface, D.COLOR_DEBRIS, G.DEBRIS_SHAPES[piece.kind], sx, sy, size)
 
     for s in world.structures.values():
+        if s.kind == "scanner" and s.built and s.powered:
+            segments += _draw_scan_beam(surface, s, camera)
         segments += _draw_structure(surface, world, s, camera, now_s, selected)
 
     # Phosphor trails (world space, so they survive panning and zooming).

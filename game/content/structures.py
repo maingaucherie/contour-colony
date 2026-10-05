@@ -6,6 +6,8 @@ build_cost       items delivered by constructors; build_time_s of assembly after
 power_kw         generation (lander, solar arrays at full sun)
 draw_kw          consumption while built and powered
 grid_reach_cells structures within this distance join the power grid through it
+scan_radius_cells, sweep_period_s  scanner radar: reach and time per revolution
+sight_cells      debris this close is spotted
 storage          items held (any type); docks units can unload at
 charge_slots     units charged at once, at charge_per_s battery units per second each
 dock_slots       unload-only docks (storage without charging)
@@ -18,6 +20,7 @@ STRUCTURES = {
         "name": "lander", "footprint_cells": 2.2, "max_slope_deg": 5.0,
         "power_kw": 15.0, "grid_reach_cells": 6.0,
         "storage": 200, "charge_slots": 4, "charge_per_s": 5.0, "dock_radius_cells": 3.2,
+        "sight_cells": 8.0,          # its own sensors spot debris this close
         "buildable": False,
     },
     "solar": {
@@ -29,6 +32,11 @@ STRUCTURES = {
         "name": "power pylon", "footprint_cells": 0.4, "max_slope_deg": 15.0,
         "build_cost": {"scrap": 4}, "build_time_s": 5.0,
         "grid_reach_cells": 9.0, "unlocked_by": None,
+    },
+    "scanner": {
+        "name": "scanner", "footprint_cells": 0.9, "max_slope_deg": 5.0,
+        "build_cost": {"scrap": 12, "parts": 2}, "build_time_s": 10.0,
+        "draw_kw": 4.0, "scan_radius_cells": 30.0, "sweep_period_s": 8.0, "unlocked_by": None,
     },
     "charging_pad": {
         "name": "charging pad", "footprint_cells": 1.0, "max_slope_deg": 5.0,
@@ -75,7 +83,7 @@ STRUCTURES = {
 }
 
 # Order of the build menu.
-BUILD_MENU = ("solar", "pylon", "charging_pad", "depot", "rover_bay",
+BUILD_MENU = ("solar", "pylon", "scanner", "charging_pad", "depot", "rover_bay",
               "ilmenite_mine", "ice_mine", "crusher", "ice_melter", "sinter_kiln")
 
 # Deconstruction: a constructor dismantles a marked structure in this fraction of

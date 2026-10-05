@@ -203,9 +203,26 @@ class World:
 
     # Systems -----------------------------------------------------------------------
 
-    def survey_area(self, x, y, radius, level):
+    def reveal_debris(self, x, y, radius):
+        """Mark debris within radius as seen. Returns how many were new."""
+        n = 0
+        r2 = radius * radius
+        for d in self.debris.values():
+            if not d.seen and (d.x - x) ** 2 + (d.y - y) ** 2 <= r2:
+                d.seen = True
+                n += 1
+        return n
+
+    def hint_field(self, f):
+        if not f.hinted:
+            f.hinted = True
+            self.event(f"FIELD SIGNAL: POSSIBLE {f.kind.upper()} DEPOSIT", "field")
+
+    def survey_area(self, x, y, radius, level, signal=True):
+        """Raise survey levels. With signal, ground surveyed this way also picks up
+        fields (the landing survey only sharpens the map)."""
         changed = self.survey.raise_area(x, y, radius, level)
-        if not changed:
+        if not changed or not signal:
             return
         res = self.survey.res
         for f in self.fields:
@@ -214,9 +231,7 @@ class World:
             for i in changed:
                 sy, sx = divmod(i, self.survey.n)
                 if f.contains((sx + 0.5) * res, (sy + 0.5) * res):
-                    if not f.hinted:
-                        f.hinted = True
-                        self.event(f"FIELD SIGNAL: POSSIBLE {f.kind.upper()} DEPOSIT", "field")
+                    self.hint_field(f)
                     if level >= 2 and not f.confirmed:
                         f.confirmed = True
                         self.event(f"{f.kind.upper()} FIELD CONFIRMED - RICHNESS {f.richness:.1f}X", "field")
@@ -261,6 +276,8 @@ class World:
         for s in list(self.structures.values()):
             if s.built and s.kind == "rover_bay":
                 structures.update_bay(self, s)
+            elif s.built and s.kind == "scanner":
+                structures.update_scanner(self, s)
         # Environment and units.
         debris.update(self)
         for unit in list(self.units.values()):
@@ -274,7 +291,7 @@ class World:
             tuple((s.id, s.kind, s.x, s.y, s.built, s.work_done_s, s.powered, s.deconstruct, s.teardown_s,
                    tuple(sorted(s.storage.items())))
                   for s in self.structures.values()),
-            tuple((d.id, d.x, d.y, d.kind, d.claimed_by) for d in self.debris.values()),
+            tuple((d.id, d.x, d.y, d.kind, d.claimed_by, d.seen) for d in self.debris.values()),
             tuple((u.id, u.kind, u.x, u.y, u.battery, u.state, u.activity, tuple(sorted(u.cargo.items())), u.target)
                   for u in self.units.values()),
             bytes(self.survey.levels), tuple(sorted(self.research.done)), self.rng.getstate(),
@@ -334,8 +351,8 @@ def build_world(seed, heightmap):
     world.dirty_power = False
     world._refresh_chargers()
     lvl1, lvl2 = W.LANDING_SURVEY_RADIUS_CELLS
-    world.survey_area(lx, ly, lvl1, 1)
-    world.survey_area(lx, ly, lvl2, 2)
+    world.survey_area(lx, ly, lvl1, 1, signal=False)
+    world.survey_area(lx, ly, lvl2, 2, signal=False)
     world.events.clear()
     for _ in range(W.DEBRIS_INITIAL):
         debris.try_spawn(world)

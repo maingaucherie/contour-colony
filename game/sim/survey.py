@@ -20,6 +20,7 @@ class SurveyMap:
         self.chunk_cells = chunk_cells
         self.chunks_per_side = math.ceil((size - 1) / chunk_cells)
         self.version = 0          # bumps on every change, for renderers and caches
+        self.changes = []         # recent (version, x0, y0, x1, y1) areas raised, for caches
         self._chunk_cache = None
         self._chunk_version = -1
 
@@ -52,6 +53,8 @@ class SurveyMap:
                         changed.append(i)
         if changed:
             self.version += 1
+            self.changes.append((self.version, x - radius, y - radius, x + radius, y + radius))
+            del self.changes[:-64]
         return changed
 
     def chunk_levels(self):

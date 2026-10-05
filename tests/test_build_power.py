@@ -194,6 +194,7 @@ class SurveyAndOrdersTests(unittest.TestCase):
         site, _ = w.place("rover_bay", *spot)
         self.assertTrue(run_until(w, lambda: site.built, 300))
         before = len(w.units)
+        w.lander.storage["scrap"] = w.lander.storage.get("scrap", 0) + 20  # don't depend on scavenging speed
         parts = w.stock("parts")
         self.assertTrue(w.order_unit(site.id, "survey_rover")[0])
         self.assertTrue(run_until(w, lambda: len(w.units) > before, 60))

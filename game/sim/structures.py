@@ -37,6 +37,7 @@ class Structure:
     building_unit: str | None = None
     bay_ticks_left: int = 0
     created_tick: int = 0
+    sweep_angle: float = 0.0                        # scanner beam direction, radians
     deconstruct: bool = False                       # marked for a constructor to dismantle
     teardown_s: float = 0.0                         # dismantling seconds done
 
@@ -202,3 +203,28 @@ def dismantle(world, s):
     world.structures_changed()
     world.event(f"{s.spec['name'].upper()} DISMANTLED - " + ", ".join(f"{n} {k.upper()}" for k, n in refund.items())
                 + " RETURNED")
+
+
+def update_scanner(world, s):
+    """Advance the radar beam; reveal debris and count passes over fields it crosses."""
+    if not s.powered:
+        return
+    spec = s.spec
+    step = 2 * math.pi / (spec["sweep_period_s"] * W.TICK_RATE)
+    start = s.sweep_angle
+    s.sweep_angle = (start + step) % (2 * math.pi)
+    radius = spec["scan_radius_cells"]
+
+    def crossed(x, y):
+        return (math.atan2(y - s.y, x - s.x) - start) % (2 * math.pi) < step
+
+    for d in world.debris.values():
+        if not d.seen and math.hypot(d.x - s.x, d.y - s.y) <= radius and crossed(d.x, d.y):
+            d.seen = True
+    for f in world.fields:
+        if f.hinted or math.hypot(f.cx - s.x, f.cy - s.y) > radius + f.radius:
+            continue
+        if crossed(f.cx, f.cy):
+            f.signal_passes += 1
+            if f.signal_passes >= W.FIELD_SIGNAL_PASSES:
+                world.hint_field(f)

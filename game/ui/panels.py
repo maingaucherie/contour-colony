@@ -14,6 +14,7 @@ ACTIVITY_LABELS = {
     "idle": "IDLE - NOTHING TO DO IN RANGE",
     "waiting for a dock": "WAITING FOR A FREE DOCK",
     "to_debris": "DRIVING TO DEBRIS",
+    "searching": "SEARCHING FOR DEBRIS",
     "pickup": "PICKING UP",
     "to_store": "RETURNING TO UNLOAD",
     "unload": "UNLOADING",
@@ -112,6 +113,13 @@ def _structure_lines(world, s):
         used = sum(1 for u in s.dock_users if u is not None)
         what = "CHARGING DOCKS" if spec.get("charge_slots") else "UNLOADING DOCKS"
         lines.append((f"{what} {used}/{len(s.docks)} IN USE", 1, D.COLOR_TEXT_DIM))
+    if s.kind in ("ilmenite_mine", "ice_mine", "crusher", "ice_melter", "sinter_kiln"):
+        lines.append(("NOT PRODUCING YET: RECIPES AND HAULERS", 1, D.COLOR_ALERT))
+        lines.append(("ARRIVE WITH MILESTONE 4 (THE PRODUCTION CHAIN)", 1, D.COLOR_ALERT))
+    if s.kind == "scanner":
+        lines.append((f"RADAR     {spec['scan_radius_cells'] * world.heightmap.cell_m / 1000:.0f} KM RANGE, "
+                      f"SWEEP EVERY {spec['sweep_period_s']:.0f} S", 1, D.COLOR_TEXT_DIM))
+        lines.append(("REVEALS DEBRIS; FIELDS AFTER 3 SWEEPS", 1, D.COLOR_TEXT_DIM))
     if s.kind == "lander":
         price = ITEMS["scrap"]["sell_price"]
         lines.append((f"X  SELL {D.SELL_BATCH} SCRAP FOR {D.SELL_BATCH * price} CR", 1, D.COLOR_FLOW))

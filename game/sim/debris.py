@@ -22,6 +22,7 @@ class Debris:
     kind: str
     value: int
     claimed_by: int | None = None
+    seen: bool = False      # hidden until a sensor, rover or scanner beam spots it
 
 
 class SpawnMap:
@@ -115,8 +116,14 @@ def try_spawn(world):
         if any(math.hypot(s.x - x, s.y - y) < s.spec["footprint_cells"] + W.DEBRIS_MIN_SPACING_CELLS
                for s in world.structures.values()):
             continue
+        node = world.grid.node_at(x, y)
+        if not world.grid.open[node] or world.charge_field.dist[node] == math.inf:
+            continue  # the jitter nudged it into ground rovers can't reach
         piece = Debris(world.new_id(), x, y, rng.choice(W.DEBRIS_KINDS), W.DEBRIS_SCRAP_VALUE)
         world.debris[piece.id] = piece
+        for s in world.structures.values():
+            if s.built and math.hypot(s.x - x, s.y - y) <= s.spec.get("sight_cells", 0.0):
+                piece.seen = True
         world.scrap_spawned += piece.value
         return piece
     return None

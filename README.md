@@ -8,7 +8,8 @@ scavenger ant farm and selling scrap: construction sites built by a
 constructor, solar arrays, pylons, charging pads, depots, rover bays and mines,
 power grids with priority allocation, a research tree, survey rovers, survey
 levels that sharpen the contour map, and hidden ilmenite and ice fields.
-Production (mines actually producing) arrives with Milestone 4.
+Mines, crushers, melters and kilns can be built but don't produce yet:
+recipes, haulers and contracts arrive with Milestone 4.
 
 ## Play
 
@@ -39,7 +40,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | C | Centre on the selection |
 | WASD / arrows / drag | Pan |
 | Mouse wheel, Q / E | Zoom |
-| Space, `,` / `.` | Pause, slower / faster (1x, 2x, 4x) |
+| Space, `,` / `.` | Pause, slower / faster (1x up to 64x for testing; the HUD shows the speed actually managed) |
 | Tab or V | Operations / survey view |
 | G, F | Glow, performance stats |
 | M | Sound: all, effects only, off |
@@ -47,9 +48,11 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | N twice | Abandon the site and generate a new one |
 | Esc | Close menus (desktop: quit when nothing is open) |
 
-A first goal: research Field Survey, build a rover bay near the lander, order a
-survey rover, let it confirm an ilmenite field (green outline), sell scrap for
-Extraction, then build a mine on the field.
+A first goal: build a scanner (its radar reveals debris for the scavengers and,
+after three sweeps, flags nearby fields as a "SIGNAL?"), research Field Survey,
+build a rover bay, build a survey rover to confirm a field (green dashed
+outline), sell scrap for Extraction, then build a mine on the field. Debris is
+hidden until something spots it: without a scanner, scavengers search blind.
 
 If the game crashes at startup, try `python main.py --no-scale` (a plain
 960x540 window without SDL's SCALED mode), then run

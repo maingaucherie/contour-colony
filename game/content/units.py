@@ -13,6 +13,7 @@ UNITS = {
         "battery": 100.0,
         "drain_per_cost_cell": 0.4,
         "cargo": 2,                  # scrap
+        "sight_cells": 2.5,          # spots debris this close
         "pickup_s": 1.5,
         "pickup_energy": 1.0,
         "unload_s": 2.0,
@@ -26,6 +27,7 @@ UNITS = {
         "battery": 100.0,
         "drain_per_cost_cell": 0.4,
         "cargo": 10,                 # build items, any mix
+        "sight_cells": 2.5,
         "load_s": 1.5,
         "build_rate": 1.0,           # seconds of build_time done per second of work
         "build_drain_per_s": 0.3,
@@ -40,6 +42,7 @@ UNITS = {
         "drain_per_cost_cell": 0.35,
         "cargo": 0,
         "sweep_radius_cells": 4.0,   # raised to level 1 around it while driving
+        "sight_cells": 7.0,          # spots debris this close
         "linger_s": 5.0,             # standing still this long raises the spot to level 2
         "linger_radius_cells": 3.0,
         "linger_drain_per_s": 0.2,
@@ -47,6 +50,11 @@ UNITS = {
         "bay_cost": {"scrap": 10, "parts": 4}, "bay_time_s": 20.0, "unlocked_by": "field_survey",
     },
 }
+
+# Scavengers with no known debris search: they drive to a random reachable
+# spot this far away (cells) and look around on the way.
+SEARCH_DISTANCE_CELLS = (6.0, 18.0)
+SEARCH_ATTEMPTS = 12
 
 # Order of the rover bay's build list.
 BAY_MENU = ("scavenger", "constructor", "survey_rover")

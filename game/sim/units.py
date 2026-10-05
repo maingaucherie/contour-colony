@@ -359,8 +359,12 @@ def update(world, unit):
         pass
     elif state == MOVING:
         arrived = _move(world, unit)
+        spotted = world.reveal_debris(unit.x, unit.y, unit.spec.get("sight_cells", 0.0))
         if hasattr(b, "on_move"):
             b.on_move(world, unit)
+        if spotted and unit.activity == "searching":
+            b.think(world, unit)  # found something: go straight for it
+            arrived = False
         if unit.battery <= 0.0:
             b.drop_job(world, unit)
             unit.state, unit.activity, unit.path = STRANDED, "stranded", []

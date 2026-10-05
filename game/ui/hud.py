@@ -54,6 +54,8 @@ def draw_running(surface, info):
     t = int(info["time_s"])
     clock = f"T+{t // 3600:02d}:{t // 60 % 60:02d}:{t % 60:02d}"
     rate = "PAUSED" if info["paused"] else f"SPEED {info['speed']}X"
+    if not info["paused"] and info["speed"] > 1 and info.get("actual_speed", info["speed"]) < info["speed"] * 0.85:
+        rate += f" (MANAGING {info['actual_speed']:.0f}X)"
     draw_text(surface, f"{clock}   {rate}", (M + 6, y + lh), 1,
               D.COLOR_ALERT if info["paused"] else D.COLOR_TEXT_DIM)
     research = info.get("research")
