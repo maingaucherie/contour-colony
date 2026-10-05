@@ -153,7 +153,7 @@ def apply(world, data):
 
     world.structures = {}
     for d in data["structures"]:
-        s = _make(Structure, d, docks=[tuple(p) for p in d["docks"]])
+        s = _make(Structure, d, docks=[tuple(p) for p in d["docks"]], ends=[tuple(p) for p in d["ends"]])
         world.structures[s.id] = s
     world.lander = world.structures[wd["lander"]]
     world.units = {}
@@ -196,6 +196,7 @@ def apply(world, data):
     o.landed = [tuple(x) for x in od["landed"]]
 
     # Derived state, recomputed as the tick would.
+    world.roads_changed()
     world.structures_changed()
     world.power_grids = power.compute(list(world.structures.values()))
     world.dirty_power = False

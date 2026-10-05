@@ -92,6 +92,8 @@ BAY_MENU = ("scavenger", "constructor", "survey_rover", "hauler", "maintenance_d
 
 # Shared unit rules.
 SLOPE_DIVISOR_DEG = 5.0              # speed = base / (1 + slope / SLOPE_DIVISOR_DEG)
+ROAD_SPEED_MULT = 2.0                # on graded roads: twice as fast (and half the battery per cell)
+ROAD_SLOPE_FACTOR = 0.5              # ... and slope slows them half as much
 LOW_BATTERY_FRACTION = 0.2           # below this, drop the job and go charge
 TOP_UP_BELOW_FRACTION = 0.6          # when docked below this, charge to full before the next job
 TRIP_SAFETY_FACTOR = 1.25            # planned energy is multiplied by this before checking range

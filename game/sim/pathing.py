@@ -4,6 +4,11 @@ Each node covers NODE_CELLS x NODE_CELLS terrain cells. Its cost is the mean
 of (1 + slope / divisor) over those cells, which is the expected cost of
 crossing one cell there, so edge costs are in "cost-cells" (see content/units).
 
+Graded roads (see roads.py) mark cells that rovers cross faster and on less
+battery. A node a road runs through is priced by its road cells alone, is
+always open (roads cross ground too steep to drive otherwise), and routes
+through it pass over the road instead of the node's centre.
+
 Searches are Dijkstra fields rather than point-to-point A*: one field from a
 unit prices every candidate target at once, and one field from a charger
 gives every unit its way home. Fields are cached per source node.
@@ -53,28 +58,75 @@ class PathGrid:
         self.n = math.ceil(size / node_cells)
         self.cost = [0.0] * (self.n * self.n)
         self.open = [False] * (self.n * self.n)
-        for ny in range(self.n):
-            for nx in range(self.n):
-                total, steep, count = 0.0, 0, 0
-                for y in range(ny * node_cells, min((ny + 1) * node_cells, size)):
-                    row = y * size
-                    for x in range(nx * node_cells, min((nx + 1) * node_cells, size)):
-                        s = slopes[row + x]
-                        total += self.cell_cost(s)
-                        steep += s > W.SLOPE_ROAD_ONLY_DEG
-                        count += 1
-                i = ny * self.n + nx
-                self.cost[i] = total / count
-                self.open[i] = steep / count <= W.PATH_BLOCKED_FRACTION
+        self.road = bytearray(size * size)   # 1 where a graded road runs
+        self.road_point = {}                 # node -> (x, y) on its road
+        for i in range(self.n * self.n):
+            self._price(i)
         self._cache = OrderedDict()
 
+    def _price(self, i):
+        """Set node i's cost and whether it is open, from its cells."""
+        ny, nx = divmod(i, self.n)
+        size, nc, slopes, road = self.size, self.node_cells, self.slopes, self.road
+        total, steep, count = 0.0, 0, 0
+        on_road, road_total = [], 0.0
+        for y in range(ny * nc, min((ny + 1) * nc, size)):
+            row = y * size
+            for x in range(nx * nc, min((nx + 1) * nc, size)):
+                s = slopes[row + x]
+                if road[row + x]:
+                    road_total += self.cell_cost(s, True)
+                    on_road.append((x, y))
+                total += self.cell_cost(s)
+                steep += s > W.SLOPE_ROAD_ONLY_DEG
+                count += 1
+        self.road_point.pop(i, None)
+        if on_road:
+            self.cost[i] = road_total / len(on_road)
+            self.open[i] = True
+            cx, cy = (nx + 0.5) * nc, (ny + 0.5) * nc
+            self.road_point[i] = min(on_road, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+        else:
+            self.cost[i] = total / count
+            self.open[i] = steep / count <= W.PATH_BLOCKED_FRACTION
+
     @staticmethod
-    def cell_cost(slope):
+    def drive_factor(slope, road=False):
+        """How much slower than on the flat a rover crosses a cell: (1 + slope /
+        divisor); on a road, slope counts ROAD_SLOPE_FACTOR as much and the
+        result is divided by ROAD_SPEED_MULT."""
+        if road:
+            return (1.0 + slope * U.ROAD_SLOPE_FACTOR / U.SLOPE_DIVISOR_DEG) / U.ROAD_SPEED_MULT
+        return 1.0 + slope / U.SLOPE_DIVISOR_DEG
+
+    @classmethod
+    def cell_cost(cls, slope, road=False):
         """Planning cost of crossing one cell: slope slows rovers, cliffs are avoided."""
-        cost = 1.0 + slope / U.SLOPE_DIVISOR_DEG
-        if slope > W.SLOPE_ROAD_ONLY_DEG:
+        cost = cls.drive_factor(slope, road)
+        if slope > W.SLOPE_ROAD_ONLY_DEG and not road:
             cost += W.PATH_STEEP_CELL_PENALTY
         return cost
+
+    def cell_factor(self, x, y):
+        """drive_factor for the cell under world point (x, y)."""
+        n = self.size
+        i = min(max(int(y + 0.5), 0), n - 1) * n + min(max(int(x + 0.5), 0), n - 1)
+        return self.drive_factor(self.slopes[i], self.road[i])
+
+    def set_roads(self, cells):
+        """Make exactly these (x, y) cells road, repricing the nodes that changed."""
+        size = self.size
+        new = bytearray(size * size)
+        for x, y in cells:
+            if 0 <= x < size and 0 <= y < size:
+                new[y * size + x] = 1
+        changed = {self.node_at(i % size, i // size) for i in range(size * size) if new[i] != self.road[i]}
+        self.road = new
+        for node in changed:
+            self._price(node)
+        if changed:
+            self.invalidate()
+        return bool(changed)
 
     def segment_cost(self, a, b):
         """Cost of driving straight from a to b, sampled along the line."""
@@ -87,7 +139,7 @@ class PathGrid:
             t = (i + 0.5) / steps
             x = min(max(int(ax + (bx - ax) * t + 0.5), 0), n - 1)
             y = min(max(int(ay + (by - ay) * t + 0.5), 0), n - 1)
-            total += self.cell_cost(self.slopes[y * n + x])
+            total += self.cell_cost(self.slopes[y * n + x], self.road[y * n + x])
         return total * length / steps
 
     # Geometry ---------------------------------------------------------------
@@ -96,6 +148,11 @@ class PathGrid:
         nx = min(max(int(x / self.node_cells), 0), self.n - 1)
         ny = min(max(int(y / self.node_cells), 0), self.n - 1)
         return ny * self.n + nx
+
+    def node_point(self, node):
+        """Where routes through a node pass: on its road if it has one, else its centre."""
+        p = self.road_point.get(node)
+        return (p[0], p[1]) if p is not None else self.node_centre(node)
 
     def node_centre(self, node):
         ny, nx = divmod(node, self.n)
@@ -182,7 +239,7 @@ class PathGrid:
     def waypoints(self, start, nodes, goal):
         """Turn a node chain into world waypoints from start to goal, shortcutting
         corners where the straight line stays on open ground and costs no more."""
-        points = [start] + [self.node_centre(n) for n in nodes[1:-1]] + [goal]
+        points = [start] + [self.node_point(n) for n in nodes[1:-1]] + [goal]
         last = len(points) - 1
         # Cumulative cost along the node route, to judge shortcuts against.
         along = [0.0]

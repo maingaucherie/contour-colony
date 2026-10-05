@@ -167,6 +167,7 @@ CONVEYOR_WIDTH_CELLS = 0.5        # gap between a conveyor's two rails
 CONVEYOR_WIDTH_MIN_PX = 3
 CONVEYOR_DOT_SPACING_CELLS = 1.0  # items on a working belt, this far apart
 CONVEYOR_PICK_PX = 6              # clicks this close to a belt select it
+COLOR_ROAD = (120, 130, 120)      # graded road edges
 COLOR_GRADABLE = (200, 140, 40)   # buildable after grading (costs credits and time)
 
 # Line styles that back up colour meaning.

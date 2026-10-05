@@ -155,7 +155,7 @@ class App:
         self.menu_cursor = 0
         self.menu_rects = None    # (panel rect, row rects) from the last draw
         self.placing = None       # structure kind being placed
-        self.conveyor_from = None  # conveyor placement: the source building picked
+        self.line_from = None     # conveyor or road placement: the first click (building id or point)
         self.confirm_new_until = 0.0
         self.paused = False
         self.speed_index = 0
@@ -304,8 +304,8 @@ class App:
             return  # Space selects in menus
         if action == "quit":
             # Escape backs out of placement and menus first.
-            if self.conveyor_from is not None:
-                self.conveyor_from = None   # back to picking a source
+            if self.line_from is not None:
+                self.line_from = None   # back to picking a source
             elif self.placing or self.menu or self.targeting:
                 self.placing = self.menu = None
                 self.targeting = False
@@ -355,7 +355,7 @@ class App:
         elif action in ("build", "research", "orbit", "contracts"):
             self.menu = None if self.menu == action else action
             self.menu_cursor = 0
-            self.placing = None
+            self.placing = self.line_from = None
             self.targeting = False
         elif action == "clock":
             s = self._selected_structure()
@@ -425,7 +425,7 @@ class App:
         elif self.menu == "build":
             kind = entries[i]
             if world.unlocked(kind):
-                self.placing, self.menu, self.conveyor_from = kind, None, None
+                self.placing, self.menu, self.line_from = kind, None, None
                 self.audio.play("confirm")
             else:
                 need = RESEARCH[STRUCTURES[kind]["unlocked_by"]]["name"].upper()
@@ -506,6 +506,9 @@ class App:
         if self.placing == "conveyor":
             self._conveyor_input()
             return
+        if self.placing == "road":
+            self._road_input()
+            return
         if self.placing:
             if inp.click is not None:
                 x, y = ST.snap_position(world, self.placing, *self.camera.screen_to_world(*inp.click))
@@ -555,25 +558,48 @@ class App:
             target = entities.structure_at(world, *self.camera.screen_to_world(*inp.click))
             if target is None:
                 self.audio.play("error")
-            elif self.conveyor_from is None:
+            elif self.line_from is None:
                 ok, reason = CONV.can_start(target)
                 self.audio.play("confirm" if ok else "error")
                 if ok:
-                    self.conveyor_from = target.id
+                    self.line_from = target.id
                 else:
                     world.event(f"CONVEYOR: {reason}", "info")
             else:
-                site, reason = world.place_conveyor(self.conveyor_from, target.id)
+                site, reason = world.place_conveyor(self.line_from, target.id)
                 self.audio.play("place" if site is not None else "error")
                 if site is None:
                     world.event(f"CAN'T BUILD CONVEYOR: {reason}", "info")
                 else:
-                    self.conveyor_from = None
+                    self.line_from = None
                     if not (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         self.placing = None  # hold shift to lay several
         if inp.right_click is not None:
-            if self.conveyor_from is not None:
-                self.conveyor_from = None
+            if self.line_from is not None:
+                self.line_from = None
+            else:
+                self.placing = None
+
+    def _road_input(self):
+        """Road placement: click one end, then the other. Shift keeps going from there."""
+        world, inp = self.world, self.input
+        if inp.click is not None:
+            point = self.camera.screen_to_world(*inp.click)
+            if self.line_from is None:
+                self.line_from = point
+                self.audio.play("confirm")
+            else:
+                site, reason = world.place_road(self.line_from, point)
+                self.audio.play("place" if site is not None else "error")
+                if site is None:
+                    world.event(f"CAN'T BUILD ROAD: {reason}", "info")
+                elif pygame.key.get_mods() & pygame.KMOD_SHIFT:
+                    self.line_from = point   # the next road starts where this one ends
+                else:
+                    self.line_from, self.placing = None, None
+        if inp.right_click is not None:
+            if self.line_from is not None:
+                self.line_from = None
             else:
                 self.placing = None
 
@@ -626,7 +652,12 @@ class App:
             draw.draw_slope_marks(self.screen, world, cam, STRUCTURES["conveyor"]["max_slope_deg"],
                                   (mx, my), D.SLOPE_MARK_RADIUS_CELLS, gradable=STRUCTURE_RULES.GRADE_MAX_DEG)
             hover = entities.structure_at(world, mx, my)
-            ghost = ("conveyor", self.conveyor_from, hover.id if hover else None, (mx, my))
+            ghost = ("conveyor", self.line_from, hover.id if hover else None, (mx, my))
+        elif self.placing == "road" and self.input.mouse_inside:
+            mx, my = self._mouse_world()
+            draw.draw_slope_marks(self.screen, world, cam, STRUCTURES["road"]["max_slope_deg"],
+                                  (mx, my), D.SLOPE_MARK_RADIUS_CELLS, gradable=STRUCTURE_RULES.ROAD_MAX_SLOPE_DEG)
+            ghost = ("road", self.line_from, (mx, my))
         elif self.placing and self.input.mouse_inside:
             draw.draw_slope_marks(self.screen, world, cam, STRUCTURES[self.placing]["max_slope_deg"],
                                   self._mouse_world(), D.SLOPE_MARK_RADIUS_CELLS, gradable=STRUCTURE_RULES.GRADE_MAX_DEG)
@@ -780,8 +811,11 @@ class App:
         if self.targeting:
             return "ORBITAL SCAN:  CLICK THE MAP TO SCAN THERE  RIGHT CLICK/ESC CANCEL"
         if self.placing == "conveyor":
-            step = "CLICK WHERE TO SEND" if self.conveyor_from is not None else "CLICK A BUILDING TO SEND FROM"
+            step = "CLICK WHERE TO SEND" if self.line_from is not None else "CLICK A BUILDING TO SEND FROM"
             return f"CONVEYOR:  {step}  SHIFT: LAY SEVERAL  RIGHT CLICK/ESC BACK"
+        if self.placing == "road":
+            step = "CLICK THE OTHER END" if self.line_from is not None else "CLICK WHERE IT STARTS"
+            return f"ROAD:  {step}  SHIFT: CARRY ON FROM THERE  RIGHT CLICK/ESC BACK"
         if self.placing:
             return (f"PLACING {STRUCTURES[self.placing]['name'].upper()}:  CLICK TO PLACE  "
                     "SHIFT+CLICK PLACE MORE  RIGHT CLICK/ESC CANCEL")

@@ -167,7 +167,7 @@ def avoid_structures(world, start, points):
     obstacles = []
     gx, gy = points[-1] if points else start
     for s in world.structures.values():
-        if s.is_link():
+        if s.is_line():
             continue  # rovers drive over conveyors
         r = s.spec["footprint_cells"] + U.STRUCTURE_CLEARANCE_CELLS
         reach = r + s.spec.get("dock_radius_cells", 0.0)
@@ -430,10 +430,7 @@ def _move(world, unit):
     """Advance along the path. Returns True when the path is finished."""
     spec = unit.spec
     dt = 1.0 / W.TICK_RATE
-    size = world.heightmap.size
-    cx = min(max(int(unit.x + 0.5), 0), size - 1)
-    cy = min(max(int(unit.y + 0.5), 0), size - 1)
-    factor = 1.0 if flies(unit) else 1.0 + world.slopes[cy * size + cx] / U.SLOPE_DIVISOR_DEG
+    factor = 1.0 if flies(unit) else world.grid.cell_factor(unit.x, unit.y)
     remaining = spec["base_speed_cells_per_s"] * dt / factor
     moved = 0.0
     while remaining > 0.0 and unit.path:

@@ -60,7 +60,7 @@ def items_for(a_kind, b_kind):
 
 def can_start(s):
     """(ok, reason) for picking s as a conveyor's source."""
-    if s.is_link():
+    if s.is_line():
         return False, "PICK A BUILDING"
     if not (is_producer(s.kind) or is_store(s.kind)):
         return False, f"{s.spec['name'].upper()} HAS NOTHING TO SEND"
@@ -94,7 +94,7 @@ def plan(world, a, b):
     if not ok:
         out["reason"] = reason
         return out
-    if b is a or b.is_link():
+    if b is a or b.is_line():
         out["reason"] = "PICK ANOTHER BUILDING"
         return out
     items = items_for(a.kind, b.kind)
@@ -103,7 +103,7 @@ def plan(world, a, b):
         out["reason"] = ("HAULERS MOVE STORAGE TO STORAGE" if both_stores
                          else f"{b.spec['name'].upper()} USES NOTHING {a.spec['name'].upper()} SENDS")
         return out
-    if any(c.is_link() and c.src == a.id and c.dst == b.id for c in world.structures.values()):
+    if any(c.kind == "conveyor" and c.src == a.id and c.dst == b.id for c in world.structures.values()):
         out["reason"] = "ALREADY LINKED"
         return out
     p0, p1 = ST.link_ends(a, b)
@@ -115,7 +115,7 @@ def plan(world, a, b):
         out["reason"] = f"TOO LONG ({length:.0f} CELLS, MAX {S.CONVEYOR_MAX_CELLS:.0f})"
         return out
     for o in world.structures.values():
-        if o is a or o is b or o.is_link():
+        if o is a or o is b or o.is_line():
             continue
         if ST.distance_to_segment(o.x, o.y, p0, p1) < o.spec["footprint_cells"] + spec["footprint_cells"] / 2:
             out["reason"] = "BLOCKED BY " + o.spec["name"].upper()
@@ -157,7 +157,7 @@ def place(world, src_id, dst_id):
 
 def attached(world, s):
     """Conveyors that start or end at s."""
-    return [c for c in world.structures.values() if c.is_link() and s.id in (c.src, c.dst)]
+    return [c for c in world.structures.values() if c.kind == "conveyor" and s.id in (c.src, c.dst)]
 
 
 # Moving items ---------------------------------------------------------------
@@ -206,7 +206,7 @@ def update(world):
     if world.tick_count % every:
         return
     for c in world.structures.values():
-        if not c.is_link() or not c.built:
+        if c.kind != "conveyor" or not c.built:
             continue
         a, b = world.structures.get(c.src), world.structures.get(c.dst)
         if not c.powered:

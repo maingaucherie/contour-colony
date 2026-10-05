@@ -106,7 +106,10 @@ def _structure_lines(world, s):
         need = s.materials_needed()
         lines.append((f"UNDER CONSTRUCTION {s.build_progress() * 100:3.0f}%", 1, D.COLOR_TEXT, ("bar", s.build_progress())))
         delivered = ", ".join(f"{s.delivered.get(k, 0)}/{n} {k.upper()}" for k, n in s.build_cost().items())
-        lines.append((f"MATERIALS {delivered}", 1, D.COLOR_TEXT_DIM))
+        if delivered:
+            lines.append((f"MATERIALS {delivered}", 1, D.COLOR_TEXT_DIM))
+        else:
+            lines.append((f"PAID {s.grade_cr} CR, NO MATERIALS: A CONSTRUCTOR GRADES IT", 1, D.COLOR_TEXT_DIM))
         short = [k for k in need if world.stock(k) < need[k] and not s.incoming.get(k)]
         if short:
             lines.append(("WAITING FOR " + ", ".join(k.upper() for k in short) + " IN STORAGE", 1, D.COLOR_ALERT))
@@ -115,10 +118,10 @@ def _structure_lines(world, s):
             lines.append(("NO CONSTRUCTOR ON SITE", 1, D.COLOR_ALERT))
         elif not US.in_charger_range(world, builders[0], s.x, s.y):
             lines.append(("OUT OF ROVER RANGE - BUILD A CHARGING PAD NEARER", 1, D.COLOR_ALERT))
-        if s.grade_deg > 0:
+        if s.grade_deg > 0 and delivered:
             lines.append((f"GRADING   {s.grade_deg:.1f} DEG ({s.grade_cr} CR PAID, +{s.build_time() - s.assembly_time():.0f} S)",
                           1, D.COLOR_TEXT_DIM))
-        lines.append(("DEL: CANCEL (REFUNDS MATERIALS)", 1, D.COLOR_FLOW))
+        lines.append(("DEL: CANCEL (REFUNDS " + ("MATERIALS)" if delivered else "CREDITS)"), 1, D.COLOR_FLOW))
         return lines
 
     if s.deconstruct:
@@ -152,8 +155,12 @@ def _structure_lines(world, s):
         used = sum(1 for u in s.dock_users if u is not None)
         what = "CHARGING DOCKS" if spec.get("charge_slots") else "UNLOADING DOCKS"
         lines.append((f"{what} {used}/{len(s.docks)} IN USE", 1, D.COLOR_TEXT_DIM))
-    if s.is_link():
+    if s.kind == "conveyor":
         lines.extend(_conveyor_lines(world, s))
+    if s.kind == "road":
+        lines.append((f"LENGTH    {s.length:.1f} CELLS", 1, D.COLOR_TEXT_DIM))
+        lines.append((f"ROVERS DRIVE {U.ROAD_SPEED_MULT:.0f}X FASTER ON IT, ON LESS BATTERY,", 1, D.COLOR_TEXT_DIM))
+        lines.append(("AND CAN CLIMB GROUND TOO STEEP TO DRIVE OFF-ROAD", 1, D.COLOR_TEXT_DIM))
     lines.extend(_belts_of(world, s))
     r = P.recipe(s)
     if r:

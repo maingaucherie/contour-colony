@@ -59,9 +59,10 @@ class Structure:
     warm: bool = False                              # getting waste heat from a neighbour
     deconstruct: bool = False                       # marked for a constructor to dismantle
     teardown_s: float = 0.0                         # dismantling seconds done
-    # Conveyors only (see conveyors.py): the buildings they join and their length.
+    # Conveyors (see conveyors.py): the buildings they join. Roads (roads.py): their ends.
     src: int | None = None
     dst: int | None = None
+    ends: list = field(default_factory=list)
     length: float = 0.0
     moved: int = 0                                  # items carried
 
@@ -83,8 +84,9 @@ class Structure:
         allowed = self.spec.get("accepts")
         return allowed is None or item in allowed
 
-    def is_link(self):
-        return self.spec.get("link", False)
+    def is_line(self):
+        """Conveyors and roads: drawn as lines, driven over, never in the way."""
+        return self.spec.get("line", False)
 
     def cells(self):
         """Whole cells of length a conveyor is paid and built by (at least 1)."""
@@ -112,7 +114,7 @@ class Structure:
         return self.spec.get("draw_kw", 0.0) * clock_spec(self.clock)["power"]
 
     def assembly_time(self):
-        per_cell = self.spec.get("build_time_per_cell_s", 0.0) * self.cells() if self.is_link() else 0.0
+        per_cell = self.spec.get("build_time_per_cell_s", 0.0) * self.cells() if self.is_line() else 0.0
         return self.spec.get("build_time_s", 1.0) + per_cell
 
     def build_time(self):
@@ -148,9 +150,11 @@ def distance_to_segment(px, py, p0, p1):
     return math.hypot(px - (p0[0] + t * dx), py - (p0[1] + t * dy))
 
 
-def conveyor_line(world, c):
-    """(start, end) of conveyor c, or None if one of its buildings is gone."""
-    a, b = world.structures.get(c.src), world.structures.get(c.dst)
+def line_of(world, s):
+    """(start, end) of a conveyor or road, or None (a conveyor whose building is gone)."""
+    if s.ends:
+        return tuple(s.ends[0]), tuple(s.ends[1])
+    a, b = world.structures.get(s.src), world.structures.get(s.dst)
     return link_ends(a, b) if a is not None and b is not None else None
 
 
@@ -304,10 +308,10 @@ def check_placement(world, kind, x, y):
         if world.credits < cost:
             return False, f"GRADING NEEDS {cost} CR"
     for other in world.structures.values():
-        if other.is_link():
-            line = conveyor_line(world, other)
+        if other.is_line():
+            line = line_of(world, other)
             if line and distance_to_segment(x, y, *line) < r + other.spec["footprint_cells"] / 2:
-                return False, "OVERLAPS CONVEYOR"
+                return False, "OVERLAPS " + other.spec["name"].upper()
             continue
         if _snaps(kind, x, y, other.kind, other.x, other.y):
             continue
@@ -353,12 +357,14 @@ def complete(world, s):
             world.produced["regolith"] = world.produced.get("regolith", 0) + n
     make_docks(s, world)
     world.structures_changed()
+    if s.kind == "road":
+        world.roads_changed()
     world.event(f"{s.spec['name'].upper()} COMPLETE")
 
 
 def remove_conveyors(world, s):
     """Conveyors to or from s go with it: sites are cancelled, built ones dismantled."""
-    for c in [c for c in world.structures.values() if c.is_link() and s.id in (c.src, c.dst)]:
+    for c in [c for c in world.structures.values() if c.kind == "conveyor" and s.id in (c.src, c.dst)]:
         if c.id in world.structures:
             (dismantle if c.built else cancel_site)(world, c)
 
@@ -425,8 +431,10 @@ def dismantle(world, s):
             unit.dock, unit.slot, unit.docked = None, -1, False
     del world.structures[s.id]
     world.structures_changed()
-    world.event(f"{s.spec['name'].upper()} DISMANTLED - " + ", ".join(f"{n} {k.upper()}" for k, n in refund.items())
-                + " RETURNED")
+    if s.kind == "road":
+        world.roads_changed()
+    returned = ", ".join(f"{n} {k.upper()}" for k, n in refund.items() if n)
+    world.event(f"{s.spec['name'].upper()} DISMANTLED" + (f" - {returned} RETURNED" if returned else ""))
 
 
 def update_scanner(world, s):

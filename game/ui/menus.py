@@ -53,8 +53,12 @@ def build_entries(world):
 def draw_build_menu(surface, world, x, y, cursor=None):
     lines = []
     for key, kind, spec, unlocked in build_entries(world):
-        per_cell = "cost_per_cell" in spec
-        cost = cost_text(spec["cost_per_cell"]) + " PER CELL" if per_cell else cost_text(spec["build_cost"])
+        if "credits_per_cell" in spec:
+            cost = f"{spec['credits_per_cell']} CR PER CELL + GRADING"
+        elif "cost_per_cell" in spec:
+            cost = cost_text(spec["cost_per_cell"]) + " PER CELL"
+        else:
+            cost = cost_text(spec["build_cost"])
         c1, c2 = D.MENU_COLUMNS
         if unlocked:
             short = [k for k, n in spec.get("cost_per_cell", spec.get("build_cost", {})).items()

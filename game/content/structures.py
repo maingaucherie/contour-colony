@@ -143,14 +143,22 @@ STRUCTURES = {
         # only its width; its length comes from the two buildings.
         "name": "conveyor", "footprint_cells": 0.5, "max_slope_deg": 5.0,
         "cost_per_cell": {"sinter": 1}, "build_time_s": 4.0, "build_time_per_cell_s": 1.0,
-        "draw_kw": 0.5, "unlocked_by": "conveyors", "link": True,
+        "draw_kw": 0.5, "unlocked_by": "conveyors", "line": True,
+    },
+    "road": {
+        # A graded strip rovers drive twice as fast on (see roads.py), placed
+        # by clicking its two ends. Paid in credits: credits_per_cell, plus
+        # grading for ground steeper than max_slope_deg (up to ROAD_MAX_SLOPE_DEG).
+        "name": "road", "footprint_cells": 0.4, "max_slope_deg": 5.0,
+        "credits_per_cell": 2, "build_time_s": 2.0, "build_time_per_cell_s": 0.5,
+        "unlocked_by": None, "line": True,
     },
 }
 
 # Order of the build menu.
 BUILD_MENU = ("solar", "pylon", "scanner", "charging_pad", "depot", "outpost", "rover_bay",
               "ilmenite_mine", "ice_mine", "crusher", "ice_melter", "sinter_kiln",
-              "electrolyzer", "reduction_furnace", "machine_shop", "maintenance_hangar", "conveyor")
+              "electrolyzer", "reduction_furnace", "machine_shop", "maintenance_hangar", "conveyor", "road")
 
 # Production buffers: inputs hold this many cycles' worth of each ingredient,
 # but at least INPUT_BUFFER_MIN (so a full hauler load fits); outputs hold
@@ -196,6 +204,13 @@ FEED_ITEMS_PER_S = 1.0
 CONVEYOR_MAX_CELLS = 16.0
 CONVEYOR_ITEMS_PER_S = 1.0
 CONVEYOR_PICK_CELLS = 2.5
+
+# Roads: at most ROAD_MAX_CELLS long, ROAD_WIDTH_CELLS wide, over ground up to
+# ROAD_MAX_SLOPE_DEG (steeper than rovers can otherwise drive: a road can open
+# a pass). Shift-click lays the next one on from where the last one ended.
+ROAD_MAX_CELLS = 24.0
+ROAD_WIDTH_CELLS = 1.5
+ROAD_MAX_SLOPE_DEG = 25.0
 
 # Grading: ground steeper than a structure allows, up to GRADE_MAX_DEG, can be
 # graded for credits and extra build time, per degree over the limit and per

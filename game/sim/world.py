@@ -20,7 +20,7 @@ from game.content.research import RESEARCH
 from game.content.structures import STRUCTURES
 from game.content.terrain import CONTOUR_CHUNK_CELLS
 from game.content import contracts as CT
-from game.sim import conveyors, debris, feeds, fields, power, production, structures, units
+from game.sim import conveyors, debris, feeds, fields, power, production, roads, structures, units
 from game.sim.contracts import Contracts
 from game.sim.orbit import Orbit
 from game.sim.pathing import PathGrid
@@ -230,6 +230,9 @@ class World:
     def place_conveyor(self, src_id, dst_id):
         return conveyors.place(self, src_id, dst_id)
 
+    def place_road(self, p0, p1):
+        return roads.place(self, p0, p1)
+
     def cancel(self, structure_id):
         s = self.structures.get(structure_id)
         if s is not None and not s.built:
@@ -348,6 +351,14 @@ class World:
         self.dirty_power = True
         self._feeds = None
         structures.refresh_output(self)
+
+    def roads_changed(self):
+        """A road was finished or removed: reprice the ground, then recompute
+        what rovers can reach from the lander and their way to chargers."""
+        if roads.refresh(self):
+            self.home_field = self.grid.field(self.grid.node_at(self.lander.x, self.lander.y))
+            self.charger_key = None
+            self._refresh_chargers()
 
     def feed_links(self):
         """Direct-feed links between touching buildings, cached until structures change."""

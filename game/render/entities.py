@@ -11,8 +11,10 @@ from game.render import symbols as SYM
 from game.render.hershey import draw_text
 from game.content import contracts as CT
 from game.content import structures as S
+from game.content import units as U
 from game.sim import conveyors as CONV
 from game.sim import feeds as FEEDS
+from game.sim import roads as ROADS
 from game.sim import production as P
 from game.sim import structures as ST
 from game.sim import units as US
@@ -168,7 +170,7 @@ def draw_feed_links(surface, world, camera, now_s):
 def draw_grid_links(surface, world, camera):
     to_screen = camera.world_to_screen
     for s in world.structures.values():
-        if s.built and s.grid_parent is not None and s.grid_parent in world.structures and not s.is_link():
+        if s.built and s.grid_parent is not None and s.grid_parent in world.structures and not s.is_line():
             p = world.structures[s.grid_parent]
             G.dotted(surface, D.COLOR_GRID_LINK, to_screen(s.x, s.y), to_screen(p.x, p.y), D.DOT_SPACING_PX)
 
@@ -209,22 +211,44 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
     return segs
 
 
-def _rails(camera, p0, p1):
-    """Screen points of a belt's two rails from world p0 to p1, and its unit direction."""
+def _rails(camera, p0, p1, width_cells=D.CONVEYOR_WIDTH_CELLS):
+    """Screen points of two parallel rails from world p0 to p1, width_cells
+    apart (or a few pixels at least), and the length between the ends."""
     a, b = camera.world_to_screen(*p0), camera.world_to_screen(*p1)
     d = math.hypot(b[0] - a[0], b[1] - a[1]) or 1.0
     ux, uy = (b[0] - a[0]) / d, (b[1] - a[1]) / d
-    half = max(D.CONVEYOR_WIDTH_CELLS * camera.zoom, D.CONVEYOR_WIDTH_MIN_PX) / 2
+    half = max(width_cells * camera.zoom, D.CONVEYOR_WIDTH_MIN_PX) / 2
     nx, ny = -uy * half, ux * half
     left = ((a[0] + nx, a[1] + ny), (b[0] + nx, b[1] + ny))
     right = ((a[0] - nx, a[1] - ny), (b[0] - nx, b[1] - ny))
     return a, b, d, left, right
 
 
+def draw_road(surface, world, s, camera, now_s, selected=None):
+    """A graded road: its two edges, faint; a site is dotted, solid as far as it is graded."""
+    p0, p1 = ST.line_of(world, s)
+    a, b, d, left, right = _rails(camera, p0, p1, S.ROAD_WIDTH_CELLS)
+    w, h = surface.get_size()
+    if max(a[0], b[0]) < 0 or min(a[0], b[0]) > w or max(a[1], b[1]) < 0 or min(a[1], b[1]) > h:
+        return 0
+    color = D.COLOR_SELECT if selected == ("structure", s.id) else D.COLOR_ROAD
+    if s.deconstruct:
+        color = _scale(D.COLOR_ALERT, 0.5 + 0.5 * (int(now_s * 2) % 2))
+    if not s.built:
+        k = s.build_progress()
+        for p, q in (left, right):
+            G.dotted(surface, color, p, q, D.DOT_SPACING_PX)
+            pygame.draw.aaline(surface, color, p, (p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k))
+        return 2
+    for p, q in (left, right):
+        pygame.draw.aaline(surface, color, p, q)
+    return 2
+
+
 def draw_conveyor(surface, world, c, camera, now_s, selected=None, color=None):
     """A belt: two cyan rails, with items running along it while it works.
     A site is dotted, solid as far as it is built."""
-    line = ST.conveyor_line(world, c)
+    line = ST.line_of(world, c)
     if line is None:
         return 0
     a, b, d, left, right = _rails(camera, *line)
@@ -351,6 +375,9 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
     to_screen = camera.world_to_screen
     segments = 0
 
+    for s in world.structures.values():
+        if s.kind == "road":
+            segments += draw_road(surface, world, s, camera, now_s, selected)
     segments += draw_tracks(surface, world, camera)
     draw_fields(surface, world, camera, now_s)
     draw_grid_links(surface, world, camera)
@@ -365,10 +392,10 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
             segments += G.draw_shape(surface, D.COLOR_DEBRIS, G.DEBRIS_SHAPES[piece.kind], sx, sy, size)
 
     for s in world.structures.values():
-        if s.is_link():
+        if s.kind == "conveyor":
             segments += draw_conveyor(surface, world, s, camera, now_s, selected)
     for s in world.structures.values():
-        if s.is_link():
+        if s.is_line():
             continue
         if s.kind == "scanner" and s.built and s.powered:
             segments += _draw_scan_beam(surface, s, camera)
@@ -435,7 +462,7 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
             if unit.path:
                 G.dashed(surface, D.COLOR_FLOW, [(sx, sy)] + [to_screen(x, y) for x, y in unit.path], D.DASH_PX, D.GAP_PX)
             _brackets(surface, sx, sy, rover_half * (1.9 if style == "symbols" else 1.4))
-        elif kind == "structure" and eid in world.structures and not world.structures[eid].is_link():
+        elif kind == "structure" and eid in world.structures and not world.structures[eid].is_line():
             s = world.structures[eid]
             sx, sy = to_screen(s.x, s.y)
             _brackets(surface, sx, sy, structure_half_px(s.spec, z, s.kind == "lander") * 1.15)
@@ -492,10 +519,37 @@ def draw_conveyor_ghost(surface, world, camera, ghost):
     return 2
 
 
+def draw_road_ghost(surface, world, camera, ghost):
+    """Road placement: the first end once clicked, then the strip to the cursor
+    with its length and price, or why not."""
+    _, start, (mx, my) = ghost
+    sx, sy = camera.world_to_screen(mx, my)
+    if start is None:
+        pygame.draw.circle(surface, D.COLOR_GHOST_OK, (int(sx), int(sy)), 3, 1)
+        draw_text(surface, "ROAD: CLICK WHERE IT STARTS", (sx, sy + 14), 1, D.COLOR_TEXT, "center")
+        return 0
+    p = ROADS.plan(world, start, (mx, my))
+    color = D.COLOR_GHOST_OK if p["ok"] else D.COLOR_ALERT
+    _, _, _, left, right = _rails(camera, start, (mx, my), S.ROAD_WIDTH_CELLS)
+    for q0, q1 in (left, right):
+        G.dotted(surface, color, q0, q1, D.DOT_SPACING_PX)
+    if p["ok"]:
+        note = f"ROAD {p['length']:.1f} CELLS  {p['credits']} CR"
+        if p["grade_deg"] > 0:
+            note += "  INCLUDING GRADING"
+        note += f"  ROVERS {U.ROAD_SPEED_MULT:.0f}X FASTER"
+    else:
+        note = p["reason"]
+    draw_text(surface, note, (sx, sy + 14), 1, D.COLOR_TEXT if p["ok"] else D.COLOR_ALERT, "center")
+    return 2
+
+
 def draw_ghost(surface, world, camera, ghost):
     """Placement preview: the structure where it would go, its grid reach, and why not."""
     if ghost[0] == "conveyor":
         return draw_conveyor_ghost(surface, world, camera, ghost)
+    if ghost[0] == "road":
+        return draw_road_ghost(surface, world, camera, ghost)
     kind, x, y, ok, reason, spec = ghost
     z = camera.zoom
     sx, sy = camera.world_to_screen(x, y)
@@ -567,14 +621,14 @@ def pick(world, camera, alpha, pos):
     if best is not None:
         return best
     for s in world.structures.values():
-        if s.is_link():
+        if s.is_line():
             continue
         sx, sy = camera.world_to_screen(s.x, s.y)
         r = max(structure_half_px(s.spec, camera.zoom, s.kind == "lander"), D.SELECT_PICK_RADIUS_PX)
         if math.hypot(sx - mx, sy - my) <= r:
             return ("structure", s.id)
     for s in world.structures.values():   # conveyors last: buildings sit on their ends
-        line = ST.conveyor_line(world, s) if s.is_link() else None
+        line = ST.line_of(world, s) if s.is_line() else None
         if line and ST.distance_to_segment(mx, my, *(camera.world_to_screen(*p) for p in line)) <= D.CONVEYOR_PICK_PX:
             return ("structure", s.id)
     return None
@@ -585,7 +639,7 @@ def structure_at(world, x, y):
     (x, y), within CONVEYOR_PICK_CELLS of its edge, or None."""
     best = None
     for s in world.structures.values():
-        if s.is_link():
+        if s.is_line():
             continue
         d = math.hypot(s.x - x, s.y - y) - s.spec["footprint_cells"]
         if d <= S.CONVEYOR_PICK_CELLS and (best is None or d < best[0]):

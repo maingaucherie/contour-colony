@@ -63,7 +63,7 @@ def compute(structures):
         gid += 1
 
     for s in built:
-        if s.grid != -1 or s.spec.get("link"):
+        if s.grid != -1 or s.spec.get("line"):
             continue
         best = None
         for n in nodes:
@@ -76,7 +76,7 @@ def compute(structures):
 
     by_id = {s.id: s for s in built}
     for c in built:
-        if not c.spec.get("link"):
+        if not c.spec.get("line"):
             continue
         for end in (by_id.get(c.src), by_id.get(c.dst)):
             if end is not None and end.grid != -1:
