@@ -10,8 +10,8 @@ to the nearest storage. Lumpy ground it scrapes often enough is levelled
 (World.scrape). When colony storage holds all the regolith it may, scrapers
 wait.
 
-A scraper whose zone gets built over, or is crowded by other scrapers,
-moves its zone to the nearest open ground by itself (_new_zone).
+A scraper whose zone gets built over moves its zone to the nearest open
+ground by itself (_new_zone).
 
 Helium harvesters use this brain too. They process the regolith on board and
 keep only what their spec `gathers` (helium-3), one per cells_per_load cells
@@ -103,20 +103,12 @@ def think(world, unit):
         return
     if unit.zone is None:
         unit.zone = (unit.x, unit.y)
-    # Now and then: crowded by other scrapers, or mostly built over? Find new ground.
-    _new_zone(world, unit, only_if_built_over=unit.zone_ordered or not _crowded(world, unit))
+    _new_zone(world, unit)   # now and then: mostly built over? Find new ground.
     if _start_pass(world, unit):
         return
     if unit.cargo_total() and _go_unload(world, unit):
         return
     UN.head_home(world, unit)  # nothing it can reach to scrape
-
-
-def _crowded(world, unit):
-    r = unit.spec["zone_radius_cells"]
-    others = sum(1 for o in world.units.values() if o is not unit and o.kind == unit.kind and o.zone is not None
-                 and math.hypot(o.zone[0] - unit.zone[0], o.zone[1] - unit.zone[1]) < r)
-    return others >= U.SCRAPERS_PER_ZONE
 
 
 def _clear_fraction(world, unit, zone):
@@ -127,15 +119,15 @@ def _clear_fraction(world, unit, zone):
     return sum(1 for k in lanes if lane_segment(world, unit, k, False, zone, near)) / len(lanes)
 
 
-def _new_zone(world, unit, only_if_built_over=False):
-    """Move the zone to the nearest open ground (rings around the old zone,
-    nearest first) that isn't another scraper's. True if it moved. Searches
-    at most every ZONE_SEARCH_EVERY_S, since it is slow. only_if_built_over:
-    only when too few of the zone's passes are still clear."""
+def _new_zone(world, unit):
+    """When too few of the zone's passes are still clear, move the zone to the
+    nearest open ground (rings around the old zone, nearest first) that isn't
+    another scraper's. True if it moved. Checks at most every
+    ZONE_SEARCH_EVERY_S, since it is slow."""
     if world.tick_count - unit.zone_check < U.ZONE_SEARCH_EVERY_S * world.tick_rate:
         return False
     unit.zone_check = world.tick_count
-    if only_if_built_over and _clear_fraction(world, unit, unit.zone) >= U.ZONE_MIN_CLEAR_FRACTION:
+    if _clear_fraction(world, unit, unit.zone) >= U.ZONE_MIN_CLEAR_FRACTION:
         return False
     r = unit.spec["zone_radius_cells"]
     size = world.heightmap.size
@@ -152,7 +144,7 @@ def _new_zone(world, unit, only_if_built_over=False):
             if any(math.hypot(z[0] - zone[0], z[1] - zone[1]) < r for z in taken):
                 continue
             if _clear_fraction(world, unit, zone) >= 0.5:
-                unit.zone, unit.lane, unit.zone_ordered = zone, 0, False
+                unit.zone, unit.lane = zone, 0
                 world.event(f"{unit.spec['name'].upper()}: NEW GROUND TO SWEEP", "info")
                 return True
     return False

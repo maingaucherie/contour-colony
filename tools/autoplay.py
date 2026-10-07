@@ -115,6 +115,20 @@ class Bot:
     def powered_spot(self, x, y):
         return any(math.hypot(n.x - x, n.y - y) <= n.spec["grid_reach_cells"] for n in self.nodes())
 
+    def wire(self, s):
+        """s is built but on no grid (the site meant to reach it is stuck or
+        gone): a pylon beside it, within reach of a working grid."""
+        reach = STRUCTURES["pylon"]["grid_reach_cells"]
+        if any(not n.built and math.hypot(n.x - s.x, n.y - s.y) <= n.spec["grid_reach_cells"] for n in self.nodes()):
+            return False   # one is on its way
+
+        def on_grid(x, y):
+            return any(n.built and n.grid != -1 and math.hypot(n.x - x, n.y - y) <= max(reach, n.spec["grid_reach_cells"])
+                       for n in self.nodes())
+
+        at = self.spot("pylon", (s.x, s.y), s.spec["footprint_cells"] + 0.5, reach, ok=on_grid)
+        return at is not None and self.place("pylon", at) is not None
+
     def place(self, kind, at):
         s, reason = self.w.place(kind, *at)
         if s is not None:
@@ -223,6 +237,8 @@ class Bot:
         if md is not None and md.phase >= 2 and not self.powered_spot(md.x, md.y):
             if self.connect(md.x, md.y):
                 return
+        if md is not None and md.built and md.phase >= 2 and md.grid == -1 and self.wire(md):
+            return
         for kind in ACT_ONE:
             if w.unlocked(kind) and not self.count(kind):
                 at = self.factory_site(kind)
