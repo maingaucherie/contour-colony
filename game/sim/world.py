@@ -441,7 +441,7 @@ class World:
             self.autosold = 0
         full = self.stored_total() >= W.STORAGE_FULL_FRACTION * self.capacity()
         if full and not self.storage_full:
-            self.event("STORAGE FULL - BUILD A DEPOT", "alert")
+            self.event("STORAGE FULL: SCRAPERS STOP - BUILD A DEPOT OR SELL SURPLUS (O)", "alert")
         self.storage_full = full
 
     def finish(self, outcome, text):

@@ -85,7 +85,8 @@ def draw_running(surface, info):
     stock = f"STORAGE {stored}/{cap}   SCRAP {info['scrap']}   PARTS {info['parts']}   SINTER {info['sinter']}"
     if info.get("output") is not None:
         stock += f"   OUTPUT {info['output']:.0f}/MIN (L)"
-    draw_text(surface, stock, (M + 6, y), 1, D.COLOR_TEXT_DIM)
+    full = cap and stored >= W.STORAGE_FULL_FRACTION * cap
+    draw_text(surface, stock, (M + 6, y), 1, D.COLOR_ALERT if full else D.COLOR_TEXT_DIM)
 
     t = int(info["time_s"])
     clock = f"T+{t // 3600:02d}:{t // 60 % 60:02d}:{t % 60:02d}"

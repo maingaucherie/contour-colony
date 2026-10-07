@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from game.content import contracts as CT  # noqa: E402
 from game.content import world as W  # noqa: E402
+from game.content.items import ITEMS  # noqa: E402
 from game.content.structures import STRUCTURES  # noqa: E402
 from game.sim import structures as ST  # noqa: E402
 from game.sim.terrain import generate_terrain, run_to_completion  # noqa: E402
@@ -52,7 +53,9 @@ UNIT_GOALS = (("hauler", 2, None), ("scraper", 2, "sinter_kiln"), ("scavenger", 
               ("constructor", 3, "fabrication_line"), ("hauler", 8, "titanium_refinery"),
               ("hauler", 9, "electronics_plant"), ("construction_drone", 2, None), ("hauler", 11, "frame_works"),
               ("harvester", 2, "fusion_reactor"))
-MAX_DEPOTS = 6
+MAX_DEPOTS = 10
+STORAGE_SELL_FROM = 0.85   # storage this full: sell surplus the goal doesn't need ...
+STORAGE_KEEP = 40          # ... down toward this many
 UNIT_PARTS_RESERVE = 4     # keep this many parts spare after ordering a unit
 OUTPOST_PARTS_SPARE = 20   # build outposts (rather than pads) only with this many parts in stock
 HAULER_DROP_LIMIT = 6      # buy haulers by supply drop up to this many when loads pile up
@@ -66,8 +69,12 @@ def supply_index(name):
 
 
 class Bot:
-    def __init__(self, world, log=None):
+    """style: "default"; "rovers" never builds field drills (scrapers and
+    sorters only), to check a colony without them can still launch."""
+
+    def __init__(self, world, log=None, style="default"):
         self.w = world
+        self.style = style
         self.log = log or (lambda text: None)
         self.last_scan_pass = -1
 
@@ -173,7 +180,7 @@ class Bot:
         pending = sum(1 for s in w.structures.values() if not s.built)
         if pending >= 3:
             return
-        if self.depot():
+        if self.depot() or self.waste():
             return
         if self.grid_balance() < POWER_MARGIN_KW and w.unlocked("solar"):
             big = w.unlocked("heliostat_tower") and w.stock("aluminium") >= 15 and self.grid_balance() < -30
@@ -207,7 +214,8 @@ class Bot:
             if at:
                 self.place("scanner", at)
                 return
-        for kind, field_kind in MINES:
+        mines = MINES if w.research.phase < 2 else sorted(MINES, key=lambda m: m[1] != "kreep")
+        for kind, field_kind in mines if self.style != "rovers" else ():
             if field_kind == "kreep" and w.research.phase < 2:
                 continue  # the sorter's trickle does until the Rails
             if w.unlocked(kind) and not self.count(kind):
@@ -233,7 +241,14 @@ class Bot:
                 if at is not None:
                     self.place(kind, at)
                     return
-        if w.research.phase >= 2:
+        if self.style == "rovers":
+            for phase, n in ((1, 4), (2, 6), (3, 8)):
+                if w.research.phase >= phase and self.count("sorter") < n:
+                    at = self.factory_site("sorter")
+                    if at is not None:
+                        self.place("sorter", at)
+                        return
+        elif w.research.phase >= 2:
             for kind, field_kind in MINES:
                 if w.unlocked(kind) and 0 < self.count(kind) < 2 and kind != "ice_mine":
                     if self.mine(kind, field_kind):
@@ -387,13 +402,11 @@ class Bot:
         """True once a built structure produces the good."""
         return any(s.built and good in s.spec.get("recipe", {}).get("out", {}) for s in self.w.structures.values())
 
-    def contracts(self):
-        """Calm mode: take offers for goods the site already makes, unless the
-        mass driver's current phase needs them."""
+    def goal_inputs(self):
+        """What the mass driver's current bill needs, and everything that goes into those."""
         from game.sim import massdriver
         md = massdriver.find(self.w)
         wanted = set(massdriver.needs(md)) if md is not None and md.built else set()
-        # ... nor what goes into them.
         grew = True
         while grew:
             grew = False
@@ -402,6 +415,12 @@ class Bot:
                 if r and wanted & set(r["out"]) and not set(r["in"]) <= wanted:
                     wanted |= set(r["in"])
                     grew = True
+        return wanted
+
+    def contracts(self):
+        """Calm mode: take offers for goods the site already makes, unless the
+        mass driver's current bill needs them (or what goes into them)."""
+        wanted = self.goal_inputs()
         for c in list(self.w.contracts.offers):
             if self.makes(c.good) and c.good not in wanted and self.w.accept_contract(c.id)[0]:
                 self.log(f"accept {c.qty} {c.good}")
@@ -421,6 +440,29 @@ class Bot:
             if n:
                 self.log(f"sell {n} scrap")
 
+    def relieve_storage(self):
+        """Storage nearly full stops the scrapers, and everything after them:
+        sell half the surplus of the biggest pile the goal doesn't need."""
+        w = self.w
+        if w.stored_total() < STORAGE_SELL_FROM * w.capacity():
+            return
+        keep = self.goal_inputs() | {"sinter", "regolith"}
+        piles = [(w.stock(k), k) for k in ITEMS if k not in keep and ITEMS[k]["tier"] != "waste"]
+        n, item = max(piles)
+        if n > STORAGE_KEEP:
+            sold = w.sell(item, (n - STORAGE_KEEP) // 2 + 1)
+            self.log(f"storage full: sell {sold} {item}")
+
+    def waste(self):
+        """Another slag heap when the heaps are nearly full."""
+        w = self.w
+        if (w.unlocked("slag_heap") and self.count("slag_heap", built_only=True)
+                and w.stock("slag") > 0.8 * w.item_cap("slag")
+                and self.count("slag_heap") == self.count("slag_heap", built_only=True)):
+            at = self.factory_site("slag_heap")
+            return at is not None and self.place("slag_heap", at) is not None
+        return False
+
     def pace_goal(self):
         """Short of parts for building: let production have the iron first."""
         from game.sim import massdriver
@@ -436,6 +478,7 @@ class Bot:
         self.pace_goal()
         self.contracts()
         self.raise_cash()
+        self.relieve_storage()
         self.research()
         self.build()
         self.units_order()
@@ -448,8 +491,8 @@ def make(seed, mode=CT.DEFAULT_MODE):
     return run_to_completion(build_world(seed, hm, mode))
 
 
-def play(world, minutes, neglect=False, log=None, report_every_s=300):
-    bot = Bot(world, log)
+def play(world, minutes, neglect=False, log=None, report_every_s=300, style="default"):
+    bot = Bot(world, log, style)
     step = W.TICK_RATE
     for t in range(int(minutes * 60 * W.TICK_RATE)):
         if not neglect and t % step == 0:
@@ -484,6 +527,7 @@ def main():
     ap.add_argument("--neglect", action="store_true")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--mode", choices=sorted(CT.MODES), default=CT.DEFAULT_MODE)
+    ap.add_argument("--style", choices=("default", "rovers"), default="default")
     args = ap.parse_args()
     t0 = time.time()
     w = make(args.seed, args.mode)
@@ -497,7 +541,7 @@ def main():
     def log_events(text):
         log(text)
 
-    play(w, args.minutes, args.neglect, log_events)
+    play(w, args.minutes, args.neglect, log_events, style=args.style)
     for _, text, kind in list(w.events)[-6:]:
         print("  event:", text)
     print(status(w))
