@@ -15,6 +15,7 @@ import json
 from collections import deque
 
 from game.content import contracts as CT
+from game.content import units as U
 from game.content import world as W
 from game.sim import power
 from game.sim.contracts import Contract
@@ -77,12 +78,13 @@ def snapshot(world):
         "fields": [_record(f) for f in world.fields],
         "survey": _value(world.survey.levels),
         "tracks": _value(world.tracks.cells),
-        "research": {"done": _value(r.done), "current": r.current, "ticks_left": r.ticks_left},
+        "scrape_passes": _value(world.scrape_passes),
+        "flattened": _value(world.flattened),
+        "research": {"done": _value(r.done), "current": r.current, "ticks_left": r.ticks_left, "phase": r.phase},
         "contracts": {
             "rng": _rng(c.rng), "offers": [_record(x) for x in c.offers], "open": [_record(x) for x in c.open],
             "next_id": c.next_id, "filled": c.filled, "expired": c.expired, "next_offer_s": c.next_offer_s,
             "reputation": c.reputation, "credits_earned": c.credits_earned,
-            "standing_streak": c.standing_streak, "drops_since_standing": c.drops_since_standing,
             "log": _value(c.log),
         },
         "orbit": {
@@ -161,7 +163,9 @@ def apply(world, data):
         u = _make(Unit, d, path=[tuple(p) for p in d["path"]],
                   haul=tuple(d["haul"]) if d["haul"] is not None else None,
                   order=tuple(d["order"]) if d["order"] is not None else None,
-                  survey_at=tuple(d["survey_at"]) if d["survey_at"] is not None else None)
+                  survey_at=tuple(d["survey_at"]) if d["survey_at"] is not None else None,
+                  zone=tuple(d["zone"]) if d["zone"] is not None else None,
+                  pass_end=tuple(d["pass_end"]) if d["pass_end"] is not None else None)
         world.units[u.id] = u
     world.debris = {d["id"]: _make(Debris, d) for d in data["debris"]}
     world.fields = [_make(Field, d, phases=tuple(d["phases"]), boundary=[tuple(p) for p in d["boundary"]])
@@ -172,19 +176,25 @@ def apply(world, data):
     world.survey.changes = []
     world.tracks.cells = _int_keys(data["tracks"])
     world.tracks.version += 1
+    world.scrape_passes = _int_keys(data["scrape_passes"])
+    world.flattened = set(data["flattened"])
+    for cell in world.flattened:
+        world.slopes[cell] = U.SCRAPE_FLATTEN_TO_DEG
+    world._relevel = set(world.flattened)
+    world.relevel()
 
     rd = data["research"]
     world.research.done = set(rd["done"])
     world.research.current = rd["current"]
     world.research.ticks_left = rd["ticks_left"]
+    world.research.phase = rd["phase"]
 
     cd, c = data["contracts"], world.contracts
     c.mode = CT.MODES[data["mode"]]
     c.rng.setstate(_state(cd["rng"]))
     c.offers = [_make(Contract, d) for d in cd["offers"]]
     c.open = [_make(Contract, d) for d in cd["open"]]
-    for key in ("next_id", "filled", "expired", "next_offer_s", "reputation", "credits_earned",
-                "standing_streak", "drops_since_standing"):
+    for key in ("next_id", "filled", "expired", "next_offer_s", "reputation", "credits_earned"):
         setattr(c, key, cd[key])
     c.log = [tuple(x) for x in cd["log"]]
 

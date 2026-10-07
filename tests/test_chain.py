@@ -19,7 +19,7 @@ import autoplay  # noqa: E402
 
 def built_structure(w, kind, near=None, rmin=4.0):
     """A finished, powered structure placed next to the lander (no construction)."""
-    w.research.done.update({"field_survey", "extraction", "sintering", "logistics_1", "electrolysis", "reduction"})
+    w.research.done.update({"prospecting", "extraction", "sorting", "logistics_1", "electrolysis", "reduction"})
     L = w.lander
     x, y = find_spot(w, kind, near or (L.x, L.y), rmin)
     s = ST.Structure(w.new_id(), kind, x, y)
@@ -110,7 +110,8 @@ class ChainRunTests(unittest.TestCase):
                     cls.violations.append((w.time_s(), "in", s.kind, item, n, into.get((s.id, item), 0)))
 
     def test_production_happened(self):
-        self.assertGreater(self.w.produced.get("concentrate", 0), 20)
+        self.assertGreater(self.w.produced.get("iron", 0), 40)
+        self.assertGreater(self.w.produced.get("sinter", 0), 100)
         self.assertGreater(self.w.contracts.filled, 0)
 
     def test_items_are_conserved(self):
@@ -169,28 +170,13 @@ class ContractTests(unittest.TestCase):
         w.tick()
         self.assertEqual(w.tick_count, ticks)
 
-    def test_standing_contract_win_needs_two_fills_without_drops(self):
+    def test_calm_sites_cannot_be_lost(self):
         w = make_world(2)
-        built_structure(w, "machine_shop")
-        w.contracts.filled = C.STANDING_AFTER
-        w.credits = 10_000
-
-        def fill_standing():
-            while not any(c.standing for c in w.contracts.open):
-                w.tick()
-            c = next(c for c in w.contracts.open if c.standing)
-            w.contracts.receive(w, c.good, c.remaining())
-            w.tick()
-
-        fill_standing()
-        self.assertEqual(w.contracts.standing_streak, 1)
-        w.order_supply(0)            # a drop in between breaks the streak
-        fill_standing()
+        w.contracts.reputation = 1
+        w.contracts.reputation += C.REPUTATION_EXPIRED
+        w.tick()
+        self.assertEqual(w.contracts.reputation, 0)
         self.assertIsNone(w.outcome)
-        self.assertEqual(w.contracts.standing_streak, 1)
-        fill_standing()
-        self.assertEqual(w.outcome, "won")
-        self.assertGreater(w.score(), 0)
 
 
 class OrbitTests(unittest.TestCase):
@@ -233,18 +219,16 @@ class OrbitTests(unittest.TestCase):
 
 
 class ExitTests(unittest.TestCase):
-    """Milestone 4 exit: one full site is winnable and losable."""
+    """Act I: a played site finishes the mass driver's foundation in about half an hour."""
 
-    def test_a_played_site_is_won(self):
-        # The bot is simple, so give it a few sites; it must win at least one.
-        results = []
-        for seed in (3, 1, 8):
+    def test_act_one_reaches_the_foundation(self):
+        from game.sim import massdriver
+        for seed in (3, 1):
             w = autoplay.make(seed)
-            autoplay.play(w, 80)
-            results.append(autoplay.status(w))
-            if w.outcome == "won":
-                return
-        self.fail("no site won:\n" + "\n".join(results))
+            autoplay.play(w, 35)
+            md = massdriver.find(w)
+            self.assertIsNotNone(md, f"seed {seed}: no mass driver")
+            self.assertGreaterEqual(md.phase, 1, f"seed {seed}: " + autoplay.status(w))
 
     def test_a_neglected_site_is_lost(self):
         w = autoplay.make(5, "pressure")   # calm sites can only be lost on accepted contracts
@@ -337,7 +321,7 @@ class SurveyPastCliffsTests(unittest.TestCase):
                                                   for x, y in f.sample_points(3.0))),
                      key=lambda f: w.charge_field.dist[w.grid.node_at(f.cx, f.cy)])
         w.hint_field(target)
-        w.research.done.add("field_survey")
+        w.research.done.add("prospecting")
         w.spawn_unit("survey_rover", w.lander.x + 3, w.lander.y)
         for _ in range(minutes(25)):
             w.tick()

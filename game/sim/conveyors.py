@@ -22,7 +22,9 @@ import math
 from game.content import structures as S
 from game.content import world as W
 from game.content.structures import STRUCTURES
+from game.content.items import ITEMS
 from game.sim import feeds
+from game.sim import massdriver
 from game.sim import production as P
 from game.sim import structures as ST
 
@@ -49,6 +51,9 @@ def _accepts(kind, item):
 def items_for(a_kind, b_kind):
     """Items a conveyor from a building of a_kind to one of b_kind would carry."""
     a, b = STRUCTURES[a_kind], STRUCTURES[b_kind]
+    if b_kind == massdriver.KIND:   # anything any phase needs, from a producer or a store
+        made = a["recipe"]["out"] if is_producer(a_kind) else (ITEMS if is_store(a_kind) else ())
+        return [k for k in made if k in massdriver.wants(b_kind) and _accepts(a_kind, k)]
     if is_producer(a_kind) and is_consumer(b_kind):
         return feeds.items_between(a_kind, b_kind)
     if is_producer(a_kind) and is_store(b_kind):
@@ -168,6 +173,8 @@ def _free_at_source(a, item):
 
 
 def _room_at_destination(world, b, item):
+    if b.kind == massdriver.KIND:
+        return massdriver.room(b, item)
     r = P.recipe(b)
     if r and item in r["in"]:
         return P.input_cap(b, item) - b.inputs.get(item, 0) - b.reserved_in.get(item, 0)

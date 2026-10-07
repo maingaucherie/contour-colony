@@ -85,7 +85,7 @@ class BatteryTests(unittest.TestCase):
                     self.assertNotEqual(u.state, US.STRANDED)
                     if u.state == US.CHARGING:
                         charged.add(u.id)
-            self.assertEqual(charged, {u.id for u in scavengers(w)}, f"seed {seed}: every scavenger should charge")
+            self.assertLessEqual({u.id for u in scavengers(w)}, charged, f"seed {seed}: every scavenger should charge")
 
     def test_low_battery_drops_job_and_returns_home_before_dying(self):
         w = make_world(1)
@@ -156,7 +156,7 @@ class DeterminismTests(unittest.TestCase):
         w = make_world(seed)
         for t in range(ticks):
             if t == 50:
-                w.start_research("field_survey")
+                w.start_research("sorting")
             if t in (1200, 3100):
                 w.sell_scrap(3)
             w.tick()

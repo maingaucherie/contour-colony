@@ -91,10 +91,6 @@ def draw_board(surface, world, now_s, mouse=None):
                   D.COLOR_FLOW if not full else D.COLOR_TEXT_DIM, "right", additive=True)
         rects.append((rect, c.id))
         y += lh + 5
-    if cs.standing_streak and any(c.standing for c in cs.open):
-        draw_text(surface, f"STANDING STREAK {cs.standing_streak}/{C.STANDING_WINS} - NO SUPPLY DROPS",
-                  (x, y), 1, D.COLOR_FLOW)
-        y += lh
     y += 4
     return draw_pass_timer(surface, world, x, y, bw), rects
 
@@ -195,7 +191,7 @@ def draw_orbit_menu(surface, world, cursor=None):
     n = len(lines)
     lines.append(("", D.COLOR_TEXT_DIM))
     lines.append((f"CREDITS {world.credits}.  DROPS LAND NEAR THE LANDER DURING THE NEXT PASS.", D.COLOR_TEXT_DIM))
-    lines.append(("ORDERING A DROP RESETS THE STANDING CONTRACT STREAK.   ESC: CLOSE", D.COLOR_TEXT_DIM))
+    lines.append(("ESC: CLOSE", D.COLOR_TEXT_DIM))
     lines.append((f"MARKET: GOODS SELL FOR {int(W.SPOT_PRICE_FRACTION * 100)}% OF CONTRACT VALUE, FROM ANY STORAGE.",
                   D.COLOR_TEXT_DIM))
     w = D.ORBIT_MENU_WIDTH

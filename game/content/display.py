@@ -228,9 +228,9 @@ INTRO_PANEL_WIDTH = 520
 # Panels.
 PANEL_WIDTH = 340
 PANEL_GAP = 8                     # inspect panel sits this far under the contracts board
-MENU_WIDTH = 470                  # build menu, top left under the HUD
+MENU_WIDTH = 560                  # build menu, top left under the HUD
 MENU_TOP = 126
-MENU_COLUMNS = (22, 170)          # x offsets: name, cost
+MENU_COLUMNS = (22, 205)          # x offsets: name, cost
 RESEARCH_WIDTH = 790
 RESEARCH_COLUMNS = (6, 190, 415)  # x offsets: name, status, effect
 COLOR_MENU_CURSOR = (5, 28, 32)   # highlighted menu row

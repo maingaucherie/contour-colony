@@ -8,7 +8,7 @@ from game.sim import structures as ST
 from game.sim import units as UN
 from tests.test_world import make_world, minutes
 
-ALL_RESEARCH = {"field_survey", "extraction", "sintering", "logistics_1", "electrolysis", "reduction"}
+ALL_RESEARCH = {"prospecting", "extraction", "sorting", "logistics_1", "electrolysis", "reduction"}
 
 
 def _spot(w, kind, near, r0=0.0, r1=8.0):

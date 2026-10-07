@@ -1,5 +1,5 @@
 """Headless autoplayer: plays a site with a simple build order, for balance
-runs and the Milestone 4 exit test (a site can be won, and lost).
+runs and the exit tests (how far a site gets, and how fast).
 
     python tools/autoplay.py --seed 3 [--minutes 70] [--neglect] [--quiet] [--mode pressure]
 
@@ -22,11 +22,17 @@ from game.sim import structures as ST  # noqa: E402
 from game.sim.terrain import generate_terrain, run_to_completion  # noqa: E402
 from game.sim.world import build_world  # noqa: E402
 
-RESEARCH_ORDER = ("field_survey", "logistics_1", "extraction", "sintering", "electrolysis", "reduction")
-FACTORY = ("crusher", "ice_melter", "sinter_kiln", "electrolyzer", "reduction_furnace", "machine_shop")
+RESEARCH_ORDER = ("logistics_1", "sorting", "prospecting", "extraction", "electrolysis", "reduction",
+                  "conveyors", "maintenance")
+# Act I: iron from scrap, sinter from scraped regolith, parts from the shop.
+ACT_ONE = ("scrap_furnace", "sinter_kiln", "machine_shop")
+FACTORY = ("crusher", "ice_melter", "electrolyzer", "reduction_furnace")
 # (unit, how many, structure that must exist first)
-UNIT_GOALS = (("survey_rover", 1, None), ("hauler", 2, None), ("scavenger", 3, None), ("hauler", 3, "crusher"),
-              ("constructor", 2, "sinter_kiln"), ("hauler", 4, "electrolyzer"), ("hauler", 5, "reduction_furnace"))
+UNIT_GOALS = (("hauler", 2, None), ("scraper", 2, "sinter_kiln"), ("scavenger", 4, None),
+              ("hauler", 3, "scrap_furnace"), ("survey_rover", 1, None), ("hauler", 4, "crusher"),
+              ("constructor", 2, "machine_shop"), ("scraper", 3, "sorter"), ("hauler", 5, "electrolyzer"),
+              ("hauler", 6, "reduction_furnace"))
+MAX_DEPOTS = 3
 UNIT_PARTS_RESERVE = 4     # keep this many parts spare after ordering a unit
 OUTPOST_PARTS_SPARE = 20   # build outposts (rather than pads) only with this many parts in stock
 HAULER_DROP_LIMIT = 6      # buy haulers by supply drop up to this many when loads pile up
@@ -147,15 +153,26 @@ class Bot:
             if at:
                 self.place("solar", at)
                 return
-        if not self.count("scanner"):
-            at = self.factory_site("scanner")
-            if at:
-                self.place("scanner", at)
-                return
         if w.unlocked("rover_bay") and not self.count("rover_bay"):
             at = self.factory_site("rover_bay")
             if at:
                 self.place("rover_bay", at)
+                return
+        if not self.count("mass_driver"):
+            at = self.spot("mass_driver", (L.x, L.y), 8.0, 40.0)
+            if at:
+                self.place("mass_driver", at)
+                return
+        for kind in ACT_ONE:
+            if w.unlocked(kind) and not self.count(kind):
+                at = self.factory_site(kind)
+                if at:
+                    self.place(kind, at)
+                    return
+        if w.unlocked("scanner") and not self.count("scanner"):
+            at = self.factory_site("scanner")
+            if at:
+                self.place("scanner", at)
                 return
         for kind, field_kind in (("ilmenite_mine", "ilmenite"), ("ice_mine", "ice")):
             if w.unlocked(kind) and not self.count(kind):
@@ -178,7 +195,7 @@ class Bot:
         w = self.w
         stored = sum(s.stored() for s in w.storages())
         capacity = sum(s.spec["storage"] for s in w.storages())
-        if w.unlocked("depot") and stored > 0.7 * capacity and not any(s.kind == "depot" and not s.built
+        if w.unlocked("depot") and stored > 0.7 * capacity and self.count("depot") < MAX_DEPOTS and not any(s.kind == "depot" and not s.built
                                                                        for s in w.structures.values()):
             at = self.factory_site("depot")
             if at:
@@ -256,16 +273,13 @@ class Bot:
 
     def supply(self):
         w = self.w
-        # Haulers falling behind: drop one in (before the standing contract only).
-        standing = any(c.standing for c in w.contracts.open)
-        if (not standing and self.loads_waiting() >= 3 and self.units("hauler") < HAULER_DROP_LIMIT
+        # Haulers falling behind: drop one in.
+        if (self.loads_waiting() >= 3 and self.units("hauler") < HAULER_DROP_LIMIT
                 and w.credits >= CT.SUPPLY[supply_index("hauler")]["cost"] + 50
                 and not any(e.get("unit") == "hauler" for e in w.orbit.pending)):
             w.order_supply(supply_index("hauler"))
             self.log("order hauler drop")
             return
-        if standing:
-            return  # self-sufficiency is the point now
         need = self.missing()
         reserve = 0
         nxt = next((n for n in RESEARCH_ORDER if n not in w.research.done and n != w.research.current), None)
@@ -302,16 +316,20 @@ class Bot:
         return any(s.built and good in s.spec.get("recipe", {}).get("out", {}) for s in self.w.structures.values())
 
     def contracts(self):
-        """Calm mode: take offers for goods the site already makes."""
+        """Calm mode: take offers for goods the site already makes, unless the
+        mass driver's current phase needs them."""
+        from game.sim import massdriver
+        md = massdriver.find(self.w)
+        wanted = massdriver.needs(md) if md is not None and md.built else {}
         for c in list(self.w.contracts.offers):
-            if self.makes(c.good) and self.w.accept_contract(c.id)[0]:
+            if self.makes(c.good) and c.good not in wanted and self.w.accept_contract(c.id)[0]:
                 self.log(f"accept {c.qty} {c.good}")
 
     def raise_cash(self):
         """Short of parts and credits: sell scrap toward a parts crate."""
         w = self.w
-        if self.missing().get("parts", 0) > 0 and w.credits < 100 and w.stock("scrap") > 30:
-            n = w.sell("scrap", w.stock("scrap") - 30)
+        if self.missing().get("parts", 0) > 0 and w.credits < 100 and w.stock("scrap") > 100:
+            n = w.sell("scrap", w.stock("scrap") - 100)
             if n:
                 self.log(f"sell {n} scrap")
 
@@ -352,7 +370,8 @@ def status(w):
             for k, n in d.items():
                 items[k] = items.get(k, 0) + n
     built = sorted(s.kind for s in w.structures.values() if s.built and s.kind not in ("pylon", "solar"))
-    return (f"t={w.time_s() / 60:5.1f}m cr={w.credits:5d} rep={c.reputation:5.1f} filled={c.filled} "
+    from game.sim import massdriver
+    return (f"t={w.time_s() / 60:5.1f}m {massdriver.goal_text(w)} | cr={w.credits:5d} rep={c.reputation:5.1f} filled={c.filled} "
             f"expired={c.expired} open={[(o.good, o.delivered, o.qty) for o in c.open]} "
             f"units={sorted((k, sum(1 for u in w.units.values() if u.kind == k)) for k in {u.kind for u in w.units.values()})} "
             f"stock={dict(sorted(items.items()))} built={dict((k, built.count(k)) for k in set(built))} solar={sum(1 for s in w.structures.values() if s.kind == 'solar')}")

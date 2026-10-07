@@ -13,7 +13,7 @@ from game.content import world as W
 from game.content.research import RESEARCH, RESEARCH_MENU
 from game.content.items import ITEMS
 from game.content import structures as STRUCTURE_RULES
-from game.content.structures import BUILD_MENU, STRUCTURES
+from game.content.structures import BUILD_CATEGORIES, STRUCTURES
 from game.content.units import BAY_MENU
 from game.audio.player import Audio
 from game.render import draw, entities
@@ -24,6 +24,7 @@ from game.render.surfaces import new_surface
 from game.sim.terrain import generate_terrain
 from game.sim.world import build_world
 from game.sim import conveyors as CONV
+from game.sim import massdriver
 from game.sim import jobs
 from game.sim import structures as ST
 from game.content import audio as AUDIO
@@ -153,6 +154,7 @@ class App:
         self.end_rects = None     # clickable choices on the site complete / lost screen
         self.last_tick_sound = 0.0
         self.menu_cursor = 0
+        self.build_tab = 0
         self.menu_rects = None    # (panel rect, row rects) from the last draw
         self.placing = None       # structure kind being placed
         self.line_from = None     # conveyor or road placement: the first click (building id or point)
@@ -387,7 +389,7 @@ class App:
             return [c.id for c in self.world.contracts.offers]
         if self.menu == "orbit":
             return board.orbit_entries(self.world)
-        return BUILD_MENU if self.menu == "build" else RESEARCH_MENU
+        return BUILD_CATEGORIES[self.build_tab][1] if self.menu == "build" else RESEARCH_MENU
 
     def _menu_choose(self, i):
         world = self.world
@@ -453,6 +455,10 @@ class App:
             elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                 self._menu_choose(self.menu_cursor)
                 return
+            elif self.menu == "build" and key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_a, pygame.K_d):
+                step = -1 if key in (pygame.K_LEFT, pygame.K_a) else 1
+                self._set_build_tab((self.build_tab + step) % len(BUILD_CATEGORIES))
+                return
         if self.menu == "build":
             for ch in inp.typed:
                 if ch in menus.BUILD_KEYS:
@@ -461,7 +467,12 @@ class App:
                     return
         if self.menu_rects is None:
             return
-        panel, rows = self.menu_rects
+        panel, rows = self.menu_rects[:2]
+        if inp.click is not None and len(self.menu_rects) > 2:
+            for rect, tab in self.menu_rects[2]:
+                if rect.collidepoint(inp.click):
+                    self._set_build_tab(tab)
+                    return
         if inp.mouse_moved:  # hover only takes over when the mouse moves
             for i, row in enumerate(rows):
                 if row.collidepoint(inp.mouse) and self.menu_cursor != i:
@@ -474,6 +485,11 @@ class App:
                         self._menu_choose(i)
             else:
                 self.menu = None  # clicking the map closes the menu
+
+    def _set_build_tab(self, tab):
+        self.build_tab = tab
+        self.menu_cursor = 0
+        self.audio.play("menu")
 
     def _mouse_world(self):
         return self.camera.screen_to_world(*self.input.mouse)
@@ -700,6 +716,7 @@ class App:
             "paused": self.paused, "speed": W.SIM_SPEEDS[self.speed_index], "actual_speed": self.actual_speed,
             "research": (RESEARCH[world.research.current]["name"], world.research.progress())
             if world.research.current else None,
+            "goal": massdriver.goal_text(world),
             "events": [((world.tick_count - t) / world.tick_rate, text, kind) for t, text, kind in world.events],
             "hint": self._hint(),
             "saved": time.perf_counter() - self.saved_at < D.SAVED_BLINK_S,
@@ -711,7 +728,8 @@ class App:
         panels.draw_inspect(self.screen, world, self.selected, board_bottom + D.PANEL_GAP)
         self.menu_rects = None
         if self.menu == "build":
-            self.menu_rects = menus.draw_build_menu(self.screen, world, D.HUD_MARGIN + 6, D.MENU_TOP, self.menu_cursor)
+            self.menu_rects = menus.draw_build_menu(self.screen, world, D.HUD_MARGIN + 6, D.MENU_TOP, self.menu_cursor,
+                                                    self.build_tab)
         elif self.menu == "research":
             self.menu_rects = menus.draw_research(self.screen, world, self.menu_cursor)
         elif self.menu == "orbit":

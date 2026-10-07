@@ -103,11 +103,13 @@ def draw_running(surface, info):
     rtext = f"RESEARCH {research[0].upper()} {research[1] * 100:3.0f}%" if research else "RESEARCH IDLE (R)"
     view = info["view"].upper() + " VIEW"
     draw_text(surface, f"{rtext}   {view}", (M + 6, y + 2 * lh), 1, D.COLOR_TEXT_DIM)
+    if info.get("goal"):
+        draw_text(surface, info["goal"], (M + 6, y + 3 * lh), 1, D.COLOR_FLOW)
     haulers, idle, waiting = info["haulers"]
     if haulers or waiting:
         busy = waiting > idle and waiting >= D.HAULERS_SHORT_LOADS
         text = f"HAULERS {haulers} ({idle} FREE)   LOADS WAITING {waiting}" + ("   BUILD MORE HAULERS" if busy else "")
-        draw_text(surface, text, (M + 6, y + 3 * lh), 1, D.COLOR_ALERT if busy else D.COLOR_TEXT_DIM)
+        draw_text(surface, text, (M + 6, y + 4 * lh), 1, D.COLOR_ALERT if busy else D.COLOR_TEXT_DIM)
 
     # Event log, newest at the bottom, fading out.
     ey = h - M - 7 - 3 * lh

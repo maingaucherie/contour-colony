@@ -48,7 +48,7 @@ UNITS = {
         "linger_radius_cells": 3.0,
         "linger_drain_per_s": 0.2,
         "launch_stagger_s": 0.0,
-        "bay_cost": {"scrap": 10, "parts": 4}, "bay_time_s": 20.0, "unlocked_by": "field_survey",
+        "bay_cost": {"scrap": 10, "parts": 4}, "bay_time_s": 20.0, "unlocked_by": "prospecting",
     },
     "hauler": {
         "name": "hauler",
@@ -62,6 +62,27 @@ UNITS = {
         "launch_stagger_s": 0.0,
         "bay_cost": {"scrap": 12, "parts": 4}, "bay_time_s": 20.0, "unlocked_by": "logistics_1",
     },
+}
+
+UNITS["scraper"] = {
+    # Sweeps a zone around its home (a point the player can move) in long
+    # back-and-forth passes, scooping regolith, and tips it into the nearest
+    # storage. Lumpy ground it passes over enough is levelled (see SCRAPE_*).
+    "name": "surface scraper",
+    "start_count": 1,
+    "base_speed_cells_per_s": 2.4,
+    "scrape_speed_fraction": 0.6,    # slower while its blade is down
+    "battery": 100.0,
+    "drain_per_cost_cell": 0.3,
+    "cargo": 30,                     # regolith
+    "cells_per_load": 1.0,           # one regolith per this many cells scraped
+    "zone_radius_cells": 10.0,
+    "lane_spacing_cells": 1.6,
+    "min_lane_cells": 4.0,           # shorter clear stretches aren't worth a pass
+    "sight_cells": 2.0,
+    "unload_s": 2.0,
+    "launch_stagger_s": 2.5,
+    "bay_cost": {"scrap": 10, "parts": 2}, "bay_time_s": 18.0, "unlocked_by": None,
 }
 
 UNITS["maintenance_drone"] = {
@@ -88,7 +109,7 @@ SEARCH_DISTANCE_CELLS = (6.0, 18.0)
 SEARCH_ATTEMPTS = 12
 
 # Order of the rover bay's build list.
-BAY_MENU = ("scavenger", "constructor", "survey_rover", "hauler", "maintenance_drone")
+BAY_MENU = ("scavenger", "scraper", "constructor", "survey_rover", "hauler", "maintenance_drone")
 
 # Shared unit rules.
 SLOPE_DIVISOR_DEG = 5.0              # speed = base / (1 + slope / SLOPE_DIVISOR_DEG)
@@ -96,6 +117,15 @@ ROAD_SPEED_MULT = 2.0                # on graded roads: twice as fast (and half 
 ROAD_SLOPE_FACTOR = 0.5              # ... and slope slows them half as much
 LOW_BATTERY_FRACTION = 0.2           # below this, drop the job and go charge
 TOP_UP_BELOW_FRACTION = 0.6          # when docked below this, charge to full before the next job
+# Scrapers level lumpy ground: a cell steeper than SCRAPE_FLATTEN_FROM_DEG but
+# no steeper than SCRAPE_FLATTEN_MAX_DEG becomes SCRAPE_FLATTEN_TO_DEG (buildable)
+# once scraped over SCRAPE_PASSES times. Cliffs stay cliffs.
+SCRAPE_FLATTEN_FROM_DEG = 5.0
+SCRAPE_FLATTEN_MAX_DEG = 12.0
+SCRAPE_FLATTEN_TO_DEG = 4.5
+SCRAPE_PASSES = 3
+SCRAPE_REPRICE_EVERY_S = 30          # levelled ground is re-costed for routes this often
+
 FIELD_RANGE_MARGIN = 1.1             # a rover's route search reaches this times its full-battery range
 TRIP_SAFETY_FACTOR = 1.25            # planned energy is multiplied by this before checking range
 STRANDED_TRICKLE_PER_S = 0.3        # battery a stranded unit's emergency panels recover per second, in full sun

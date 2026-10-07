@@ -12,7 +12,7 @@ from tests.test_build_power import find_spot
 from tests.test_chain import built_structure, ledger_ok
 from tests.test_world import make_world, minutes
 
-ALL_RESEARCH = {"field_survey", "extraction", "sintering", "logistics_1", "electrolysis", "reduction"}
+ALL_RESEARCH = {"prospecting", "extraction", "sorting", "logistics_1", "electrolysis", "reduction"}
 
 
 def finish(w, kind, x, y):

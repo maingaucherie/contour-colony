@@ -9,12 +9,15 @@ class Research:
         self.done = set()
         self.current = None
         self.ticks_left = 0
+        self.phase = 0       # mass driver phases finished (later tiers wait for them)
 
     def status(self, node):
         if node in self.done:
             return "done"
         if node == self.current:
             return "active"
+        if RESEARCH[node].get("phase", 0) > self.phase:
+            return "waiting"
         if all(r in self.done for r in RESEARCH[node]["requires"]):
             return "available"
         return "locked"
@@ -22,6 +25,8 @@ class Research:
     def can_start(self, node, credits):
         st = self.status(node)
         if st != "available":
+            if st == "waiting":
+                return False, f"NEEDS MASS DRIVER PHASE {RESEARCH[node]['phase']}"
             return False, {"done": "ALREADY DONE", "active": "IN PROGRESS", "locked": "PREREQUISITES MISSING"}[st]
         if self.current is not None:
             return False, "ANOTHER PROJECT IS RUNNING"
@@ -57,7 +62,7 @@ class Research:
         """Combined effect: multipliers multiply, flags OR together."""
         value = default
         for node in self.done:
-            eff = RESEARCH[node].get("effects", {})
+            eff = RESEARCH.get(node, {}).get("effects", {})
             if name in eff:
                 v = eff[name]
                 value = (value or v) if isinstance(v, bool) else value * v

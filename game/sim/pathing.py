@@ -130,13 +130,19 @@ class PathGrid:
                 new[y * size + x] = 1
         changed = {self.node_at(i % size, i // size) for i in range(size * size) if new[i] != self.road[i]}
         self.road = new
-        for node in changed:
+        return self.reprice(changed)
+
+    def reprice(self, nodes):
+        """Re-cost these nodes from their cells (after roads or levelling).
+        Returns True if anything changed."""
+        if not nodes:
+            return False
+        for node in nodes:
             self._price(node)
-        for node in {nb for c in changed for nb in self._around(c)}:
+        for node in {nb for c in nodes for nb in self._around(c)}:
             self._link(node)
-        if changed:
-            self.invalidate()
-        return bool(changed)
+        self.invalidate()
+        return True
 
     def segment_cost(self, a, b):
         """Cost of driving straight from a to b, sampled along the line."""

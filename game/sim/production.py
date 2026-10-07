@@ -15,6 +15,7 @@ import math
 from game.content import structures as S
 from game.content import world as W
 from game.content.items import ITEMS
+from game.sim import geology as G
 from game.sim import wear
 
 WORKING, STARVED, BLOCKED, UNPOWERED, IDLE, BROKEN = "working", "starved", "blocked", "unpowered", "idle", "broken"
@@ -91,7 +92,7 @@ def update(world, s):
         s.cycle_left_s -= dt * speed(world, s)    # cycle_left_s counts base recipe seconds
         if s.cycle_left_s <= 0.0:
             s.cycle_left_s = 0.0
-            for item, n in r["out"].items():
+            for item, n in cycle_outputs(world, s, r).items():
                 world.produced[item] = world.produced.get(item, 0) + n
                 keep = min(n, output_cap(s, item) - s.outputs.get(item, 0))
                 s.outputs[item] = s.outputs.get(item, 0) + keep
@@ -119,6 +120,20 @@ def update(world, s):
         world.consumed[item] = world.consumed.get(item, 0) + n
     s.cycle_left_s = r["time_s"]
     s.status = WORKING
+
+
+def cycle_outputs(world, s, r):
+    """What one finished cycle makes: the whole recipe, or for a sorter one
+    output picked with the weights of the ground it stands on."""
+    if not s.spec.get("picks_one"):
+        return r["out"]
+    weights = s.spec["sorts"][G.zone_at(world.heightmap.geology, s.x, s.y)]
+    roll = world.rng.random() * sum(weights.values())
+    for item, w in weights.items():
+        roll -= w
+        if roll < 0:
+            return {item: r["out"][item]}
+    return {item: r["out"][item]}
 
 
 def _update_heat(world, s, dt):

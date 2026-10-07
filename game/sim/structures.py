@@ -57,6 +57,8 @@ class Structure:
     grade_deg: float = 0.0                          # degrees of grading the site needs
     grade_cr: int = 0                               # credits paid for grading (refunded on cancel)
     warm: bool = False                              # getting waste heat from a neighbour
+    phase: int = 0                                  # mass driver: phases finished
+    charge_s: float = 0.0                           # mass driver: launch charge so far
     deconstruct: bool = False                       # marked for a constructor to dismantle
     teardown_s: float = 0.0                         # dismantling seconds done
     # Conveyors (see conveyors.py): the buildings they join. Roads (roads.py): their ends.
@@ -110,7 +112,9 @@ class Structure:
         return all(self.delivered.get(k, 0) >= n for k, n in cost.items())
 
     def draw_kw(self):
-        """Power drawn while working, at this clock speed."""
+        """Power drawn while working, at this clock speed (the mass driver only while charging)."""
+        if "launch_kw" in self.spec:
+            return self.spec["launch_kw"] if self.status == "charging" else 0.0
         return self.spec.get("draw_kw", 0.0) * clock_spec(self.clock)["power"]
 
     def assembly_time(self):
@@ -326,6 +330,8 @@ def check_placement(world, kind, x, y):
 
 
 def place_site(world, kind, x, y):
+    if STRUCTURES[kind].get("unique") and any(s.kind == kind for s in world.structures.values()):
+        return None, "ONLY ONE " + STRUCTURES[kind]["name"].upper()
     ok, reason = check_placement(world, kind, x, y)
     if not ok:
         return None, reason

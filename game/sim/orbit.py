@@ -50,7 +50,6 @@ class Orbit:
         world.credits -= entry["cost"]
         self.pending.append(entry)
         self.orders += 1
-        world.contracts.note_drop()
         when = "THIS PASS" if self.overhead(world.time_s()) else "NEXT PASS"
         world.event(f"SUPPLY ORDERED: {entry['name'].upper()} - LANDS {when}", "info")
         return True, ""

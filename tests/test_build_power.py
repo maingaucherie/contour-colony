@@ -74,7 +74,7 @@ class PlacementTests(unittest.TestCase):
     def test_rules(self):
         w = make_world(1)
         L = w.lander
-        ok, reason = ST.check_placement(w, "rover_bay", L.x + 4, L.y)
+        ok, reason = ST.check_placement(w, "scanner", L.x + 4, L.y)
         self.assertFalse(ok)
         self.assertEqual(reason, "NOT RESEARCHED")
         self.assertEqual(ST.check_placement(w, "solar", L.x, L.y)[1], "OVERLAPS LANDER")
@@ -87,7 +87,7 @@ class PlacementTests(unittest.TestCase):
 
     def test_mine_needs_a_confirmed_field(self):
         w = make_world(1)
-        w.research.done.update({"field_survey", "extraction"})
+        w.research.done.update({"prospecting", "extraction"})
         f = next(f for f in w.fields if f.kind == "ilmenite")
         w.hint_field(f)  # the scanner's job
         saved = bytes(w.survey.levels)
@@ -143,19 +143,22 @@ class ConstructionTests(unittest.TestCase):
 class ResearchTests(unittest.TestCase):
     def test_prerequisites_cost_and_one_at_a_time(self):
         w = make_world(1)
-        self.assertEqual(w.start_research("extraction")[1], "PREREQUISITES MISSING")
+        self.assertEqual(w.start_research("better_batteries")[1], "PREREQUISITES MISSING")
+        self.assertEqual(w.start_research("prospecting")[1], "NEEDS MASS DRIVER PHASE 1")
         credits = w.credits
-        self.assertTrue(w.start_research("field_survey")[0])
-        self.assertEqual(w.credits, credits - RESEARCH["field_survey"]["cost"])
+        self.assertTrue(w.start_research("logistics_1")[0])
+        self.assertEqual(w.credits, credits - RESEARCH["logistics_1"]["cost"])
         w.credits += 1000
-        self.assertEqual(w.start_research("logistics_1")[1], "ANOTHER PROJECT IS RUNNING")
-        ticks = round(RESEARCH["field_survey"]["time_s"] * W.TICK_RATE)
+        self.assertEqual(w.start_research("sorting")[1], "ANOTHER PROJECT IS RUNNING")
+        ticks = round(RESEARCH["logistics_1"]["time_s"] * W.TICK_RATE)
         for _ in range(ticks - 1):
             w.tick()
-        self.assertNotIn("field_survey", w.research.done)
+        self.assertNotIn("logistics_1", w.research.done)
         w.tick()
-        self.assertIn("field_survey", w.research.done)
-        self.assertTrue(w.unlocked("rover_bay"))
+        self.assertIn("logistics_1", w.research.done)
+        self.assertTrue(w.unlocked("hauler"))
+        w.research.phase = 1
+        self.assertTrue(w.start_research("prospecting")[0])
 
     def test_better_batteries_raise_capacity(self):
         w = make_world(1)
@@ -190,7 +193,7 @@ class SurveyAndOrdersTests(unittest.TestCase):
 
     def test_rover_bay_builds_units_from_storage(self):
         w = make_world(1)
-        w.research.done.add("field_survey")
+        w.research.done.add("prospecting")
         spot = find_spot(w, "rover_bay", (w.lander.x, w.lander.y), 3, 5)
         site, _ = w.place("rover_bay", *spot)
         self.assertTrue(run_until(w, lambda: site.built, 300))
@@ -208,8 +211,9 @@ class ExitCriterionTest(unittest.TestCase):
     def test_survey_a_field_then_build_a_mine_on_it(self):
         w = make_world(1)
         L = w.lander
-        self.assertTrue(w.start_research("field_survey")[0])
-        self.assertTrue(run_until(w, lambda: "field_survey" in w.research.done, 60))
+        w.research.phase = 1   # as if the mass driver's foundation were done
+        self.assertTrue(w.start_research("prospecting")[0])
+        self.assertTrue(run_until(w, lambda: "prospecting" in w.research.done, 60))
         bay, _ = w.place("rover_bay", *find_spot(w, "rover_bay", (L.x, L.y), 3, 5))
         self.assertTrue(run_until(w, lambda: bay.built, 300))
         w.order_unit(bay.id, "survey_rover")

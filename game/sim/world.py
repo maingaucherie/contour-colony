@@ -20,7 +20,7 @@ from game.content.research import RESEARCH
 from game.content.structures import STRUCTURES
 from game.content.terrain import CONTOUR_CHUNK_CELLS
 from game.content import contracts as CT
-from game.sim import conveyors, debris, feeds, fields, power, production, roads, structures, units
+from game.sim import conveyors, debris, feeds, fields, massdriver, power, production, roads, structures, units
 from game.sim.contracts import Contracts
 from game.sim.orbit import Orbit
 from game.sim.pathing import PathGrid
@@ -59,6 +59,9 @@ class World:
         self._feeds = None
         self.autosold = 0             # scrap sold on arrival since the last report
         self.rates = {}               # structure id -> cycles (conveyors: items) per minute, recently
+        self.scrape_passes = {}       # cell -> times a scraper's blade crossed it (lumpy ground only)
+        self.flattened = set()        # cells scrapers have levelled
+        self._relevel = set()         # levelled cells whose route costs are out of date
         self._rate_log = deque(maxlen=W.RATE_WINDOW_S // W.RATE_SAMPLE_S + 1)
         self.outcome_text = ""
         self.end_s = None
@@ -131,6 +134,8 @@ class World:
             if put:
                 s.inputs[item] = s.inputs.get(item, 0) + put
             return put
+        if s.kind == massdriver.KIND:
+            return massdriver.receive(s, item, amount)
         put = self.contracts.receive(self, item, amount) if s.spec.get("export_bay") else 0
         if s.stores():
             put += self.store(s, item, amount - put)
@@ -302,7 +307,10 @@ class World:
             return False, "UNAVAILABLE"
         if kind == "survey" and u.kind != "survey_rover":
             kind = "move"
-        return units.give_order(self, u, kind, x, y)
+        ok, reason = units.give_order(self, u, kind, x, y)
+        if ok and u.kind == "scraper":   # a scraper sent somewhere sweeps there from now on
+            u.zone, u.lane = (x, y), 0
+        return ok, reason
 
     # Systems -----------------------------------------------------------------------
 
@@ -353,6 +361,31 @@ class World:
         self.dirty_power = True
         self._feeds = None
         structures.refresh_output(self)
+
+    def scrape(self, cell):
+        """A scraper's blade crossed this cell: lumpy ground crossed often enough is levelled."""
+        slope = self.slopes[cell]
+        if not U.SCRAPE_FLATTEN_FROM_DEG < slope <= U.SCRAPE_FLATTEN_MAX_DEG:
+            return
+        n = self.scrape_passes.get(cell, 0) + 1
+        if n < U.SCRAPE_PASSES:
+            self.scrape_passes[cell] = n
+            return
+        self.scrape_passes.pop(cell, None)
+        self.slopes[cell] = U.SCRAPE_FLATTEN_TO_DEG
+        self.flattened.add(cell)
+        self._relevel.add(cell)
+
+    def relevel(self):
+        """Re-cost routes over ground scrapers have levelled since last time."""
+        if not self._relevel:
+            return
+        size = self.heightmap.size
+        nodes = {self.grid.node_at(c % size, c // size) for c in self._relevel}
+        self._relevel = set()
+        if self.grid.reprice(nodes):
+            self.home_field = self.grid.field(self.grid.node_at(self.lander.x, self.lander.y))
+            self.charger_key = None
 
     def roads_changed(self):
         """A road was finished or removed: reprice the ground, then recompute
@@ -457,6 +490,8 @@ class World:
                 structures.update_bay(self, s)
             elif s.built and s.kind == "scanner":
                 structures.update_scanner(self, s)
+            elif s.kind == massdriver.KIND:
+                massdriver.update(self, s)
             elif s.built:
                 production.update(self, s)
         feeds.update(self)
@@ -474,6 +509,8 @@ class World:
             self._check_storage()
         if self.tick_count % (W.RATE_SAMPLE_S * W.TICK_RATE) == 0:
             self._sample_rates()
+        if self.tick_count % (U.SCRAPE_REPRICE_EVERY_S * W.TICK_RATE) == 0:
+            self.relevel()
 
     def digest(self):
         """Compact full-state snapshot for determinism checks."""
@@ -555,7 +592,7 @@ def build_world(seed, heightmap, mode=CT.DEFAULT_MODE):
         debris.try_spawn(world)
 
     slot = 0
-    for kind in ("scavenger", "constructor"):
+    for kind in ("scavenger", "constructor", "scraper"):
         spec = U.UNITS[kind]
         for i in range(spec["start_count"]):
             x, y = lander.docks[slot]
@@ -564,6 +601,6 @@ def build_world(seed, heightmap, mode=CT.DEFAULT_MODE):
             lander.dock_users[slot] = u.id
             u.timer = round((i + 1) * spec["launch_stagger_s"] * W.TICK_RATE) + slot
             slot += 1
-    world.event("TOUCHDOWN. SCAVENGERS DEPLOYED")
+    world.event("TOUCHDOWN. SCAVENGERS AND SCRAPER DEPLOYED")
     yield 1.0
     return world

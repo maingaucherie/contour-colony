@@ -9,6 +9,7 @@ from game.content import world as W
 from game.content.items import ITEMS
 from game.render.hershey import draw_text, line_height
 from game.sim import conveyors as CONV
+from game.sim import massdriver as MD
 from game.sim import production as P
 from game.sim import wear
 from game.sim import units as US
@@ -155,6 +156,8 @@ def _structure_lines(world, s):
         used = sum(1 for u in s.dock_users if u is not None)
         what = "CHARGING DOCKS" if spec.get("charge_slots") else "UNLOADING DOCKS"
         lines.append((f"{what} {used}/{len(s.docks)} IN USE", 1, D.COLOR_TEXT_DIM))
+    if s.kind == MD.KIND:
+        lines.extend(_mass_driver_lines(world, s))
     if s.kind == "conveyor":
         lines.extend(_conveyor_lines(world, s))
     if s.kind == "road":
@@ -191,6 +194,27 @@ def _structure_lines(world, s):
             if world.unlocked(kind):
                 lines.append((f"{i + 1}  {spec_u['name'].upper()}: {cost_text(spec_u['bay_cost'])}", 1, D.COLOR_FLOW))
     return lines
+
+
+def _mass_driver_lines(world, s):
+    out = []
+    phases = MD.phases(s)
+    ph = MD.current(s)
+    for i, p in enumerate(phases):
+        mark = "DONE" if i < s.phase else ("NOW" if i == s.phase else "")
+        out.append((f"PHASE {i + 1}  {p['name'].upper():12s} {mark}", 1, D.COLOR_TEXT if i == s.phase else D.COLOR_TEXT_DIM))
+    if ph is not None:
+        out.append((f"DELIVERING FOR {ph['name'].upper()}", 1, D.COLOR_TEXT, ("bar", MD.progress(s))))
+        for k, n in ph["needs"].items():
+            got = min(s.inputs.get(k, 0), n)
+            out.append((f"  {ITEMS[k]['name'].upper():14s} {got:4d}/{n}", 1,
+                        D.COLOR_FLOW if got >= n else D.COLOR_TEXT_DIM))
+        out.append(("HAULERS AND CONVEYORS DELIVER; EACH PHASE OPENS RESEARCH", 1, D.COLOR_TEXT_DIM))
+    else:
+        state = "FIRED" if s.status == MD.FIRED else ("CHARGING" if s.powered else "WAITING FOR POWER")
+        out.append((f"LAUNCH    {state}  {s.spec['launch_kw']:.0f} KW FOR {s.spec['launch_charge_s']:.0f} S", 1,
+                    D.COLOR_TEXT, ("bar", MD.progress(s))))
+    return out
 
 
 def _conveyor_lines(world, c):

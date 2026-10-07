@@ -11,6 +11,7 @@ reserved at both ends until it delivers or drops the job.
 import math
 
 from game.content import world as W
+from game.sim import massdriver
 from game.sim import production as P
 from game.sim import units as UN
 
@@ -19,7 +20,20 @@ def _reserved(d):
     return sum(d.values())
 
 
+def construction_needs(world):
+    """{item: count} construction sites still need from storage."""
+    need = {}
+    for s in world.structures.values():
+        if not s.built:
+            for item, n in s.materials_needed().items():
+                need[item] = need.get(item, 0) + n
+    return need
+
+
 def offers(world):
+    """Production outputs, and stored goods except what construction sites
+    still need (storage keeps that back, so building never starves)."""
+    keep = construction_needs(world)
     for s in world.structures.values():
         if not s.built:
             continue
@@ -31,6 +45,10 @@ def offers(world):
         if s.stores():
             for item, n in s.storage.items():
                 avail = n - s.reserved_out.get(item, 0)
+                held = min(keep.get(item, 0), max(0, avail))
+                if held:
+                    keep[item] -= held
+                    avail -= held
                 if avail > 0:
                     yield s, item, avail, "storage"
 
@@ -48,6 +66,11 @@ def requests(world):
                 space = P.input_cap(s, item) - s.inputs.get(item, 0) - s.reserved_in.get(item, 0)
                 if space > 0:
                     yield s, item, space, mult
+        if s.kind == massdriver.KIND:
+            for item, left in massdriver.needs(s).items():
+                space = left - s.reserved_in.get(item, 0)
+                if space > 0:
+                    yield s, item, space, W.JOB_MASS_DRIVER_MULT
         if s.spec.get("export_bay") and contracts is not None:
             for item, remaining in contracts.needs().items():
                 space = remaining - s.reserved_in.get(item, 0)

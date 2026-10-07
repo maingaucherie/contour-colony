@@ -41,6 +41,12 @@ class Unit:
     haul: tuple | None = None        # hauler: (source id, dest id, item, amount)
     survey_at: tuple | None = None   # survey rover: the field spot it's going to survey
     order: tuple | None = None       # direct order: ("move" | "survey", x, y)
+    zone: tuple | None = None        # scraper: centre of the area it sweeps
+    lane: int = 0                    # scraper: next pass to sweep
+    scraped: float = 0.0             # scraper: cells scraped toward the next load
+    pass_end: tuple | None = None    # scraper: where the current pass ends
+    blade_odo: float = 0.0           # scraper: odometer when last counted
+    blade_cell: int = -1             # scraper: cell last scraped
     path: list = field(default_factory=list)
     path_left: float = 0.0           # cells of path still to drive
     odometer: float = 0.0            # cells driven on the current path
@@ -85,9 +91,9 @@ def make_unit(world, uid, kind, x, y):
 
 
 def brain(unit):
-    from game.sim import constructor, drone, hauler, scavenger, surveyor
+    from game.sim import constructor, drone, hauler, scavenger, scraper, surveyor
     return {"scavenger": scavenger, "constructor": constructor, "survey_rover": surveyor,
-            "hauler": hauler, "maintenance_drone": drone}[unit.kind]
+            "hauler": hauler, "maintenance_drone": drone, "scraper": scraper}[unit.kind]
 
 
 def flies(unit):
@@ -438,6 +444,8 @@ def _move(world, unit):
     dt = 1.0 / W.TICK_RATE
     factor = 1.0 if flies(unit) else world.grid.cell_factor(unit.x, unit.y)
     remaining = spec["base_speed_cells_per_s"] * dt / factor
+    if unit.activity == "scraping":
+        remaining *= spec["scrape_speed_fraction"]
     moved = 0.0
     while remaining > 0.0 and unit.path:
         tx, ty = unit.path[0]

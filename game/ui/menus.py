@@ -4,8 +4,8 @@ import pygame
 
 from game.content import display as D
 from game.content.research import RESEARCH, RESEARCH_MENU
-from game.content.structures import BUILD_MENU, STRUCTURES
-from game.render.hershey import draw_text, line_height
+from game.content.structures import BUILD_CATEGORIES, STRUCTURES
+from game.render.hershey import draw_text, line_height, text_width
 
 BUILD_KEYS = "1234567890"
 
@@ -40,19 +40,21 @@ def _panel(surface, x, y, w, lines, title, cursor=None, selectable=0):
     return rect, rows
 
 
-def build_entries(world):
-    """Every buildable structure; the first ten also get a number key."""
+def build_entries(world, tab=0):
+    """The structures in one build category, each with a number key."""
     out = []
-    for i, kind in enumerate(BUILD_MENU):
+    for i, kind in enumerate(BUILD_CATEGORIES[tab][1]):
         key = BUILD_KEYS[i] if i < len(BUILD_KEYS) else " "
         spec = STRUCTURES[kind]
         out.append((key, kind, spec, world.unlocked(kind)))
     return out
 
 
-def draw_build_menu(surface, world, x, y, cursor=None):
-    lines = []
-    for key, kind, spec, unlocked in build_entries(world):
+def draw_build_menu(surface, world, x, y, cursor=None, tab=0):
+    """The build panel: category tabs on top, then that category's structures.
+    Returns (panel rect, [row rects], [(tab rect, tab index)])."""
+    lines = [("", D.COLOR_TEXT)]   # room for the tabs, drawn below
+    for key, kind, spec, unlocked in build_entries(world, tab):
         if "credits_per_cell" in spec:
             cost = f"{spec['credits_per_cell']} CR PER CELL + GRADING"
         elif "cost_per_cell" in spec:
@@ -69,15 +71,28 @@ def draw_build_menu(surface, world, x, y, cursor=None):
         else:
             need = RESEARCH[spec["unlocked_by"]]["name"].upper()
             lines.append(([(0, key), (c1, spec["name"].upper()), (c2, "RESEARCH " + need)], D.COLOR_TEXT_DIM))
-    n = len(lines)
     lines.append(("", D.COLOR_TEXT_DIM))
-    lines.append(("UP/DOWN + ENTER, CLICK, OR A NUMBER   ESC: CLOSE", D.COLOR_TEXT_DIM))
-    return _panel(surface, x, y, D.MENU_WIDTH, lines, "BUILD", cursor, n)
+    lines.append(("LEFT/RIGHT: CATEGORY   UP/DOWN + ENTER, CLICK OR A NUMBER   ESC: CLOSE", D.COLOR_TEXT_DIM))
+    rows_n = len(lines) - 2
+    rect, rows = _panel(surface, x, y, D.MENU_WIDTH, lines, "BUILD", None if cursor is None else cursor + 1, rows_n)
+    tabs = []
+    tx, ty = x + 10, rows[0].y
+    for i, (name, _) in enumerate(BUILD_CATEGORIES):
+        label = name.upper()
+        w = text_width(label) + 12
+        r = pygame.Rect(tx - 4, ty, w, rows[0].height)
+        if i == tab:
+            pygame.draw.rect(surface, D.COLOR_MENU_CURSOR, r)
+            pygame.draw.rect(surface, D.COLOR_FLOW, r, 1)
+        draw_text(surface, label, (tx + 2, ty), 1, D.COLOR_TEXT if i == tab else D.COLOR_TEXT_DIM, additive=True)
+        tabs.append((r, i))
+        tx += w + 6
+    return rect, rows[1:], tabs
 
 
-def build_key(world, key):
+def build_key(world, key, tab=0):
     """Structure kind for a pressed key, if it is unlocked."""
-    for k, kind, spec, unlocked in build_entries(world):
+    for k, kind, spec, unlocked in build_entries(world, tab):
         if k == key and unlocked:
             return kind
     return None
@@ -97,6 +112,8 @@ def draw_research(surface, world, cursor=None):
         elif status == "available":
             text = f"{spec['cost']:4d} CR  {spec['time_s']:3d} S"
             color = D.COLOR_TEXT if world.credits >= spec["cost"] and r.current is None else D.COLOR_TEXT_DIM
+        elif status == "waiting":
+            text, color = f"AFTER MASS DRIVER PHASE {spec['phase']}", D.COLOR_TEXT_DIM
         else:
             need = ", ".join(RESEARCH[p]["name"].upper() for p in spec["requires"] if p not in r.done)
             text, color = f"NEEDS {need}", D.COLOR_TEXT_DIM

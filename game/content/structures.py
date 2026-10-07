@@ -15,6 +15,8 @@ requires_field   only on a confirmed (survey level 2) field of this kind; mines
                  run their recipe faster on richer fields (time / richness), and
                  slow down as the field's reserves run out (see world.py)
 recipe           per cycle: consume "in", after time_s produce "out"
+picks_one        the recipe yields ONE of its outputs per cycle, picked at random
+                 with the weights in sorts[zone of the ground it stands on]
 sun_speed        recipe speed from the darkest to the brightest ground (a solar concentrator)
 heat             warms up while working and cools when idle; runs at heat x
                  speed, never slower than cold_speed
@@ -24,6 +26,8 @@ accepts          storage that takes only these items (the default is anything)
 cost_per_cell    conveyors: build cost per cell of length (plus build_time_per_cell_s)
 snap             tiles edge to edge with others of its kind on a (dx, dy) lattice
                  instead of keeping a gap; farm_bonus per touching neighbour
+unique           only one may be built
+phases           the mass driver's bills of goods (see massdriver.py)
 unlocked_by      research node, or None when available from the start
 """
 
@@ -31,7 +35,7 @@ STRUCTURES = {
     "lander": {
         "name": "lander", "footprint_cells": 2.2, "max_slope_deg": 5.0,
         "power_kw": 15.0, "grid_reach_cells": 6.0,
-        "storage": 200, "charge_slots": 4, "charge_per_s": 5.0, "dock_radius_cells": 3.2,
+        "storage": 300, "charge_slots": 4, "charge_per_s": 5.0, "dock_radius_cells": 3.2,
         "export_bay": True,          # contract goods delivered here count toward contracts
         "sight_cells": 8.0,          # its own sensors spot debris this close
         "buildable": False,
@@ -50,7 +54,7 @@ STRUCTURES = {
     "scanner": {
         "name": "scanner", "footprint_cells": 0.9, "max_slope_deg": 5.0,
         "build_cost": {"scrap": 12, "parts": 2}, "build_time_s": 10.0,
-        "draw_kw": 6.0, "scan_radius_cells": 110.0, "sweep_period_s": 30.0, "unlocked_by": None,
+        "draw_kw": 6.0, "scan_radius_cells": 240.0, "sweep_period_s": 30.0, "unlocked_by": "prospecting",
     },
     "charging_pad": {
         "name": "charging pad", "footprint_cells": 1.0, "max_slope_deg": 5.0,
@@ -76,19 +80,52 @@ STRUCTURES = {
     "rover_bay": {
         "name": "rover bay", "footprint_cells": 1.3, "max_slope_deg": 5.0,
         "build_cost": {"scrap": 20, "parts": 6}, "build_time_s": 20.0,
-        "draw_kw": 5.0, "unlocked_by": "field_survey",
+        "draw_kw": 5.0, "unlocked_by": None,
+    },
+    "scrap_furnace": {
+        # The first iron: melts down wreckage. As fast as the scavengers can feed it.
+        "name": "scrap furnace", "footprint_cells": 1.0, "max_slope_deg": 5.0,
+        "build_cost": {"scrap": 15, "parts": 2}, "build_time_s": 12.0,
+        "draw_kw": 4.0, "unlocked_by": None,
+        "recipe": {"in": {"scrap": 2}, "out": {"iron": 1}, "time_s": 6.0}, "wear_per_cycle": 0.001,
+    },
+    "sorter": {
+        # Sifts regolith for mineral grains. Each cycle yields ONE of its
+        # outputs, picked at random with the weights of the ground the sorter
+        # stands on (sorts: zone -> weights), so where it is built matters.
+        "name": "sorter", "footprint_cells": 1.0, "max_slope_deg": 5.0,
+        "build_cost": {"scrap": 15, "parts": 3}, "build_time_s": 14.0,
+        "draw_kw": 5.0, "unlocked_by": "sorting",
+        "recipe": {"in": {"regolith": 3}, "out": {"ilmenite": 1, "anorthite": 1, "kreep": 1}, "time_s": 6.0},
+        "picks_one": True,
+        "sorts": {"mare": {"ilmenite": 0.65, "anorthite": 0.3, "kreep": 0.05},
+                  "highlands": {"ilmenite": 0.2, "anorthite": 0.75, "kreep": 0.05},
+                  "kreep": {"ilmenite": 0.15, "anorthite": 0.35, "kreep": 0.5}},
+        "wear_per_cycle": 0.001,
     },
     "ilmenite_mine": {
-        "name": "ilmenite mine", "footprint_cells": 1.1, "max_slope_deg": 5.0,
+        "name": "ilmenite drill", "footprint_cells": 1.1, "max_slope_deg": 5.0,
         "build_cost": {"scrap": 20, "parts": 4}, "build_time_s": 18.0,
-        "draw_kw": 6.0, "requires_field": "ilmenite", "unlocked_by": "extraction",
-        "recipe": {"in": {}, "out": {"ilmenite": 2, "regolith": 1}, "time_s": 6.0}, "wear_per_cycle": 0.0012,
+        "draw_kw": 6.0, "requires_field": "ilmenite", "unlocked_by": "prospecting",
+        "recipe": {"in": {}, "out": {"ilmenite": 2}, "time_s": 6.0}, "wear_per_cycle": 0.0012,
+    },
+    "anorthite_mine": {
+        "name": "anorthite drill", "footprint_cells": 1.1, "max_slope_deg": 5.0,
+        "build_cost": {"scrap": 20, "parts": 4}, "build_time_s": 18.0,
+        "draw_kw": 6.0, "requires_field": "anorthite", "unlocked_by": "prospecting",
+        "recipe": {"in": {}, "out": {"anorthite": 2}, "time_s": 6.0}, "wear_per_cycle": 0.0012,
+    },
+    "kreep_mine": {
+        "name": "KREEP drill", "footprint_cells": 1.1, "max_slope_deg": 5.0,
+        "build_cost": {"sinter": 15, "parts": 4}, "build_time_s": 18.0,
+        "draw_kw": 6.0, "requires_field": "kreep", "unlocked_by": "prospecting",
+        "recipe": {"in": {}, "out": {"kreep": 1}, "time_s": 6.0}, "wear_per_cycle": 0.0012,
     },
     "ice_mine": {
-        "name": "ice mine", "footprint_cells": 1.1, "max_slope_deg": 5.0,
+        "name": "ice drill", "footprint_cells": 1.1, "max_slope_deg": 5.0,
         "build_cost": {"scrap": 20, "parts": 4}, "build_time_s": 18.0,
-        "draw_kw": 6.0, "requires_field": "ice", "unlocked_by": "extraction",
-        "recipe": {"in": {}, "out": {"ice": 2, "regolith": 1}, "time_s": 8.0}, "wear_per_cycle": 0.0012,
+        "draw_kw": 6.0, "requires_field": "ice", "unlocked_by": "prospecting",
+        "recipe": {"in": {}, "out": {"ice": 2}, "time_s": 8.0}, "wear_per_cycle": 0.0012,
     },
     "crusher": {
         "name": "crusher", "footprint_cells": 1.1, "max_slope_deg": 5.0,
@@ -106,7 +143,7 @@ STRUCTURES = {
     "sinter_kiln": {
         "name": "sinter kiln", "footprint_cells": 1.1, "max_slope_deg": 5.0,
         "build_cost": {"scrap": 15, "parts": 3}, "build_time_s": 15.0,
-        "draw_kw": 10.0, "unlocked_by": "sintering",
+        "draw_kw": 10.0, "unlocked_by": None,
         "recipe": {"in": {"regolith": 3}, "out": {"sinter": 1}, "time_s": 5.0}, "wear_per_cycle": 0.001,
         "sun_speed": (0.5, 1.4),
     },
@@ -126,8 +163,8 @@ STRUCTURES = {
     },
     "machine_shop": {
         "name": "machine shop", "footprint_cells": 1.2, "max_slope_deg": 5.0,
-        "build_cost": {"sinter": 20, "parts": 6}, "build_time_s": 25.0,
-        "draw_kw": 8.0, "unlocked_by": "reduction",
+        "build_cost": {"scrap": 20, "parts": 4}, "build_time_s": 25.0,
+        "draw_kw": 8.0, "unlocked_by": None,
         "recipe": {"in": {"iron": 2}, "out": {"parts": 1}, "time_s": 6.0}, "wear_per_cycle": 0.0012,
     },
     "maintenance_hangar": {
@@ -136,6 +173,23 @@ STRUCTURES = {
         "build_cost": {"sinter": 20, "parts": 4}, "build_time_s": 25.0,
         "draw_kw": 3.0, "charge_slots": 2, "charge_per_s": 6.0, "dock_radius_cells": 1.9,
         "storage": 30, "accepts": ("parts",), "unlocked_by": "maintenance",
+    },
+    "mass_driver": {
+        # The goal. Built once, then completed in phases: each phase is a bill
+        # of goods delivered like any other (haulers, conveyors), and each one
+        # finished opens the next tier of research. After the last bill it
+        # charges for launch_charge_s, drawing launch_kw, and fires: the site
+        # is won.
+        "name": "mass driver", "footprint_cells": 3.0, "max_slope_deg": 5.0,
+        "build_cost": {"scrap": 40, "parts": 8}, "build_time_s": 40.0,
+        "unlocked_by": None, "unique": True,
+        "phases": (
+            {"name": "foundation", "needs": {"sinter": 150, "iron": 40}},
+            {"name": "rails", "needs": {"iron": 300, "parts": 150, "aluminium": 120}},
+            {"name": "coils", "needs": {"parts": 300, "titanium": 150, "electronics": 100}},
+            {"name": "launch", "needs": {"frames": 200, "electronics": 150}},
+        ),
+        "launch_kw": 400.0, "launch_charge_s": 60.0,
     },
     "conveyor": {
         # A belt from one building to another (see conveyors.py), placed by
@@ -155,10 +209,16 @@ STRUCTURES = {
     },
 }
 
-# Order of the build menu.
-BUILD_MENU = ("solar", "pylon", "scanner", "charging_pad", "depot", "outpost", "rover_bay",
-              "ilmenite_mine", "ice_mine", "crusher", "ice_melter", "sinter_kiln",
-              "electrolyzer", "reduction_furnace", "machine_shop", "maintenance_hangar", "conveyor", "road")
+# The build menu: one tab per category, in this order.
+BUILD_CATEGORIES = (
+    ("goal", ("mass_driver",)),
+    ("power", ("solar", "pylon")),
+    ("gather", ("rover_bay", "scanner", "ilmenite_mine", "anorthite_mine", "kreep_mine", "ice_mine")),
+    ("process", ("scrap_furnace", "sinter_kiln", "sorter", "crusher", "ice_melter", "electrolyzer",
+                 "reduction_furnace", "machine_shop")),
+    ("logistics", ("charging_pad", "depot", "outpost", "road", "conveyor", "maintenance_hangar")),
+)
+BUILD_MENU = tuple(kind for _, kinds in BUILD_CATEGORIES for kind in kinds)
 
 # Production buffers: inputs hold this many cycles' worth of each ingredient,
 # but at least INPUT_BUFFER_MIN (so a full hauler load fits); outputs hold

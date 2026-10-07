@@ -61,8 +61,6 @@ class Contracts:
         self.next_offer_s = self.mode["first_contract_s"]
         self.reputation = float(C.REPUTATION_START)
         self.credits_earned = 0
-        self.standing_streak = 0
-        self.drops_since_standing = 0
         self.log = []                  # (time_s, text) of finished contracts
 
     def set_mode(self, mode):
@@ -109,9 +107,6 @@ class Contracts:
         world.event(f"CONTRACT ACCEPTED: {c.qty} {ITEMS[c.good]['name'].upper()} IN {int(c.minutes)} MIN", "contract")
         return True, ""
 
-    def note_drop(self):
-        self.drops_since_standing += 1
-
     def update(self, world):
         now = world.time_s()
         mode = self.mode
@@ -136,11 +131,6 @@ class Contracts:
             if now - c.offered_s > C.OFFER_WINDOW_S:
                 self.offers.remove(c)
                 world.event(f"OFFER WITHDRAWN: {ITEMS[c.good]['name'].upper()}")
-        if (self.filled >= C.STANDING_AFTER and not any(c.standing for c in self.open)
-                and any(s.kind == C.STANDING_REQUIRES and s.built for s in world.structures.values())):
-            c = self._issue(now, C.STANDING, standing=True)
-            world.event(f"STANDING CONTRACT: {c.qty} {ITEMS[c.good]['name'].upper()} EVERY "
-                        f"{C.STANDING['minutes']} MIN - FILL IT {C.STANDING_WINS}X WITHOUT SUPPLY DROPS", "contract")
 
         # Goods already sitting in the lander's hold ship too, except building
         # materials (those stay for construction; haulers bring contract parts
@@ -166,9 +156,10 @@ class Contracts:
         if mode["drain_per_min"] and now > C.REPUTATION_DRAIN_GRACE_S:
             self.reputation -= mode["drain_per_min"] / 60.0 / W.TICK_RATE
         self.reputation = min(self.reputation, C.REPUTATION_MAX)
-        if self.reputation <= 0 and world.outcome is None:
+        if self.reputation <= 0:
             self.reputation = 0.0
-            world.finish("lost", "REPUTATION GONE: THE CONSORTIUM HAS PULLED THE PLUG")
+            if mode["can_lose"] and world.outcome is None:
+                world.finish("lost", "REPUTATION GONE: THE CONSORTIUM HAS PULLED THE PLUG")
 
     def receive(self, world, item, amount):
         """Goods arriving at the export bay: credit open contracts, oldest first.
@@ -196,18 +187,11 @@ class Contracts:
         world.event(f"CONTRACT FILLED{'' if on_time else ' LATE'}: {c.qty} {name} +{pay} CR"
                     + (f" +{C.REPUTATION_ON_TIME} REP" if on_time else ""), "contract")
         self.log.append((now, f"{'filled' if on_time else 'late'} {c.qty} {c.good}"))
-        if c.standing:
-            self.standing_streak = self.standing_streak + 1 if self.drops_since_standing == 0 else 1
-            self.drops_since_standing = 0
-            if self.standing_streak >= C.STANDING_WINS:
-                world.finish("won", "SITE SELF-SUFFICIENT: HANDED OFF TO THE CONSORTIUM")
 
     def _expire(self, world, c):
         self.open.remove(c)
         self.expired += 1
         self.reputation += C.REPUTATION_EXPIRED
-        if c.standing:
-            self.standing_streak = 0
         world.event(f"CONTRACT EXPIRED: {ITEMS[c.good]['name'].upper()} {C.REPUTATION_EXPIRED} REP", "alert")
         self.log.append((world.time_s(), f"expired {c.qty} {c.good}"))
 

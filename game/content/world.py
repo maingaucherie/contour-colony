@@ -30,9 +30,9 @@ LANDER_CENTRE_PENALTY = 0.02         # node cost added per node of distance from
 LANDER_MIN_REACH_FRACTION = 0.3
 
 # Debris.
-DEBRIS_MAX = 40
-DEBRIS_INITIAL = 40
-DEBRIS_SPAWN_INTERVAL_S = 20.0
+DEBRIS_MAX = 80
+DEBRIS_INITIAL = 80
+DEBRIS_SPAWN_INTERVAL_S = 8.0
 DEBRIS_SCRAP_VALUE = 1
 DEBRIS_MIN_SPACING_CELLS = 1.0
 DEBRIS_SPAWN_ATTEMPTS = 20
@@ -50,7 +50,7 @@ DEBRIS_PROXIMITY_FLOOR = 0.05
 # Starting stock. Machine parts only come from the lander's hold (and, from
 # Milestone 4, supply drops) until a machine shop runs.
 START_CREDITS = 300
-START_STORAGE = {"scrap": 100, "parts": 40}
+START_STORAGE = {"scrap": 100, "parts": 50}
 
 # Survey: levels are tracked on a grid of SURVEY_CELLS x SURVEY_CELLS terrain cells.
 SURVEY_CELLS = 2
@@ -144,3 +144,4 @@ JOB_DISTANCE_BIAS = 10.0
 JOB_PRIORITY_MULT = {"high": 2.0, "normal": 1.0, "low": 0.5}
 JOB_STORAGE_MULT = 0.25
 JOB_EXPORT_MULT = 3.0
+JOB_MASS_DRIVER_MULT = 2.5           # goods for the mass driver's current phase (ahead of production)

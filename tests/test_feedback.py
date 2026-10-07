@@ -124,6 +124,7 @@ class ScannerAndSightTests(unittest.TestCase):
 
     def test_scanner_reveals_debris_and_signals_fields(self):
         w = make_world(2)
+        w.research.done.add("prospecting")
         scanner = build(w, "scanner", (w.lander.x, w.lander.y), 3, 8)
         radius = scanner.spec["scan_radius_cells"]
         period = int(scanner.spec["sweep_period_s"] * W.TICK_RATE)
