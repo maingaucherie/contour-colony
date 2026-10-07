@@ -56,6 +56,7 @@ UNIT_GOALS = (("hauler", 2, None), ("scraper", 2, "sinter_kiln"), ("scavenger", 
 MAX_DEPOTS = 10
 STORAGE_SELL_FROM = 0.85   # storage this full: sell surplus the goal doesn't need ...
 STORAGE_KEEP = 40          # ... down toward this many
+PARTS_PLENTY = 60         # with this many parts in stock the mass driver gets high priority
 UNIT_PARTS_RESERVE = 4     # keep this many parts spare after ordering a unit
 OUTPOST_PARTS_SPARE = 20   # build outposts (rather than pads) only with this many parts in stock
 HAULER_DROP_LIMIT = 6      # buy haulers by supply drop up to this many when loads pile up
@@ -469,6 +470,8 @@ class Bot:
         md = massdriver.find(self.w)
         if md is not None and md.built:
             want = "low" if self.missing().get("parts", 0) > 0 or self.w.stock("parts") < 10 else "normal"
+            if want == "normal" and self.w.stock("parts") > PARTS_PLENTY:
+                want = "high"   # parts to spare: the goal comes first
             if md.status == massdriver.CHARGING:
                 want = "high"
             if md.priority != want:
