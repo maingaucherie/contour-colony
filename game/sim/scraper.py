@@ -10,6 +10,9 @@ to the nearest storage. Lumpy ground it scrapes often enough is levelled
 (World.scrape). When colony storage holds all the regolith it may, scrapers
 wait.
 
+A scraper whose zone gets built over, or is crowded by other scrapers,
+moves its zone to the nearest open ground by itself (_new_zone).
+
 Helium harvesters use this brain too. They process the regolith on board and
 keep only what their spec `gathers` (helium-3), one per cells_per_load cells
 scraped, times the yield of the zone they are scraping (yield_by_zone).
@@ -17,6 +20,7 @@ scraped, times the yield of the zone they are scraping (yield_by_zone).
 
 import math
 
+from game.content import units as U
 from game.sim import geology as G
 from game.sim import units as UN
 
@@ -33,16 +37,18 @@ def _lanes(unit):
     return list(range(-n, n + 1))
 
 
-def _blocked_by_structure(world, x, y):
-    for s in world.structures.values():
+def _blocked_by_structure(world, x, y, near=None):
+    for s in near if near is not None else world.structures.values():
         if not s.is_line() and math.hypot(s.x - x, s.y - y) <= s.spec["footprint_cells"] + 0.6:
             return True
     return False
 
 
-def lane_segment(world, unit, k, reverse):
-    """(start, end) of the longest clear stretch of pass k, or None."""
-    cx, cy = unit.zone
+def lane_segment(world, unit, k, reverse, zone=None, near=None):
+    """(start, end) of the longest clear stretch of pass k, or None. zone:
+    another centre to try (default: the unit's); near: the structures that
+    could be in the way (default: all)."""
+    cx, cy = zone or unit.zone
     spec = unit.spec
     r = spec["zone_radius_cells"]
     dy = k * spec["lane_spacing_cells"]
@@ -58,7 +64,7 @@ def lane_segment(world, unit, k, reverse):
     for i in range(steps + 1):
         x = x0 + i
         node = grid.node_at(x, y)
-        clear = grid.open[node] and home.reachable(node) and not _blocked_by_structure(world, x, y)
+        clear = grid.open[node] and home.reachable(node) and not _blocked_by_structure(world, x, y, near)
         if clear and run is None:
             run = x
         if run is not None and (not clear or i == steps):
@@ -97,11 +103,59 @@ def think(world, unit):
         return
     if unit.zone is None:
         unit.zone = (unit.x, unit.y)
+    # Now and then: crowded by other scrapers, or mostly built over? Find new ground.
+    _new_zone(world, unit, only_if_built_over=unit.zone_ordered or not _crowded(world, unit))
     if _start_pass(world, unit):
         return
     if unit.cargo_total() and _go_unload(world, unit):
         return
     UN.head_home(world, unit)  # nothing it can reach to scrape
+
+
+def _crowded(world, unit):
+    r = unit.spec["zone_radius_cells"]
+    others = sum(1 for o in world.units.values() if o is not unit and o.kind == unit.kind and o.zone is not None
+                 and math.hypot(o.zone[0] - unit.zone[0], o.zone[1] - unit.zone[1]) < r)
+    return others >= U.SCRAPERS_PER_ZONE
+
+
+def _clear_fraction(world, unit, zone):
+    r = unit.spec["zone_radius_cells"]
+    near = [s for s in world.structures.values()
+            if abs(s.x - zone[0]) <= r + 3 and abs(s.y - zone[1]) <= r + 3]
+    lanes = _lanes(unit)
+    return sum(1 for k in lanes if lane_segment(world, unit, k, False, zone, near)) / len(lanes)
+
+
+def _new_zone(world, unit, only_if_built_over=False):
+    """Move the zone to the nearest open ground (rings around the old zone,
+    nearest first) that isn't another scraper's. True if it moved. Searches
+    at most every ZONE_SEARCH_EVERY_S, since it is slow. only_if_built_over:
+    only when too few of the zone's passes are still clear."""
+    if world.tick_count - unit.zone_check < U.ZONE_SEARCH_EVERY_S * world.tick_rate:
+        return False
+    unit.zone_check = world.tick_count
+    if only_if_built_over and _clear_fraction(world, unit, unit.zone) >= U.ZONE_MIN_CLEAR_FRACTION:
+        return False
+    r = unit.spec["zone_radius_cells"]
+    size = world.heightmap.size
+    taken = [o.zone for o in world.units.values() if o is not unit and o.kind == unit.kind and o.zone is not None]
+    cx, cy = unit.zone
+    for ring in range(1, U.ZONE_SEARCH_RINGS + 1):
+        d = 2 * r * ring
+        steps = 6 * ring
+        for i in range(steps):
+            a = 2 * math.pi * i / steps
+            zone = (cx + d * math.cos(a), cy + d * math.sin(a))
+            if not (r <= zone[0] <= size - r and r <= zone[1] <= size - r):
+                continue
+            if any(math.hypot(z[0] - zone[0], z[1] - zone[1]) < r for z in taken):
+                continue
+            if _clear_fraction(world, unit, zone) >= 0.5:
+                unit.zone, unit.lane, unit.zone_ordered = zone, 0, False
+                world.event(f"{unit.spec['name'].upper()}: NEW GROUND TO SWEEP", "info")
+                return True
+    return False
 
 
 def _go_unload(world, unit):

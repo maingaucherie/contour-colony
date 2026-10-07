@@ -169,6 +169,13 @@ SCRAPE_FLATTEN_MAX_DEG = 12.0
 SCRAPE_FLATTEN_TO_DEG = 4.5
 SCRAPE_PASSES = 3
 SCRAPE_REPRICE_EVERY_S = 30          # levelled ground is re-costed for routes this often
+# A scraper moves its zone to open ground on its own when fewer than
+# ZONE_MIN_CLEAR_FRACTION of its passes are clear (the colony built over it),
+# or when SCRAPERS_PER_ZONE others already sweep within a zone radius.
+ZONE_MIN_CLEAR_FRACTION = 0.3
+SCRAPERS_PER_ZONE = 2
+ZONE_SEARCH_RINGS = 6                # looks this many zone widths out, nearest first
+ZONE_SEARCH_EVERY_S = 60             # ... and no more often than this
 
 FIELD_RANGE_MARGIN = 1.1             # a rover's route search reaches this times its full-battery range
 TRIP_SAFETY_FACTOR = 1.25            # planned energy is multiplied by this before checking range

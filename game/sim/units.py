@@ -47,6 +47,8 @@ class Unit:
     pass_end: tuple | None = None    # scraper: where the current pass ends
     blade_odo: float = 0.0           # scraper: odometer when last counted
     blade_cell: int = -1             # scraper: cell last scraped
+    zone_check: int = -10 ** 9       # scraper: tick it last looked for new ground
+    zone_ordered: bool = False       # scraper: the player chose its zone (it stays, however crowded)
     path: list = field(default_factory=list)
     path_left: float = 0.0           # cells of path still to drive
     odometer: float = 0.0            # cells driven on the current path

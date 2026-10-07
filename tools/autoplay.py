@@ -35,9 +35,11 @@ FACTORY = (("crusher", ("ilmenite_mine", "sorter")), ("aluminium_cell", ("anorth
            ("reduction_furnace", ("crusher",)), ("fabrication_line", ("aluminium_cell",)),
            ("titanium_refinery", ("reduction_furnace",)), ("frame_works", ("titanium_refinery",)),
            ("rare_earth_separator", ("kreep_mine", "sorter")), ("electronics_plant", ("rare_earth_separator",)))
+# ... but not before the bill that needs it (frames would eat the Coils' titanium).
+FACTORY_FROM_PHASE = {"frame_works": 3}
 # Scaling up for the later bills: (mass driver phases done, kind, how many).
 SCALE = ((1, "sorter", 3), (2, "sorter", 4), (2, "aluminium_cell", 2), (2, "crusher", 2), (2, "reduction_furnace", 2), (2, "titanium_refinery", 2), (2, "electrolyzer", 2),
-         (2, "fabrication_line", 2), (3, "frame_works", 2), (3, "titanium_refinery", 3), (3, "reduction_furnace", 3),
+         (2, "fabrication_line", 2), (3, "titanium_refinery", 3), (3, "reduction_furnace", 3),
          (3, "crusher", 3), (3, "electronics_plant", 2), (3, "aluminium_cell", 3), (3, "frame_works", 3))
 MINES = (("ilmenite_mine", "ilmenite"), ("anorthite_mine", "anorthite"), ("ice_mine", "ice"), ("kreep_mine", "kreep"))
 SELL_ABOVE = {"sinter": 120, "regolith": 120, "anorthite": 80, "ilmenite": 80, "kreep": 40, "titania": 40,
@@ -240,6 +242,8 @@ class Bot:
                 if self.mine(kind, field_kind) or self.outpost(field_kind):
                     return
         for kind, sources in FACTORY:
+            if w.research.phase < FACTORY_FROM_PHASE.get(kind, 0):
+                continue
             if w.unlocked(kind) and not self.count(kind):
                 if not any(self.count(k, built_only=True) for k in sources):
                     continue

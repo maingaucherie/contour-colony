@@ -1,5 +1,6 @@
 """Act I: scrapers, the sorter, the scrap furnace, construction priority and the mass driver."""
 
+import math
 import unittest
 
 from game.content import units as U
@@ -63,6 +64,25 @@ class ScraperTests(unittest.TestCase):
         save.apply(fresh, save.read(save.dumps(w)))
         self.assertEqual(fresh.slopes[lumpy], U.SCRAPE_FLATTEN_TO_DEG)
         self.assertIn(lumpy, fresh.flattened)
+
+    def test_a_built_over_zone_is_left_for_open_ground(self):
+        w = make_world(2)
+        u = scraper(w)
+        u.zone = (w.lander.x, w.lander.y)
+        r = u.spec["zone_radius_cells"]
+        for _ in range(60):   # cover the zone in buildings
+            try:
+                x, y = find_spot(w, "solar", u.zone, 0.0, r)
+            except AssertionError:
+                break
+            s = ST.Structure(w.new_id(), "solar", x, y)
+            w.structures[s.id] = s
+            ST.complete(w, s)
+        old = u.zone
+        for _ in range(minutes(2)):
+            w.tick()
+        self.assertNotEqual(u.zone, old)
+        self.assertGreaterEqual(math.hypot(u.zone[0] - old[0], u.zone[1] - old[1]), 2 * r - 1e-6)
 
     def test_ordering_a_scraper_moves_its_zone(self):
         w = make_world(2)
