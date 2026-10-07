@@ -10,6 +10,7 @@ scavengers. A player order ("survey here") overrides that.
 
 import math
 
+from game.content import units as U
 from game.content import world as W
 from game.sim import units as UN
 
@@ -26,12 +27,28 @@ def start_linger(world, unit):
     UN.work(unit, "surveying", _linger_s(world, unit))
 
 
+# Stand points only change when the routes do (new chargers, roads, levelled
+# ground make new home and charge fields), so they are kept until then.
+_stand_cache = {"fields": None, "points": {}}
+
+
 def stand_point(world, x, y, reach):
     """Where a rover should stand to survey (x, y) in detail: of the point
     itself and spots within reach around it, the one closest to a charger by
     road (so a field across a cliff is surveyed from the near side). None when
     every spot is walled in."""
     grid, home, cf = world.grid, world.home_field, world.charge_field
+    fields = _stand_cache["fields"]
+    if fields is None or fields[0] is not home or fields[1] is not cf:
+        _stand_cache["fields"], _stand_cache["points"] = (home, cf), {}
+    key = (x, y, reach)
+    points = _stand_cache["points"]
+    if key not in points:
+        points[key] = _stand_point(world, grid, home, cf, x, y, reach)
+    return points[key]
+
+
+def _stand_point(world, grid, home, cf, x, y, reach):
     size = world.heightmap.size
     best = None
     candidates = [(x, y)] + [(x + reach * k / 4 * math.cos(math.radians(a)), y + reach * k / 4 * math.sin(math.radians(a)))
@@ -55,6 +72,10 @@ def _targets(world, unit, f):
     grid = world.grid
     linger_energy = _linger_s(world, unit) * unit.spec["linger_drain_per_s"]
     reach = unit.spec["linger_radius_cells"] + W.SURVEY_CELLS * 0.75
+    # UN.can_afford, worked out once: the cost-cells a trip may take.
+    spare = unit.battery - UN.reserve(world, unit)
+    per_cell = unit.spec["drain_per_cost_cell"] * U.TRIP_SAFETY_FACTOR
+    level_at, charge_dist = world.survey.level_at, world.charge_field.dist
     best = None
     unit_far = None   # nearest field spot out of range from here, for a top-up on the way
     for fld in world.fields:
@@ -65,7 +86,7 @@ def _targets(world, unit, f):
         edge = [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(fld.boundary, fld.boundary[1:])]
         remaining = 0
         for x, y in fld.sample_points(unit.spec["linger_radius_cells"]) + edge:
-            if world.survey.level_at(x, y) >= 2:
+            if level_at(x, y) >= 2:
                 continue
             stand = stand_point(world, x, y, reach)
             if stand is None:
@@ -75,7 +96,7 @@ def _targets(world, unit, f):
             d = f.dist[node]
             if d == math.inf:
                 continue
-            if not UN.can_afford(world, unit, d + world.charge_field.dist[node], linger_energy):
+            if (d + charge_dist[node]) * per_cell + linger_energy > spare:
                 if unit_far is None or d < unit_far[0]:
                     unit_far = (d, stand, linger_energy)
                 continue
@@ -93,12 +114,10 @@ def _targets(world, unit, f):
             return ("relay", r)
     for node in range(grid.n * grid.n):
         d = f.dist[node]
-        if d == math.inf or d < grid.node_cells:
+        if d == math.inf or d < grid.node_cells or (d + charge_dist[node]) * per_cell > spare:
             continue
         x, y = grid.node_centre(node)
-        if world.survey.level_at(x, y) >= 1:
-            continue
-        if not UN.can_afford(world, unit, d + world.charge_field.dist[node]):
+        if level_at(x, y) >= 1:
             continue
         if best is None or d < best[0]:
             best = (d, (x, y), None)

@@ -12,6 +12,7 @@ from game.render.hershey import draw_text
 from game.content import contracts as CT
 from game.content import structures as S
 from game.content import units as U
+from game.content import world as W
 from game.sim import conveyors as CONV
 from game.sim import feeds as FEEDS
 from game.sim import massdriver as MD
@@ -33,6 +34,16 @@ def interp(unit, alpha):
 
 def _scale(color, k):
     return tuple(max(0, min(255, int(c * k))) for c in color)
+
+
+def _trail_color(k):
+    """Trail colour k of the way from its oldest point (0) to the unit (1)."""
+    color = tuple(int(o + (f - o) * k) for o, f in zip(D.TRAIL_COLOR_OLD, D.TRAIL_COLOR_FRESH))
+    return _scale(color, k)
+
+
+_TRACK_RAMP = [_scale(D.COLOR_TRACK, D.TRACK_MIN_BRIGHTNESS + (1 - D.TRACK_MIN_BRIGHTNESS) * q / 8) for q in range(9)]
+_TRAIL_RAMP = [_trail_color((b + 1) / D.TRAIL_BANDS) for b in range(D.TRAIL_BANDS)]
 
 
 def _on_screen(sx, sy, margin, w, h):
@@ -77,29 +88,52 @@ def _flicker(now_s, key):
     return lo + (hi - lo) * wave
 
 
+# For one world: field id -> (survey version, revealed boundary runs in world space, segments revealed).
+_field_runs = {"world": None, "runs": {}}
+
+
+def _revealed_runs(world, f):
+    """The stretches of a field's boundary surveyed to level 2 (a segment
+    counts when its midpoint is), worked out again only when the survey changes."""
+    if _field_runs["world"] is not world:
+        _field_runs["world"], _field_runs["runs"] = world, {}
+    cache = _field_runs["runs"]
+    version = world.survey.version
+    hit = cache.get(f.id)
+    if hit is not None and (hit[0] == version or f.survey_done and hit[2] == len(f.boundary) - 1):
+        return hit[1], hit[2]
+    level_at = world.survey.level_at
+    runs, run, revealed = [], [], 0
+    for a, b in zip(f.boundary, f.boundary[1:]):
+        if f.survey_done or level_at((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) >= 2:
+            if not run:
+                run.append(a)
+            run.append(b)
+            revealed += 1
+        elif run:
+            runs.append(run)
+            run = []
+    if run:
+        runs.append(run)
+    cache[f.id] = (version, runs, revealed)
+    return runs, revealed
+
+
 def draw_fields(surface, world, camera, now_s):
     z = camera.zoom
+    w, h = surface.get_size()
     to_screen = camera.world_to_screen
-    level_at = world.survey.level_at
     show_richness_at_1 = world.research.effect("richness_at_level_1", False)
     for f in world.fields:
         if not f.hinted:
             continue
+        sx, sy = to_screen(f.cx, f.cy)
+        if not _on_screen(sx, sy, (f.radius * 1.5 + abs(f.hint_dx) + abs(f.hint_dy)) * z + D.FIELD_LABEL_MARGIN_PX, w, h):
+            continue
         color = D.COLOR_FIELD_ICE if f.kind == "ice" else D.COLOR_FIELD
-        # Revealed boundary: segments whose midpoint is surveyed to level 2.
-        revealed = 0
-        run = []
-        for a, b in zip(f.boundary, f.boundary[1:]):
-            if f.survey_done or level_at((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) >= 2:
-                if not run:
-                    run.append(to_screen(*a))
-                run.append(to_screen(*b))
-                revealed += 1
-            elif run:
-                G.dashed(surface, color, run, D.FIELD_LONG_DASH_PX, D.FIELD_GAP_PX)
-                run = []
-        if run:
-            G.dashed(surface, color, run, D.FIELD_LONG_DASH_PX, D.FIELD_GAP_PX)
+        runs, revealed = _revealed_runs(world, f)
+        for run in runs:
+            G.dashed(surface, color, [to_screen(x, y) for x, y in run], D.FIELD_LONG_DASH_PX, D.FIELD_GAP_PX)
         if revealed < len(f.boundary) - 1:
             # Still uncertain: a flickering dotted ring around roughly the right place.
             hx, hy = to_screen(f.cx + f.hint_dx, f.cy + f.hint_dy)
@@ -110,7 +144,6 @@ def draw_fields(surface, world, camera, now_s):
                 draw_text(surface, f"{f.kind.upper()} SIGNAL?", (hx, hy - 6), 1, _scale(color, 0.8), "center",
                           additive=True)
         if f.confirmed or show_richness_at_1:
-            sx, sy = to_screen(f.cx, f.cy)
             label = f"{f.kind.upper()} {f.richness:.1f}X"
             if f.mined:
                 label += f"  {f.reserves_left() * 100:.0f}% LEFT"
@@ -132,11 +165,13 @@ def draw_tracks(surface, world, camera):
     twin = z >= D.TRACK_TWIN_ZOOM
     gap = D.TRACK_TWIN_GAP_CELLS * z
     n = 0
+    ox, oy = camera.offset()
+    steps = len(_TRACK_RAMP) - 1
     for x, y, a, k in _tracks_cache["items"]:
-        sx, sy = camera.world_to_screen(x, y)
+        sx, sy = x * z + ox, y * z + oy
         if not _on_screen(sx, sy, half, w, h):
             continue
-        color = _scale(D.COLOR_TRACK, D.TRACK_MIN_BRIGHTNESS + (1 - D.TRACK_MIN_BRIGHTNESS) * k)
+        color = _TRACK_RAMP[int(k * steps + 0.5)]
         dx, dy = math.cos(a) * half, math.sin(a) * half
         if twin:
             ox, oy = -math.sin(a) * gap, math.cos(a) * gap
@@ -543,20 +578,25 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
     if lander_lift > 0:
         return segments  # still landing: the rovers are aboard
 
-    # Phosphor trails (world space, so they survive panning and zooming).
+    # Phosphor trails (world space, so they survive panning and zooming):
+    # oldest part dimmest, drawn in a few brightness bands, skipped off screen.
+    ox, oy = camera.offset()
+    reach = U.TRAIL_POINTS / W.TICK_RATE * D.TRAIL_MAX_SPEED_CELLS_PER_S * z
+    bands = len(_TRAIL_RAMP)
     for unit in world.units.values():
+        if not unit.trail:
+            continue
         rx, ry = interp(unit, alpha)
-        points = list(unit.trail)
-        n = len(points)
-        prev = None
-        for i, (x, y) in enumerate(points + [(rx, ry)]):
-            p = to_screen(x, y)
-            if prev is not None and (p[0] != prev[0] or p[1] != prev[1]):
-                k = i / n if n else 1.0
-                color = tuple(int(o + (f - o) * k) for o, f in zip(D.TRAIL_COLOR_OLD, D.TRAIL_COLOR_FRESH))
-                pygame.draw.aaline(surface, _scale(color, k), prev, p)
-                segments += 1
-            prev = p
+        if not _on_screen(rx * z + ox, ry * z + oy, reach, w, h):
+            continue
+        points = [(x * z + ox, y * z + oy) for x, y in unit.trail]
+        points.append((rx * z + ox, ry * z + oy))
+        n = len(points) - 1
+        for b in range(bands):
+            i0, i1 = n * b // bands, n * (b + 1) // bands
+            if i1 > i0:
+                pygame.draw.aalines(surface, _TRAIL_RAMP[b], False, points[i0:i1 + 1])
+        segments += n
 
     rover_half = unit_half_px(z)
     for unit in world.units.values():

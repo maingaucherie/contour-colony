@@ -152,6 +152,11 @@ class App:
         self.world = None
         self.selected = None
         self.shading = None
+        self.terrain = None       # cached terrain layer (see _draw_terrain) and what it was drawn for
+        self.terrain_key = None
+        self.terrain_survey = -1
+        self.terrain_at = 0.0
+        self.terrain_segments = 0
         self.menu = None          # None, "build", "research" or "orbit"
         self.targeting = False    # choosing where an orbital scan goes
         self.board_rects = []     # clickable offers on the contracts board
@@ -665,15 +670,36 @@ class App:
         s = self.world.structures.get(eid)
         return (s.x, s.y) if s else (self.camera.x, self.camera.y)
 
+    def _draw_terrain(self):
+        """Scenery, contours and the site border. They only change when the
+        camera moves, the view changes or the survey grows, so they are drawn
+        into a cached layer and redrawn only then (survey changes at most every
+        TERRAIN_SURVEY_REFRESH_S: a survey rover changes it every tick)."""
+        cam, world = self.camera, self.world
+        if self.shading is None or self.shading.survey is not world.survey:
+            self.shading = draw.ContourShading(world.survey)
+        now = time.perf_counter()
+        view_key = (cam.x, cam.y, cam.zoom, self.view, id(world.survey))
+        survey_due = (world.survey.version != self.terrain_survey
+                      and now - self.terrain_at >= D.TERRAIN_SURVEY_REFRESH_S)
+        if self.terrain is None or view_key != self.terrain_key or survey_due:
+            if self.terrain is None:
+                self.terrain = new_surface(D.SCREEN_SIZE)
+            layer = self.terrain
+            layer.fill(D.COLOR_BACKGROUND)
+            self.terrain_segments = draw.draw_scenery(layer, self.scenery, cam, self.colors[self.view])
+            self.terrain_segments += draw.draw_contours(layer, self.contours, cam, self.colors[self.view],
+                                                        self.shading)
+            draw.draw_site_border(layer, cam)
+            self.terrain_key, self.terrain_survey, self.terrain_at = view_key, world.survey.version, now
+        self.screen.blit(self.terrain, (0, 0))
+        self.segments = self.terrain_segments
+
     def _draw_site(self):
         cam, hm = self.camera, self.heightmap
         tier = tier_for_zoom(cam.zoom)
         world = self.world
-        if self.shading is None or self.shading.survey is not world.survey:
-            self.shading = draw.ContourShading(world.survey)
-        self.segments = draw.draw_scenery(self.screen, self.scenery, cam, self.colors[self.view])
-        self.segments += draw.draw_contours(self.screen, self.contours, cam, self.colors[self.view], self.shading)
-        draw.draw_site_border(self.screen, cam)
+        self._draw_terrain()
         if self.view == "survey" and not self.placing:
             draw.draw_slope_marks(self.screen, world, cam, W.SLOPE_BUILDABLE_DEG, impassable_only=True)
         ghost = None

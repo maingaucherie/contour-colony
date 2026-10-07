@@ -19,6 +19,10 @@ ZOOM_WHEEL_FACTOR = 1.15
 ZOOM_KEY_FACTOR_PER_S = 2.5
 PAN_KEY_SPEED_PX_PER_S = 480.0
 
+# The terrain is drawn into a cached layer, redrawn when the camera moves and,
+# while the survey grows, at most this often.
+TERRAIN_SURVEY_REFRESH_S = 0.5
+
 # Glow (bloom): lines are downscaled by GLOW_DOWNSCALE, scaled back up and
 # added GLOW_GAIN times on top of the frame.
 GLOW_ENABLED = True
@@ -156,6 +160,9 @@ CARGO_PIP_PX = 2
 # Phosphor trails: colour by age from fresh to old, fading out.
 TRAIL_COLOR_FRESH = (200, 255, 210)
 TRAIL_COLOR_OLD = (20, 70, 35)
+FIELD_LABEL_MARGIN_PX = 60        # a field this far off screen may still have its label showing
+TRAIL_BANDS = 5                   # trails fade in this many steps (each one draw call)
+TRAIL_MAX_SPEED_CELLS_PER_S = 10.0  # for skipping trails off screen: the fastest unit, on a road
 
 # Buildable-ground marks: in placement mode around the cursor, and across the
 # screen in survey view.
