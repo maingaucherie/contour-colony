@@ -61,6 +61,17 @@ def fit(text, width, size=1):
     return text.rstrip() + ".."
 
 
+def wrap(text, width, size=1):
+    """text split at spaces into lines no wider than width pixels."""
+    lines = []
+    for word in text.split(" "):
+        if lines and text_width(lines[-1] + " " + word, size) <= width:
+            lines[-1] += " " + word
+        else:
+            lines.append(word)
+    return lines
+
+
 def draw_text(dest, text, pos, size=1, color=D.COLOR_TEXT, align="left", additive=False):
     """Blit cached text. pos is the top-left (or top-right/top-centre).
 

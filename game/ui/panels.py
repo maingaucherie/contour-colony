@@ -7,7 +7,7 @@ from game.content import structures as S
 from game.content import units as U
 from game.content import world as W
 from game.content.items import ITEMS
-from game.render.hershey import draw_text, fit, line_height, text_width
+from game.render.hershey import draw_text, fit, line_height, text_width, wrap
 from game.sim import conveyors as CONV
 from game.sim import geology as G
 from game.sim import massdriver as MD
@@ -238,8 +238,9 @@ def _mass_driver_lines(world, s):
                     f"  NEEDS {spec['ship_kw']:.0f} KW"), 1, D.COLOR_TEXT if s.powered else D.COLOR_ALERT))
         out.append((f"HOLD      {hold}/{spec['ship_hold']}: {spec['ship_batch']} UP EVERY {spec['ship_every_s']:.0f} S",
                     1, D.COLOR_TEXT_DIM, ("bar", hold / spec["ship_hold"])))
-        out.append((f"EXPORTS PAY {spec['ship_price_mult']:.0f}X MARKET: "
-                    + ", ".join(ITEMS[k]["name"].upper() for k in spec["ships"]), 1, D.COLOR_TEXT_DIM))
+        exports = f"EXPORTS PAY {spec['ship_price_mult']:.0f}X MARKET: " + ", ".join(
+            ITEMS[k]["name"].upper() for k in spec["ships"])
+        out += [(line, 1, D.COLOR_TEXT_DIM) for line in wrap(exports, D.PANEL_WIDTH)]
     else:
         state = "FIRED" if s.status == MD.FIRED else ("CHARGING" if s.powered else "WAITING FOR POWER")
         out.append((f"LAUNCH    {state}  {s.spec['launch_kw']:.0f} KW FOR {s.spec['launch_charge_s']:.0f} S", 1,
