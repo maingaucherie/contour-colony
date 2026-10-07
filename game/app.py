@@ -19,6 +19,7 @@ from game.audio.player import Audio
 from game.render import draw, entities
 from game.render.contours import build_contours, tier_for_zoom
 from game.render.glow import Glow
+from game.render.minimap import Minimap
 from game.render.scenery import build_scenery
 from game.render.surfaces import new_surface
 from game.sim.terrain import generate_terrain
@@ -62,6 +63,7 @@ class App:
         self.input = Input()
         self.view = "operations"
         self.show_stats = False   # F shows frame rate and drawing stats
+        self.show_minimap = True  # U hides the minimap
         self.running = True
         self.audio = Audio()
         self.audio_built = False
@@ -100,6 +102,7 @@ class App:
                 self.audio.cycle_mode()
         self.glow_on = bool(data.get("glow", self.glow_on))
         self.show_stats = bool(data.get("stats", self.show_stats))
+        self.show_minimap = bool(data.get("minimap", self.show_minimap))
         if data.get("icons") in D.ICON_STYLES:
             entities.style = data["icons"]
         if data.get("pace") in CT.MODES:
@@ -108,7 +111,7 @@ class App:
     def _save_settings(self):
         storage.save_text(D.SETTINGS_KEY, json.dumps({
             "sound": self.audio.mode, "glow": self.glow_on, "stats": self.show_stats,
-            "icons": entities.style, "pace": self.mode}))
+            "minimap": self.show_minimap, "icons": entities.style, "pace": self.mode}))
 
     def _autosave(self, force=False):
         """Save the site every AUTOSAVE_S of real time (and when asked)."""
@@ -145,6 +148,7 @@ class App:
         self.contours = None
         self.scenery = None
         self.camera = None
+        self.minimap = None
         self.world = None
         self.selected = None
         self.shading = None
@@ -194,6 +198,7 @@ class App:
         self.camera.x, self.camera.y = self.world.lander.x, self.world.lander.y
         self.camera.zoom = D.START_ZOOM
         self.camera.clamp()
+        self.minimap = Minimap(self.world, D.SCREEN_SIZE)
 
     def _step_loader(self):
         deadline = time.perf_counter() + D.LOAD_BUDGET_MS / 1000.0
@@ -318,6 +323,9 @@ class App:
             self._save_settings()
         elif action == "toggle_stats":
             self.show_stats = not self.show_stats
+            self._save_settings()
+        elif action == "minimap":
+            self.show_minimap = not self.show_minimap
             self._save_settings()
         elif action == "toggle_view":
             self.view = D.VIEWS[(D.VIEWS.index(self.view) + 1) % len(D.VIEWS)]
@@ -509,7 +517,11 @@ class App:
                     ok, reason = world.order_unit(bay.id, BAY_MENU[int(ch) - 1])
                     if not ok:
                         world.event(reason, "alert")
-        # Pointer.
+        # Pointer. A click on the minimap looks there, whatever else is going on.
+        if self.show_minimap and self.minimap is not None and self.minimap.contains(inp.click):
+            self.camera.x, self.camera.y = self.minimap.to_world(*inp.click)
+            self.camera.clamp()
+            return
         if self.targeting:
             if inp.click is not None:
                 x, y = self.camera.screen_to_world(*inp.click)
@@ -709,7 +721,8 @@ class App:
         hud.draw_running(self.screen, {
             "seed": self.seed, "view": self.view, "interval": self.contours.interval,
             "cursor": cursor, "cell_m": hm.cell_m, "zoom": cam.zoom, "tier": tier,
-            "show_stats": self.show_stats, "fps": self.clock.get_fps(),
+            "show_stats": self.show_stats,
+            "stats_bottom": self.minimap.rect.top - 4 if self.show_minimap and self.minimap else None, "fps": self.clock.get_fps(),
             "frame_ms": self.frame_ms, "segments": self.segments, "glow": self.glow_on,
             "credits": world.credits, "scrap": world.stock("scrap"), "parts": world.stock("parts"),
             "sinter": world.stock("sinter"), "reputation": world.contracts.reputation,
@@ -725,6 +738,8 @@ class App:
             "saved": time.perf_counter() - self.saved_at < D.SAVED_BLINK_S,
             "complete": world.score() if world.endless else None,
         })
+        if self.show_minimap and self.minimap is not None:
+            self.minimap.draw(self.screen, cam)
         now = time.perf_counter()
         board_bottom, self.board_rects = board.draw_board(self.screen, world, now,
                                                           self.input.mouse if self.input.mouse_inside else None)

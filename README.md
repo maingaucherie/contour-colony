@@ -32,6 +32,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | R | Research panel: Up/Down + Enter or click a row to start a project |
 | K | Contract offers: accept one (or click an offer on the board) |
 | L | Production: everything made per minute, and a graph over the whole run |
+| U | Minimap on / off (click the minimap to look there) |
 | O | Orbit and market: order supply drops (crates or ready-built units, land during the next pass), aim the free orbital scan while the ship is overhead, or sell 10 of any stored good |
 | Left click | Select a unit or structure (inspect panel) |
 | Right click | Order the selected unit: go there, or for a survey rover, survey there; a scraper sent somewhere sweeps there from then on |

@@ -11,6 +11,7 @@ import pygame
 
 from game.content import display as D
 from game.render import draw
+from game.sim import structures as ST
 
 
 def relief(world, size_px):
@@ -61,9 +62,10 @@ class Minimap:
                 color = D.COLOR_FIELD_ICE if f.kind == "ice" else D.COLOR_FIELD
                 pygame.draw.circle(surface, color, (int(cx), int(cy)), r, 1)
         for s in world.structures.values():
-            if s.spec.get("carries") or s.kind == "road":
-                if s.ends:
-                    a, b = s.ends
+            if s.is_line():
+                ends = ST.line_of(world, s)
+                if ends:
+                    a, b = ends
                     color = D.COLOR_FLOW if s.spec.get("carries") else D.COLOR_TEXT_DIM
                     pygame.draw.line(surface, color, self.to_screen(*a), self.to_screen(*b))
                 continue
@@ -71,10 +73,10 @@ class Minimap:
             r = max(1, int(s.spec["footprint_cells"] * self.scale + 0.5))
             if not s.built:
                 color = D.COLOR_TEXT_DIM
-            elif s.kind == "lander" or s.powered or not s.spec.get("power_kw", 0) < 0:
+            elif s.powered or s.draw_kw() <= 0:
                 color = D.COLOR_TEXT
             else:
-                color = D.COLOR_POWER
+                color = D.COLOR_ALERT   # built but unpowered
             pygame.draw.rect(surface, color, (int(x) - r // 2, int(y) - r // 2, max(r, 2), max(r, 2)))
         for u in world.units.values():
             x, y = self.to_screen(u.x, u.y)

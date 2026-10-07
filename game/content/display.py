@@ -86,6 +86,7 @@ KEY_BINDINGS = {
     "orbit": ("o",),
     "contracts": ("k",),
     "production": ("l",),
+    "minimap": ("u",),
     "clock": ("j",),
     "cancel_site": ("delete", "backspace"),
     "quit": ("escape",),
@@ -230,6 +231,12 @@ INTRO_CHARS_PER_S = 70
 INTRO_PANEL_WIDTH = 520
 
 # Panels.
+# Minimap (U to hide): bottom right, above the scale bar. Click it to look there.
+MINIMAP_SIZE_PX = 132
+MINIMAP_BOTTOM_PX = 58            # its bottom edge sits this far above the screen's bottom
+MINIMAP_SLOPE_DARK_DEG = 30.0     # ground this steep is drawn darkest
+MINIMAP_PALETTE = ((0.0, (4, 8, 7)), (0.5, (12, 24, 19)), (1.0, (30, 48, 38)))
+
 PANEL_WIDTH = 340
 PANEL_GAP = 8                     # inspect panel sits this far under the contracts board
 MENU_WIDTH = 560                  # build menu, top left under the HUD

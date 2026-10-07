@@ -156,4 +156,5 @@ def draw_running(surface, info):
     if info["show_stats"]:
         text = (f"FPS {info['fps']:4.1f}  FRAME {info['frame_ms']:4.1f} MS  SEGMENTS {info['segments']}"
                 f"  TIER {info['tier']}  ZOOM {info['zoom']:4.1f}  GLOW {'ON' if info['glow'] else 'OFF'}")
-        draw_text(surface, text, (w - M - 6, by - 5 - 2 * lh), 1, D.COLOR_TEXT_DIM, "right")
+        sy = by - 5 - 2 * lh if info.get("stats_bottom") is None else info["stats_bottom"] - lh
+        draw_text(surface, text, (w - M - 6, sy), 1, D.COLOR_TEXT_DIM, "right")
