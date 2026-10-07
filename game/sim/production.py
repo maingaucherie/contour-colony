@@ -18,7 +18,8 @@ from game.content.items import ITEMS
 from game.sim import geology as G
 from game.sim import wear
 
-WORKING, STARVED, BLOCKED, UNPOWERED, IDLE, BROKEN = "working", "starved", "blocked", "unpowered", "idle", "broken"
+WORKING, STARVED, BLOCKED, UNPOWERED, IDLE, BROKEN, OFF = ("working", "starved", "blocked", "unpowered", "idle",
+                                                          "broken", "off")
 
 
 def recipe(s):
@@ -26,8 +27,9 @@ def recipe(s):
 
 
 def input_cap(s, item):
+    """How much of an ingredient the input buffer holds (none while switched off)."""
     r = recipe(s)
-    if not r or item not in r["in"]:
+    if not r or item not in r["in"] or s.clock == 0:
         return 0
     return max(r["in"][item] * S.INPUT_BUFFER_CYCLES, S.INPUT_BUFFER_MIN)
 
@@ -90,6 +92,9 @@ def update(world, s):
 def _run(world, s, r):
     dt = 1.0 / W.TICK_RATE
     _update_heat(world, s, dt)
+    if s.clock == 0:   # switched off (J): pauses, even mid-cycle
+        s.status = OFF
+        return
     if wear.broken(world, s):
         s.status = BROKEN
         return

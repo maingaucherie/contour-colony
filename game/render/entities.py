@@ -233,7 +233,9 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
     color = D.COLOR_STRUCTURE
     if s.status in (P.STARVED, P.BLOCKED, P.BROKEN) and P.recipe(s):
         color = _scale(D.COLOR_STARVED, 0.6 + 0.4 * (int(now_s * 2) % 2))
-    if not s.powered:
+    if s.status == P.OFF:
+        color = _scale(color, D.OFF_DIM)
+    elif not s.powered:
         color = _scale(color, _flicker(now_s, s.id))
     label = None
     if view in ("power", "flow", "wear"):

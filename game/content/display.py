@@ -244,6 +244,8 @@ MD_PULSE_HZ = 1.2
 MD_LAUNCH_DIRECTION = {"symbols": (1.0, 0.0), "pictorial": (0.866, -0.5)}
 MD_STREAK_S = 2.5
 
+OFF_DIM = 0.4                     # a switched-off building is drawn this bright
+
 PANEL_WIDTH = 340
 PANEL_GAP = 8                     # inspect panel sits this far under the contracts board
 MENU_WIDTH = 560                  # build menu, top left under the HUD

@@ -38,7 +38,7 @@ FACTORY = (("crusher", ("ilmenite_mine", "sorter")), ("aluminium_cell", ("anorth
 # Scaling up for the later bills: (mass driver phases done, kind, how many).
 SCALE = ((1, "sorter", 3), (2, "sorter", 4), (2, "aluminium_cell", 2), (2, "crusher", 2), (2, "reduction_furnace", 2), (2, "titanium_refinery", 2), (2, "electrolyzer", 2),
          (2, "fabrication_line", 2), (3, "frame_works", 2), (3, "titanium_refinery", 3), (3, "reduction_furnace", 3),
-         (3, "crusher", 3), (3, "electronics_plant", 2), (3, "aluminium_cell", 2))
+         (3, "crusher", 3), (3, "electronics_plant", 2), (3, "aluminium_cell", 3), (3, "frame_works", 3))
 MINES = (("ilmenite_mine", "ilmenite"), ("anorthite_mine", "anorthite"), ("ice_mine", "ice"), ("kreep_mine", "kreep"))
 SELL_ABOVE = {"sinter": 120, "regolith": 120, "anorthite": 80, "ilmenite": 80, "kreep": 40, "titania": 40,
               "water": 30, "concentrate": 60, "ice": 60}
@@ -57,6 +57,10 @@ MAX_DEPOTS = 10
 STORAGE_SELL_FROM = 0.85   # storage this full: sell surplus the goal doesn't need ...
 STORAGE_KEEP = 40          # ... down toward this many
 PARTS_PLENTY = 60         # with this many parts in stock the mass driver gets high priority
+SITE_SEARCH_BASE = 26.0          # factory sites within this many cells of the lander ...
+SITE_SEARCH_PER_STRUCTURE = 0.15  # ... and this much further per structure on site
+SITE_SEARCH_MAX = 60.0
+SITE_RETRY_S = 30               # no spot for a kind: don't search for it again for this long
 UNIT_PARTS_RESERVE = 4     # keep this many parts spare after ordering a unit
 OUTPOST_PARTS_SPARE = 20   # build outposts (rather than pads) only with this many parts in stock
 HAULER_DROP_LIMIT = 6      # buy haulers by supply drop up to this many when loads pile up
@@ -76,6 +80,7 @@ class Bot:
     def __init__(self, world, log=None, style="default"):
         self.w = world
         self.style = style
+        self.no_site = {}   # kind -> tick before which factory_site doesn't search again
         self.log = log or (lambda text: None)
         self.last_scan_pass = -1
 
@@ -172,8 +177,20 @@ class Bot:
                 return
 
     def factory_site(self, kind):
-        L = self.w.lander
-        return self.spot(kind, (L.x, L.y), 4.0, 26.0, ok=lambda x, y: self.powered_spot(x, y))
+        """A powered spot near home, searching wider as the colony grows. When
+        there is none, grow the grid outward and don't look again for a while
+        (a full search is slow)."""
+        w = self.w
+        L = w.lander
+        if w.tick_count < self.no_site.get(kind, -1):
+            return None
+        reach = min(SITE_SEARCH_MAX, SITE_SEARCH_BASE + SITE_SEARCH_PER_STRUCTURE * len(w.structures))
+        at = self.spot(kind, (L.x, L.y), 4.0, reach, ok=lambda x, y: self.powered_spot(x, y))
+        if at is None:
+            self.no_site[kind] = w.tick_count + SITE_RETRY_S * W.TICK_RATE
+            a = (w.tick_count // 10) % 8 * math.pi / 4
+            self.connect(L.x + reach * 0.6 * math.cos(a), L.y + reach * 0.6 * math.sin(a))
+        return at
 
     def build(self):
         w = self.w
@@ -228,10 +245,7 @@ class Bot:
                     continue
                 at = self.factory_site(kind)
                 if at is None:
-                    # Grow the grid outward with a pylon and try again next time.
-                    a = (w.tick_count // 10) % 8 * math.pi / 4
-                    self.connect(L.x + 14 * math.cos(a), L.y + 14 * math.sin(a))
-                    return
+                    return   # the grid grows toward more room; try again later
                 self.place(kind, at)
                 return
         if self.fusion():
@@ -468,6 +482,18 @@ class Bot:
             return at is not None and self.place("slag_heap", at) is not None
         return False
 
+    def parts_switch(self):
+        """Plenty of parts: switch the parts makers off (they eat iron and
+        aluminium the frames need); back on when stock runs down."""
+        w = self.w
+        n = w.stock("parts")
+        clock = 0.0 if n > PARTS_PLENTY * 3 else (1.0 if n < PARTS_PLENTY * 2 else None)
+        if clock is None:
+            return
+        for s in w.structures.values():
+            if s.kind in ("machine_shop", "fabrication_line") and s.built and s.clock != clock:
+                w.set_clock(s.id, clock)
+
     def pace_goal(self):
         """Short of parts for building: let production have the iron first."""
         from game.sim import massdriver
@@ -486,6 +512,7 @@ class Bot:
         self.contracts()
         self.raise_cash()
         self.relieve_storage()
+        self.parts_switch()
         self.research()
         self.build()
         self.units_order()

@@ -40,7 +40,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | Right click | Order the selected unit: go there, or for a survey rover, survey there; a scraper sent somewhere sweeps there from then on |
 | 1-8 with a rover bay selected | Build a scavenger, scraper, constructor, survey rover, hauler, maintenance drone, construction drone or helium harvester |
 | P | Cycle the selected structure's power priority |
-| J | Clock speed of the selected production building: 100%, 50% (less power, less wear), 150% after Overclocking |
+| J | Clock speed of the selected production building: 100%, 150% after Overclocking, 50% (less power, less wear), or off (takes nothing in, draws nothing) |
 | Del | Cancel the selected construction site (materials refunded), or mark a finished structure for a constructor to dismantle (75% back); Del again keeps it |
 | X / Shift+X | Sell 10 scrap / all scrap (from any storage) |
 | C | Centre on the selection |

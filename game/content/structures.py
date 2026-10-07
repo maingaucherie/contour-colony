@@ -417,6 +417,7 @@ CLOCKS = (
     (1.0, {"power": 1.0, "wear": 1.0}),
     (1.5, {"power": 2.0, "wear": 2.0, "research": "overclock"}),
     (0.5, {"power": 0.45, "wear": 0.4}),
+    (0.0, {"power": 0.0, "wear": 0.0}),      # off: takes nothing in, makes nothing, draws nothing
 )
 
 # Minimum clear gap between footprints, in cells.

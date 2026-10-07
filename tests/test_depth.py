@@ -42,6 +42,21 @@ class ClockTests(unittest.TestCase):
         self.assertAlmostEqual(c.draw_kw(), draw * 2.0)
         self.assertAlmostEqual(P.speed(w, c), 1.5)
 
+    def test_switched_off_takes_nothing_and_draws_nothing(self):
+        from game.sim import jobs
+        w = make_world(1)
+        c = built_structure(w, "crusher")
+        w.set_clock(c.id, 0.5)
+        self.assertEqual(ST.next_clock(w, c), 0.0)
+        w.set_clock(c.id, 0.0)
+        self.assertEqual(c.draw_kw(), 0.0)
+        self.assertFalse(any(s is c for s, item, space, mult in jobs.requests(w)))
+        c.inputs = {"ilmenite": 4}
+        P.update(w, c)
+        self.assertEqual(c.status, P.OFF)
+        self.assertEqual(c.inputs, {"ilmenite": 4})
+        self.assertEqual(ST.next_clock(w, c), 1.0)
+
 
 class WearTests(unittest.TestCase):
     def test_wear_builds_up_and_slows_but_only_breaks_under_pressure(self):

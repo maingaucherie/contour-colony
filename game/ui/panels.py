@@ -55,6 +55,7 @@ STATUS_LABELS = {
     P.UNPOWERED: ("UNPOWERED", D.COLOR_ALERT),
     P.BROKEN: ("BROKEN - NEEDS A REPAIR", D.COLOR_ALERT),
     P.IDLE: ("IDLE", D.COLOR_TEXT_DIM),
+    P.OFF: ("SWITCHED OFF (J TO TURN ON)", D.COLOR_TEXT_DIM),
 }
 
 
@@ -186,7 +187,8 @@ def _structure_lines(world, s):
     if r:
         lines.extend(_production_lines(world, s, r))
         over = world.research.effect("overclock", False)
-        lines.append((f"CLOCK     {s.clock * 100:.0f}%   (J: 50 / 100" + (" / 150%)" if over else "%)"), 1, D.COLOR_FLOW))
+        setting = "OFF" if s.clock == 0 else f"{s.clock * 100:.0f}%"
+        lines.append((f"CLOCK     {setting}   (J: 100" + (" / 150" if over else "") + " / 50% / OFF)", 1, D.COLOR_FLOW))
     if s.kind == "scanner":
         lines.append((f"RADAR     {spec['scan_radius_cells'] * world.heightmap.cell_m / 1000:.0f} KM RANGE, "
                       f"SWEEP EVERY {spec['sweep_period_s']:.0f} S", 1, D.COLOR_TEXT_DIM))
