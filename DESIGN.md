@@ -430,6 +430,8 @@ Playtest verdict on Milestone 5: the game felt like a sequence of actions, never
 - KREEP stretched (2 KREEP → 2 rare earths + thorium; 1 rare earth + 1 part → 2 electronics): the KREEP province is 160–230 cells out and the mare sorters only trickle it.
 - Smaller late bills (Coils 200 / 120 / 80, Launch 120 / 120).
 
+Rovers only (`tools/autoplay.py --style rovers`: no field drills, scrapers and up to eight sorters): one of three seeds launched at 149 min, the other two were 65–72% through the Launch bill at 240. Slower at the end, but every road reaches the launch.
+
 **Tier III numbers.** Molten regolith cell: 5 regolith and 80 kW → 1 iron, 2 oxygen, 2 slag, and titania / aluminium with odds set by the ground (mare 90% / 30%, highlands 20% / 90%). Harvester: one helium-3 canister per 6 cells scraped on mare (60% on KREEP ground, 35% on highlands). Deuterium still: 4 water → 1 deuterium in 10 s. Fusion reactor: 1 helium-3 + 1 deuterium every 20 s → 300 kW (half without its six radiators): one ice mine, melter and still, plus one or two harvesters, keep one running.
 
 ## Later: touch screens and teaching
