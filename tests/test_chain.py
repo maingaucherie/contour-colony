@@ -319,7 +319,7 @@ class ColonyStorageTests(unittest.TestCase):
 class SurveyPastCliffsTests(unittest.TestCase):
     def test_fields_with_cliff_locked_parts_can_be_finished(self):
         from game.sim import surveyor as SV
-        w = make_world(6)
+        w = make_world(14)
         reach = 3.0 + W.SURVEY_CELLS * 0.75
         locked = 0
         for f in w.fields:

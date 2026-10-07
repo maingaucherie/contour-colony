@@ -1,8 +1,11 @@
 """Terrain generation and contour tables. Plain data: no logic."""
 
 # Site grid. Heights are sampled at GRID_SIZE x GRID_SIZE points, CELL_SIZE_M apart.
-GRID_SIZE = 256
+GRID_SIZE = 512
 CELL_SIZE_M = 400.0
+# Feature counts below are for a REFERENCE_SIZE site and scale with its area
+# (tests use smaller sites to run fast).
+REFERENCE_SIZE = 256
 
 # Fractal value noise (the highland base layer).
 NOISE_OCTAVES = 6
@@ -11,8 +14,12 @@ NOISE_LACUNARITY = 2.0
 NOISE_PERSISTENCE = 0.5
 NOISE_AMPLITUDE_M = 950.0
 
-# Flooded basins (mare-like flats). Each is carved as a smooth bowl, then
-# everything below its flood level is flattened toward that level.
+# Flooded basins (maria). Each is carved as a smooth bowl, then everything
+# below its flood level is flattened toward that level. The landing mare is
+# always near the middle, MARE_MAIN_RADIUS_FRACTION of the site wide; the
+# others are placed at random.
+MARE_MAIN_RADIUS_FRACTION = 0.17
+MARE_MAIN_OFFSET_FRACTION = 0.05
 BASIN_COUNT_RANGE = (2, 3)
 BASIN_RADIUS_RANGE_CELLS = (25.0, 55.0)
 BASIN_DEPTH_RANGE_M = (700.0, 1100.0)
@@ -37,6 +44,16 @@ CRATER_COMPLEX_RADIUS_CELLS = 8.0 # at or above this, craters get flat floors an
 CRATER_COMPLEX_FLOOR_FRACTION = 0.45
 CRATER_COMPLEX_PEAK_RATIO = 0.35  # central peak height as a fraction of depth
 CRATER_COMPLEX_PEAK_RADIUS_FRACTION = 0.18
+
+# Geology. One edge of the site is the "pole" side: COLD_TRAP_COUNT large,
+# deep craters sit within COLD_TRAP_BAND of that edge (fractions of the site)
+# and hold the ice. The KREEP province (thorium, rare earths) is a region on
+# the far side, KREEP_DISTANCE_FRACTION from the middle.
+COLD_TRAP_COUNT = 3
+COLD_TRAP_RADIUS_CELLS = (12.0, 20.0)
+COLD_TRAP_BAND = (0.06, 0.16)
+KREEP_DISTANCE_FRACTION = (0.30, 0.36)
+KREEP_RADIUS_FRACTION = 0.11
 
 # Contours. The interval is the "nice" number (NICE_STEPS x 10^n) whose level
 # count over the site's height range is closest to CONTOUR_TARGET_LEVELS.

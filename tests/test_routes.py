@@ -80,7 +80,7 @@ class LongRouteTests(unittest.TestCase):
         self.check(1, "charging_pad", 65, 14, 30)
 
     def test_outposts_far_apart(self):
-        self.check(6, "outpost", 75, 14, 25)
+        self.check(7, "outpost", 75, 14, 25)
 
 
 class DockTests(unittest.TestCase):

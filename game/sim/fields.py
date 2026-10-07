@@ -1,4 +1,4 @@
-"""Resource fields: hidden ilmenite and ice deposits. Never imports pygame.
+"""Resource fields: hidden mineral and ice deposits. Never imports pygame.
 
 A field is a blob with a smooth, wobbly edge: radius r(theta) = radius *
 (1 + wobble * f(theta)). Membership and the boundary polyline both come from
@@ -9,6 +9,7 @@ import math
 from dataclasses import dataclass, field
 
 from game.content import world as W
+from game.sim import geology as G
 
 BOUNDARY_POINTS = 48
 
@@ -16,7 +17,7 @@ BOUNDARY_POINTS = 48
 @dataclass(slots=True)
 class Field:
     id: int
-    kind: str              # "ilmenite" or "ice"
+    kind: str              # "ilmenite", "anorthite", "kreep" or "ice"
     cx: float
     cy: float
     radius: float
@@ -80,22 +81,26 @@ def _make(fid, kind, x, y, radius, rng):
     return f
 
 
+def _count(kind, size, rng):
+    lo, hi = W.FIELD_COUNTS[kind]
+    scale = (size / W.FIELD_COUNT_SIZE) ** 2
+    return max(1, round(rng.randint(lo, hi) * scale))
+
+
 def generate(world, rng):
-    """Place ilmenite fields (mare flats and crater ejecta) and ice fields (deep,
-    shadowed crater floors). The first ilmenite field is near the lander."""
+    """Place each mineral's fields in its zone (geology.py): ilmenite on the
+    maria (the first one near the lander), anorthite in the highlands, KREEP
+    in its province, ice at the darkest reachable spot of each cold trap."""
     hm, slopes, grid = world.heightmap, world.slopes, world.grid
     size = hm.size
+    geo = hm.geology
     lx, ly = world.lander.x, world.lander.y
     fields = []
-    # Mare-like flats: the lower part of the height range.
-    sorted_h = sorted(hm.heights[::97])
-    low_cut = sorted_h[int(len(sorted_h) * 0.4)]
-    craters = hm.craters
 
     def ok_spot(x, y, radius):
         if not (radius < x < size - 1 - radius and radius < y < size - 1 - radius):
             return False
-        # A mine must fit at the centre: its whole footprint on buildable ground.
+        # A drill must fit at the centre: its whole footprint on buildable ground.
         r = W.FIELD_FLAT_RADIUS_CELLS
         for cy in range(int(y - r), int(y + r) + 2):
             for cx in range(int(x - r), int(x + r) + 2):
@@ -109,34 +114,42 @@ def generate(world, rng):
         return all(math.hypot(x - f.cx, y - f.cy) > f.radius + radius + W.FIELD_MIN_SPACING_CELLS
                    for f in fields)
 
-    def ilmenite_like(x, y):
-        if hm.at(int(x), int(y)) <= low_cut:
-            return True
-        return any(1.2 <= math.hypot(x - cx, y - cy) / r <= 2.0 for cx, cy, r in craters if r >= 4)
+    def place(kind, count, candidate, zone=None):
+        """Try random candidate spots; the first half of the tries must be in zone."""
+        for k in range(count):
+            radius = rng.uniform(*W.FIELD_RADIUS_CELLS[kind])
+            for attempt in range(W.FIELD_CANDIDATES):
+                x, y = candidate(k)
+                strict = zone is not None and attempt < W.FIELD_CANDIDATES // 2
+                if ok_spot(x, y, radius) and (not strict or G.zone_at(geo, x, y) == zone):
+                    fields.append(_make(len(fields) + 1, kind, x, y, radius, rng))
+                    break
 
-    count = rng.randint(*W.ILMENITE_FIELD_COUNT)
-    for k in range(count):
-        radius = rng.uniform(*W.ILMENITE_RADIUS_CELLS)
-        for attempt in range(W.FIELD_CANDIDATES):
-            if k == 0:
-                d = rng.uniform(*W.FIELD_NEAR_LANDER_CELLS)
-                a = rng.uniform(0, 2 * math.pi)
-                x, y = lx + d * math.cos(a), ly + d * math.sin(a)
-            else:
-                x, y = rng.uniform(0, size - 1), rng.uniform(0, size - 1)
-            strict = attempt < W.FIELD_CANDIDATES // 2
-            if ok_spot(x, y, radius) and (not strict or ilmenite_like(x, y)):
-                fields.append(_make(len(fields) + 1, "ilmenite", x, y, radius, rng))
-                break
+    def anywhere(k):
+        return rng.uniform(0, size - 1), rng.uniform(0, size - 1)
 
-    # Ice: in and around craters (floor, foot of the wall, rim: wherever a mine
-    # fits), at the most shadowed reachable spot found. The first one is
-    # the darkest crater floor within a modest drive of the lander (smaller
-    # craters allowed), so the chain can always be started; the rest go in the
-    # largest craters.
-    want = rng.randint(*W.ICE_FIELD_COUNT)
+    def ilmenite_spot(k):
+        if k == 0:  # the first is a short drive from the lander
+            d = rng.uniform(*W.FIELD_NEAR_LANDER_CELLS)
+            a = rng.uniform(0, 2 * math.pi)
+            return lx + d * math.cos(a), ly + d * math.sin(a)
+        return anywhere(k)
+
+    def kreep_spot(k):
+        kx, ky, kr = geo.kreep
+        a, d = rng.uniform(0, 2 * math.pi), kr * math.sqrt(rng.random())
+        return kx + d * math.cos(a), ky + d * math.sin(a)
+
+    place("ilmenite", _count("ilmenite", size, rng), ilmenite_spot, G.MARE)
+    place("anorthite", _count("anorthite", size, rng), anywhere, G.HIGHLANDS)
+    place("kreep", _count("kreep", size, rng), kreep_spot, G.KREEP)
+
+    # Ice: in each cold trap (floor, foot of the wall, rim: wherever a drill
+    # fits), at the most shadowed reachable spot. If the traps can't hold
+    # enough, the largest other craters on the pole half of the site.
+    want = _count("ice", size, rng)
     lo_r, hi_r = W.ICE_FLOOR_RING
-    home = world.home_field
+    mid = size / 2
 
     def floor_spot(cx, cy, r, radius):
         best = None
@@ -150,22 +163,12 @@ def generate(world, rng):
                     best = (light, x, y)
         return best
 
-    first = []
-    lo_p, hi_p = W.ICE_FIRST_PATH_COST
-    for cx, cy, r in craters:
-        if r < W.ICE_FIRST_MIN_CRATER_RADIUS_CELLS:
-            continue
-        radius = max(W.ICE_MIN_RADIUS_CELLS, r * rng.uniform(*W.ICE_RADIUS_FRACTION))
-        best = floor_spot(cx, cy, r, radius)
-        if best is not None:
-            path = home.dist[grid.node_at(best[1], best[2])]
-            first.append((0 if lo_p <= path <= hi_p else 1, path if not lo_p <= path <= hi_p else best[0],
-                          best[1], best[2], radius))
-    if first:
-        _, _, x, y, radius = min(first)
-        fields.append(_make(len(fields) + 1, "ice", x, y, radius, rng))
-    hosts = sorted((c for c in craters if c[2] >= W.ICE_MIN_CRATER_RADIUS_CELLS), key=lambda c: -c[2])
-    for cx, cy, r in hosts:
+    def pole_side(c):
+        return (c[0] - mid) * geo.pole[0] + (c[1] - mid) * geo.pole[1] > 0
+
+    others = sorted((c for c in hm.craters if c not in geo.cold_traps and pole_side(c)
+                     and c[2] >= W.ICE_MIN_CRATER_RADIUS_CELLS), key=lambda c: -c[2])
+    for cx, cy, r in list(geo.cold_traps) + others:
         if sum(1 for f in fields if f.kind == "ice") >= want:
             break
         radius = max(W.ICE_MIN_RADIUS_CELLS, r * rng.uniform(*W.ICE_RADIUS_FRACTION))

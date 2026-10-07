@@ -8,11 +8,12 @@ from game.sim.terrain import generate_terrain, run_to_completion
 from game.sim.world import build_world
 
 _heightmaps = {}
+TEST_SIZE = 256   # a quarter of the game's site: the same rules, much faster tests
 
 
 def make_world(seed):
     if seed not in _heightmaps:
-        _heightmaps[seed] = run_to_completion(generate_terrain(seed))
+        _heightmaps[seed] = run_to_completion(generate_terrain(seed, TEST_SIZE))
     return run_to_completion(build_world(seed, _heightmaps[seed]))
 
 

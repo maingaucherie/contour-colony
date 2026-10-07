@@ -96,6 +96,7 @@ ROAD_SPEED_MULT = 2.0                # on graded roads: twice as fast (and half 
 ROAD_SLOPE_FACTOR = 0.5              # ... and slope slows them half as much
 LOW_BATTERY_FRACTION = 0.2           # below this, drop the job and go charge
 TOP_UP_BELOW_FRACTION = 0.6          # when docked below this, charge to full before the next job
+FIELD_RANGE_MARGIN = 1.1             # a rover's route search reaches this times its full-battery range
 TRIP_SAFETY_FACTOR = 1.25            # planned energy is multiplied by this before checking range
 STRANDED_TRICKLE_PER_S = 0.3        # battery a stranded unit's emergency panels recover per second, in full sun
 STRANDED_RESUME_FRACTION = 0.3       # ... until it has at least this much, and enough to reach a charger

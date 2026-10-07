@@ -62,6 +62,9 @@ class PathGrid:
         self.road_point = {}                 # node -> (x, y) on its road
         for i in range(self.n * self.n):
             self._price(i)
+        self.adj = [None] * (self.n * self.n)   # node -> ((neighbour, edge cost), ...)
+        for i in range(self.n * self.n):
+            self._link(i)
         self._cache = OrderedDict()
 
     def _price(self, i):
@@ -89,6 +92,11 @@ class PathGrid:
         else:
             self.cost[i] = total / count
             self.open[i] = steep / count <= W.PATH_BLOCKED_FRACTION
+
+    def _link(self, i):
+        """Precompute node i's edges, so searches only add up numbers."""
+        scale = self.node_cells * 0.5
+        self.adj[i] = tuple((nb, (self.cost[i] + self.cost[nb]) * scale * step) for nb, step in self.neighbours(i))
 
     @staticmethod
     def drive_factor(slope, road=False):
@@ -124,6 +132,8 @@ class PathGrid:
         self.road = new
         for node in changed:
             self._price(node)
+        for node in {nb for c in changed for nb in self._around(c)}:
+            self._link(node)
         if changed:
             self.invalidate()
         return bool(changed)
@@ -160,6 +170,12 @@ class PathGrid:
         return (min(nx * self.node_cells + half, self.size - 1),
                 min(ny * self.node_cells + half, self.size - 1))
 
+    def _around(self, node):
+        """node and the up to 8 nodes around it."""
+        ny, nx = divmod(node, self.n)
+        return [y * self.n + x for y in range(max(0, ny - 1), min(self.n, ny + 2))
+                for x in range(max(0, nx - 1), min(self.n, nx + 2))]
+
     def neighbours(self, node):
         ny, nx = divmod(node, self.n)
         n, open_ = self.n, self.open
@@ -173,14 +189,17 @@ class PathGrid:
 
     # Searches -----------------------------------------------------------------
 
-    def field(self, source):
-        """Full Dijkstra field from a node, cached (terrain is static for now).
+    def field(self, source, limit=math.inf):
+        """Dijkstra field from a node, cached until roads change.
 
         source may also be a tuple of nodes: a multi-source field giving the
-        cost to the nearest of them (its .source is the first)."""
-        cached = self._cache.get(source)
+        cost to the nearest of them (its .source is the first). With a limit,
+        the search stops there: nodes further away read as unreachable (a
+        rover's own field only needs to reach as far as its battery)."""
+        key = source if limit == math.inf else (source, limit)
+        cached = self._cache.get(key)
         if cached is not None:
-            self._cache.move_to_end(source)
+            self._cache.move_to_end(key)
             return cached
         sources = source if isinstance(source, tuple) else (source,)
         dist = [math.inf] * (self.n * self.n)
@@ -193,19 +212,20 @@ class PathGrid:
                 heap.append((0.0, s))
         if heap:
             heapq.heapify(heap)
-            cost, scale = self.cost, self.node_cells * 0.5
+            adj, pop, push = self.adj, heapq.heappop, heapq.heappush
             while heap:
-                d, node = heapq.heappop(heap)
+                d, node = pop(heap)
                 if d > dist[node]:
                     continue
-                c = cost[node]
-                for nb, step in self.neighbours(node):
-                    nd = d + (c + cost[nb]) * scale * step
+                if d > limit:
+                    break
+                for nb, w in adj[node]:
+                    nd = d + w
                     if nd < dist[nb]:
                         dist[nb] = nd
                         prev[nb] = node
-                        heapq.heappush(heap, (nd, nb))
-        self._cache[source] = result
+                        push(heap, (nd, nb))
+        self._cache[key] = result
         if len(self._cache) > W.PATH_CACHE_SIZE:
             self._cache.popitem(last=False)
         return result

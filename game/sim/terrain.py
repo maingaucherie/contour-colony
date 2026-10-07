@@ -13,6 +13,15 @@ from game.content import terrain as T
 
 
 @dataclass(slots=True)
+class Geology:
+    """Where things are, decided before the terrain is shaped (cells)."""
+    maria: tuple = ()        # (x, y, radius) flooded basins; the first is the landing mare
+    cold_traps: tuple = ()   # (x, y, radius) deep craters near the pole edge, holding ice
+    pole: tuple = (0.0, -1.0)  # unit vector toward the pole edge
+    kreep: tuple = (0.0, 0.0, 0.0)  # (x, y, radius) of the KREEP province
+
+
+@dataclass(slots=True)
 class Heightmap:
     size: int
     cell_m: float
@@ -20,6 +29,7 @@ class Heightmap:
     min_h: float
     max_h: float
     craters: tuple = ()  # (x, y, radius) in cells, as placed by the generator
+    geology: Geology = None
 
     def at(self, x: int, y: int) -> float:
         return self.heights[y * self.size + x]
@@ -84,19 +94,24 @@ def generate_terrain(seed: int, size: int = T.GRID_SIZE):
     """Generator: yields progress in [0, 1], returns a Heightmap."""
     rng = random.Random(seed)
     h = [0.0] * (size * size)
+    area = (size / T.REFERENCE_SIZE) ** 2
 
     # Plan all features up front so progress can be measured in cells touched.
-    basins = []
-    for _ in range(rng.randint(*T.BASIN_COUNT_RANGE)):
+    # The landing mare first, near the middle; then the others.
+    mid, off = size / 2, T.MARE_MAIN_OFFSET_FRACTION * size
+    basins = [(mid + rng.uniform(-off, off), mid + rng.uniform(-off, off),
+               T.MARE_MAIN_RADIUS_FRACTION * size, rng.uniform(*T.BASIN_DEPTH_RANGE_M))]
+    for _ in range(max(1, round(rng.randint(*T.BASIN_COUNT_RANGE) * size / T.REFERENCE_SIZE))):
         basins.append((
             rng.uniform(0, size), rng.uniform(0, size),
             rng.uniform(*T.BASIN_RADIUS_RANGE_CELLS),
             rng.uniform(*T.BASIN_DEPTH_RANGE_M),
         ))
-    radii = [rng.uniform(*T.CRATER_LARGE_RADIUS_RANGE_CELLS) for _ in range(T.CRATER_GUARANTEED_LARGE)]
-    radii += [_crater_radius(rng) for _ in range(T.CRATER_COUNT)]
-    radii.sort(reverse=True)  # big first, so small craters overprint them
-    craters = [(rng.uniform(0, size), rng.uniform(0, size), r) for r in radii]
+    geology = _plan_geology(rng, size, basins)
+    radii = [rng.uniform(*T.CRATER_LARGE_RADIUS_RANGE_CELLS) for _ in range(round(T.CRATER_GUARANTEED_LARGE * area))]
+    radii += [_crater_radius(rng) for _ in range(round(T.CRATER_COUNT * area))]
+    craters = [(rng.uniform(0, size), rng.uniform(0, size), r) for r in radii] + list(geology.cold_traps)
+    craters.sort(key=lambda c: -c[2])  # big first, so small craters overprint them
 
     def box(cx, cy, reach):
         return (max(0, int(cx - reach)), min(size - 1, int(cx + reach) + 1),
@@ -206,7 +221,31 @@ def generate_terrain(seed: int, size: int = T.GRID_SIZE):
             yield done / total
 
     heights = array("f", h)
-    return Heightmap(size, T.CELL_SIZE_M, heights, min(heights), max(heights), tuple(craters))
+    return Heightmap(size, T.CELL_SIZE_M, heights, min(heights), max(heights), tuple(craters), geology)
+
+
+def _plan_geology(rng, size, basins):
+    """Pick the pole edge, the cold-trap craters near it and the KREEP province
+    on the far side."""
+    angle = rng.choice((0.0, 0.5, 1.0, 1.5)) * math.pi
+    px, py = math.cos(angle), math.sin(angle)
+    mid = size / 2
+    traps = []
+    for k in range(T.COLD_TRAP_COUNT):
+        r = rng.uniform(*T.COLD_TRAP_RADIUS_CELLS)
+        inset = max(r + 2, rng.uniform(*T.COLD_TRAP_BAND) * size)   # distance in from the pole edge
+        along = (k + 0.5) / T.COLD_TRAP_COUNT * size * 0.7 + size * 0.15 + rng.uniform(-0.05, 0.05) * size
+        # The pole edge runs perpendicular to (px, py).
+        cx = mid + px * (mid - inset) + (-py) * (along - mid)
+        cy = mid + py * (mid - inset) + px * (along - mid)
+        traps.append((min(max(cx, r), size - 1 - r), min(max(cy, r), size - 1 - r), r))
+    away = angle + math.pi + rng.choice((-1, 1)) * rng.uniform(0.3, 0.8)
+    dist = rng.uniform(*T.KREEP_DISTANCE_FRACTION) * size
+    kr = T.KREEP_RADIUS_FRACTION * size
+    kx = min(max(mid + dist * math.cos(away), kr), size - 1 - kr)
+    ky = min(max(mid + dist * math.sin(away), kr), size - 1 - kr)
+    maria = tuple((x, y, r) for x, y, r, _ in basins)
+    return Geology(maria, tuple(traps), (px, py), (kx, ky, kr))
 
 
 def illumination(heightmap, w):

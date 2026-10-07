@@ -118,9 +118,15 @@ def can_afford(world, unit, cost_cells, work_energy=0.0):
     return unit.battery - trip_energy(unit, cost_cells, work_energy) >= reserve(world, unit)
 
 
+def range_limit(world, unit):
+    """Cost-cells a full battery covers, with a margin: as far as a rover's own field needs to search."""
+    return round(capacity(world, unit) / unit.spec["drain_per_cost_cell"] * U.FIELD_RANGE_MARGIN)
+
+
 def here_field(world, unit):
     grid = world.grid
-    return grid.field(grid.nearest_reachable(grid.node_at(unit.x, unit.y), world.home_field))
+    start = grid.nearest_reachable(grid.node_at(unit.x, unit.y), world.home_field)
+    return grid.field(start, range_limit(world, unit))
 
 
 def back_cost(world, x, y):
@@ -321,7 +327,7 @@ def relay(world, unit, x, y, rest_cost=0.0, work_energy=0.0, start=None, battery
         return None
     sx, sy = start if start is not None else (unit.x, unit.y)
     battery = unit.battery if battery is None else battery
-    here = grid.field(grid.nearest_reachable(grid.node_at(sx, sy), world.home_field))
+    here = grid.field(grid.nearest_reachable(grid.node_at(sx, sy), world.home_field), range_limit(world, unit))
 
     def reachable_now(s):
         if start is None and unit.docked and unit.dock == s.id:
@@ -411,7 +417,7 @@ def give_order(world, unit, kind, x, y):
     f = here_field(world, unit)
     node = world.grid.node_at(x, y)
     if not f.reachable(node):
-        return False, "UNREACHABLE"
+        return False, "OUT OF BATTERY RANGE" if world.home_field.reachable(node) else "UNREACHABLE"
     linger = unit.spec.get("linger_drain_per_s", 0.0) * unit.spec.get("linger_s", 0.0) if kind == "survey" else 0.0
     if not can_afford(world, unit, f.dist[node] + back_cost(world, x, y), linger):
         full = unit.battery >= capacity(world, unit)

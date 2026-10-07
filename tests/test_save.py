@@ -8,7 +8,7 @@ from game.content import world as W
 from game.sim import save
 from game.sim.terrain import run_to_completion
 from game.sim.world import build_world
-from tests.test_world import _heightmaps, make_world, minutes
+from tests.test_world import make_world, minutes
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 import autoplay  # noqa: E402
@@ -16,14 +16,13 @@ import autoplay  # noqa: E402
 
 def reload(world):
     text = save.dumps(world)
-    return save.load(text, _heightmaps[world.seed], build_world, run_to_completion), text
+    return save.load(text, world.heightmap, build_world, run_to_completion), text
 
 
 class SaveTests(unittest.TestCase):
     def test_a_loaded_site_continues_identically(self):
         # A busy site: the bot builds, researches, hauls and takes contracts.
         w = autoplay.make(3)
-        _heightmaps.setdefault(3, w.heightmap)
         bot = autoplay.Bot(w)
         for t in range(minutes(25)):
             if t % W.TICK_RATE == 0:

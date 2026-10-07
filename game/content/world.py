@@ -57,15 +57,17 @@ SURVEY_CELLS = 2
 LANDING_SURVEY_RADIUS_CELLS = (16.0, 5.0)  # level 1, level 2 around the lander at touchdown
 SURVEY_LEVEL_TO_TIER = (0, 1, 2)           # highest contour detail tier shown per survey level
 
-# Resource fields (hidden until surveyed).
-ILMENITE_FIELD_COUNT = (4, 6)
-ICE_FIELD_COUNT = (2, 3)
-ILMENITE_RADIUS_CELLS = (4.0, 7.0)
+# Resource fields (hidden until found by the scanner and confirmed by survey).
+# Counts are for a FIELD_COUNT_SIZE site and scale with its area (at least
+# one of each). Each mineral forms in its own geology zone (see geology.py):
+# ilmenite on the maria, anorthite in the highlands, KREEP in its province,
+# ice in the cold-trap craters near the pole edge.
+FIELD_COUNT_SIZE = 512
+FIELD_COUNTS = {"ilmenite": (6, 8), "anorthite": (5, 7), "ice": (3, 4), "kreep": (2, 3)}
+FIELD_RADIUS_CELLS = {"ilmenite": (4.0, 7.0), "anorthite": (4.0, 7.0), "kreep": (3.5, 6.0)}
 ICE_RADIUS_FRACTION = (0.2, 0.3)           # of the host crater's radius
 ICE_MIN_CRATER_RADIUS_CELLS = 6.0
 ICE_MIN_RADIUS_CELLS = 3.0
-ICE_FIRST_MIN_CRATER_RADIUS_CELLS = 3.5     # the first ice field may sit in a smaller crater ...
-ICE_FIRST_PATH_COST = (40.0, 130.0)        # ... a drive of about this (cost-cells) from the lander
 ICE_FLOOR_RING = (0.2, 1.5)                # searched band around a crater's centre, in crater radii (floor, wall foot, rim)
 ICE_FLOOR_SAMPLES = 80
 FIELD_RICHNESS = (0.6, 1.5)

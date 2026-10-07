@@ -19,10 +19,15 @@ class Camera:
         self.x = self.y = world_extent / 2
 
     def clamp(self):
+        """Keep the view on the site (plus a little overscan). A view wider
+        than that stays centred on the site."""
         self.zoom = min(max(self.zoom, self.min_zoom), D.ZOOM_MAX)
         o = D.CAMERA_OVERSCAN_CELLS
-        self.x = min(max(self.x, -o), self.extent + o)
-        self.y = min(max(self.y, -o), self.extent + o)
+        for axis, screen in (("x", self.sw), ("y", self.sh)):
+            half = screen / 2 / self.zoom
+            lo, hi = half - o, self.extent + o - half
+            value = getattr(self, axis)
+            setattr(self, axis, self.extent / 2 if lo > hi else min(max(value, lo), hi))
 
     def offset(self):
         return self.sw / 2 - self.x * self.zoom, self.sh / 2 - self.y * self.zoom
