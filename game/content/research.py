@@ -21,12 +21,10 @@ RESEARCH = {
                                 "ice_mine")},
     "deep_survey": {"name": "deep survey", "requires": ("prospecting",), "phase": 1, "cost": 120, "time_s": 50,
                     "effects": {"linger_mult": 0.5, "richness_at_level_1": True}},
-    "extraction": {"name": "extraction", "requires": ("prospecting",), "phase": 1, "cost": 80, "time_s": 45,
-                   "unlocks": ("crusher", "ice_melter")},
-    "electrolysis": {"name": "electrolysis", "requires": ("extraction",), "phase": 1, "cost": 150, "time_s": 60,
+    "extraction": {"name": "extraction", "requires": (), "phase": 1, "cost": 100, "time_s": 45,
+                   "unlocks": ("crusher", "ice_melter", "reduction_furnace")},
+    "electrolysis": {"name": "electrolysis", "requires": ("extraction",), "phase": 1, "cost": 100, "time_s": 50,
                      "unlocks": ("electrolyzer",)},
-    "reduction": {"name": "reduction", "requires": ("electrolysis",), "phase": 1, "cost": 200, "time_s": 75,
-                  "unlocks": ("reduction_furnace",)},
     "conveyors": {"name": "conveyors", "requires": ("logistics_1",), "phase": 1, "cost": 150, "time_s": 60,
                   "unlocks": ("conveyor",)},
     "maintenance": {"name": "maintenance", "requires": (), "phase": 1, "cost": 120, "time_s": 60,
@@ -35,12 +33,21 @@ RESEARCH = {
                           "time_s": 60, "effects": {"wear_mult": 0.6}},
     "overclocking": {"name": "overclocking", "requires": (), "phase": 1, "cost": 200, "time_s": 75,
                      "effects": {"overclock": True}},
+    "volatiles": {"name": "volatiles", "requires": ("extraction",), "phase": 1, "cost": 100, "time_s": 50,
+                  "unlocks": ("volatiles_oven",)},
+    "aluminium": {"name": "aluminium", "requires": (), "phase": 1, "cost": 120, "time_s": 60,
+                  "unlocks": ("aluminium_cell", "slag_heap")},
+    "fabrication": {"name": "fabrication", "requires": ("aluminium",), "phase": 1, "cost": 150, "time_s": 60,
+                    "unlocks": ("fabrication_line",)},
     # Later Tier II (after the Rails).
-    "titanium": {"name": "titanium", "requires": ("reduction",), "phase": 2, "cost": 300, "time_s": 90,
+    "titanium": {"name": "titanium", "requires": ("extraction",), "phase": 2, "cost": 200, "time_s": 75,
                  "unlocks": ("titanium_refinery", "frame_works")},
+    "rare_earths": {"name": "rare earths", "requires": (), "phase": 2, "cost": 200, "time_s": 75,
+                    "unlocks": ("rare_earth_separator", "electronics_plant")},
 }
 
 # Order of the research panel (each gets a letter key).
 RESEARCH_MENU = ("sorting", "logistics_1", "better_batteries",
-                 "prospecting", "deep_survey", "extraction", "electrolysis", "reduction", "conveyors",
-                 "maintenance", "hardened_bearings", "overclocking", "titanium")
+                 "prospecting", "deep_survey", "extraction", "electrolysis", "conveyors",
+                 "volatiles", "aluminium", "fabrication", "maintenance", "hardened_bearings", "overclocking",
+                 "titanium", "rare_earths")

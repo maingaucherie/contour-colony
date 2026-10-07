@@ -1,6 +1,7 @@
 import math
 import unittest
 
+from game.content import units as U
 from game.content import world as W
 from game.content.research import RESEARCH
 from game.content.structures import STRUCTURES
@@ -131,6 +132,7 @@ class ConstructionTests(unittest.TestCase):
 
     def test_charging_pad_extends_charging(self):
         w = make_world(2)
+        w.lander.storage["sinter"] = 20
         spot = find_spot(w, "charging_pad", (w.lander.x, w.lander.y), 3, 6)
         site, _ = w.place("charging_pad", *spot)
         self.assertTrue(run_until(w, lambda: site.built, 240))
@@ -202,7 +204,7 @@ class SurveyAndOrdersTests(unittest.TestCase):
         parts = w.stock("parts")
         self.assertTrue(w.order_unit(site.id, "survey_rover")[0])
         self.assertTrue(run_until(w, lambda: len(w.units) > before, 60))
-        self.assertEqual(w.stock("parts"), parts - 4)
+        self.assertEqual(w.stock("parts"), parts - U.UNITS["survey_rover"]["bay_cost"]["parts"])
 
 
 class ExitCriterionTest(unittest.TestCase):
@@ -212,6 +214,7 @@ class ExitCriterionTest(unittest.TestCase):
         w = make_world(1)
         L = w.lander
         w.research.phase = 1   # as if the mass driver's foundation were done
+        w.lander.storage["sinter"] = 40
         self.assertTrue(w.start_research("prospecting")[0])
         self.assertTrue(run_until(w, lambda: "prospecting" in w.research.done, 60))
         bay, _ = w.place("rover_bay", *find_spot(w, "rover_bay", (L.x, L.y), 3, 5))

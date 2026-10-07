@@ -126,7 +126,10 @@ def cycle_outputs(world, s, r):
     """What one finished cycle makes: the whole recipe, or for a sorter one
     output picked with the weights of the ground it stands on."""
     if not s.spec.get("picks_one"):
-        return r["out"]
+        chance = s.spec.get("chance")
+        if not chance:
+            return r["out"]
+        return {k: n for k, n in r["out"].items() if k not in chance or world.rng.random() < chance[k]}
     weights = s.spec["sorts"][G.zone_at(world.heightmap.geology, s.x, s.y)]
     roll = world.rng.random() * sum(weights.values())
     for item, w in weights.items():

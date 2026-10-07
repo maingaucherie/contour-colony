@@ -148,4 +148,5 @@ JOB_DISTANCE_BIAS = 10.0
 JOB_PRIORITY_MULT = {"high": 2.0, "normal": 1.0, "low": 0.5}
 JOB_STORAGE_MULT = 0.25
 JOB_EXPORT_MULT = 3.0
-JOB_MASS_DRIVER_MULT = 2.5           # goods for the mass driver's current phase (ahead of production)
+JOB_MASS_DRIVER_MULT = 1.0           # goods for the mass driver's current phase, times its priority (P)
+JOB_CONSTRUCTION_MULT = 2.5          # into storage, goods construction sites are short of

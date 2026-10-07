@@ -33,7 +33,7 @@ UNITS = {
         "build_drain_per_s": 0.3,
         "repair_rate": 0.5,          # repairs at half a maintenance drone's speed
         "launch_stagger_s": 0.5,
-        "bay_cost": {"scrap": 12, "parts": 6}, "bay_time_s": 25.0, "unlocked_by": None,
+        "bay_cost": {"scrap": 12, "parts": 4}, "bay_time_s": 25.0, "unlocked_by": None,
     },
     "survey_rover": {
         "name": "survey rover",
@@ -48,7 +48,7 @@ UNITS = {
         "linger_radius_cells": 3.0,
         "linger_drain_per_s": 0.2,
         "launch_stagger_s": 0.0,
-        "bay_cost": {"scrap": 10, "parts": 4}, "bay_time_s": 20.0, "unlocked_by": "prospecting",
+        "bay_cost": {"scrap": 10, "parts": 2}, "bay_time_s": 20.0, "unlocked_by": "prospecting",
     },
     "hauler": {
         "name": "hauler",
@@ -60,7 +60,7 @@ UNITS = {
         "sight_cells": 2.5,
         "load_s": 0.8,
         "launch_stagger_s": 0.0,
-        "bay_cost": {"scrap": 12, "parts": 4}, "bay_time_s": 20.0, "unlocked_by": "logistics_1",
+        "bay_cost": {"scrap": 10, "parts": 2}, "bay_time_s": 20.0, "unlocked_by": "logistics_1",
     },
 }
 
@@ -74,8 +74,8 @@ UNITS["scraper"] = {
     "scrape_speed_fraction": 0.6,    # slower while its blade is down
     "battery": 100.0,
     "drain_per_cost_cell": 0.3,
-    "cargo": 30,                     # regolith
-    "cells_per_load": 1.0,           # one regolith per this many cells scraped
+    "cargo": 40,                     # regolith
+    "cells_per_load": 0.5,           # one regolith per this many cells scraped
     "zone_radius_cells": 10.0,
     "lane_spacing_cells": 1.6,
     "min_lane_cells": 4.0,           # shorter clear stretches aren't worth a pass

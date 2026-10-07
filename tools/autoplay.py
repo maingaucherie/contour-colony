@@ -22,17 +22,28 @@ from game.sim import structures as ST  # noqa: E402
 from game.sim.terrain import generate_terrain, run_to_completion  # noqa: E402
 from game.sim.world import build_world  # noqa: E402
 
-RESEARCH_ORDER = ("logistics_1", "sorting", "prospecting", "extraction", "electrolysis", "reduction",
-                  "conveyors", "maintenance")
+RESEARCH_ORDER = ("logistics_1", "sorting", "extraction", "volatiles", "aluminium", "prospecting", "electrolysis",
+                  "fabrication", "titanium", "rare_earths", "maintenance", "conveyors")
 # Act I: iron from scrap, sinter from scraped regolith, parts from the shop.
-ACT_ONE = ("scrap_furnace", "sinter_kiln", "machine_shop")
-FACTORY = ("crusher", "ice_melter", "electrolyzer", "reduction_furnace")
+ACT_ONE = ("scrap_furnace", "sinter_kiln", "machine_shop", "sorter")
+# Later industry, each built once its inputs have a source: (kind, needs any of these to exist).
+FACTORY = (("crusher", ("ilmenite_mine", "sorter")), ("aluminium_cell", ("anorthite_mine", "sorter")),
+           ("slag_heap", ("aluminium_cell",)), ("ice_melter", ("ice_mine",)), ("electrolyzer", ("ice_melter",)),
+           ("volatiles_oven", ("sinter_kiln",)),
+           ("reduction_furnace", ("crusher",)), ("fabrication_line", ("aluminium_cell",)),
+           ("titanium_refinery", ("reduction_furnace",)), ("frame_works", ("titanium_refinery",)),
+           ("rare_earth_separator", ("kreep_mine", "sorter")), ("electronics_plant", ("rare_earth_separator",)))
+MINES = (("ilmenite_mine", "ilmenite"), ("ice_mine", "ice"), ("anorthite_mine", "anorthite"), ("kreep_mine", "kreep"))
+SELL_ABOVE = {"sinter": 120, "regolith": 120, "anorthite": 80, "ilmenite": 80, "kreep": 40, "titania": 40,
+              "water": 30, "concentrate": 60, "ice": 60}
 # (unit, how many, structure that must exist first)
-UNIT_GOALS = (("hauler", 2, None), ("scraper", 2, "sinter_kiln"), ("scavenger", 4, None),
+UNIT_GOALS = (("hauler", 2, None), ("scraper", 2, "sinter_kiln"), ("scavenger", 4, None), ("constructor", 2, "sorter"),
               ("hauler", 3, "scrap_furnace"), ("survey_rover", 1, None), ("hauler", 4, "crusher"),
               ("constructor", 2, "machine_shop"), ("scraper", 3, "sorter"), ("hauler", 5, "electrolyzer"),
-              ("hauler", 6, "reduction_furnace"))
-MAX_DEPOTS = 3
+              ("hauler", 6, "reduction_furnace"), ("scraper", 4, "volatiles_oven"), ("hauler", 7, "aluminium_cell"),
+              ("constructor", 3, "fabrication_line"), ("hauler", 8, "titanium_refinery"),
+              ("hauler", 9, "electronics_plant"))
+MAX_DEPOTS = 6
 UNIT_PARTS_RESERVE = 4     # keep this many parts spare after ordering a unit
 OUTPOST_PARTS_SPARE = 20   # build outposts (rather than pads) only with this many parts in stock
 HAULER_DROP_LIMIT = 6      # buy haulers by supply drop up to this many when loads pile up
@@ -174,13 +185,15 @@ class Bot:
             if at:
                 self.place("scanner", at)
                 return
-        for kind, field_kind in (("ilmenite_mine", "ilmenite"), ("ice_mine", "ice")):
+        for kind, field_kind in MINES:
+            if field_kind == "kreep" and w.research.phase < 2:
+                continue  # the sorter's trickle does until the Rails
             if w.unlocked(kind) and not self.count(kind):
                 if self.mine(kind, field_kind) or self.outpost(field_kind):
                     return
-        for kind in FACTORY:
+        for kind, sources in FACTORY:
             if w.unlocked(kind) and not self.count(kind):
-                if kind == "ice_melter" and not self.count("ice_mine"):
+                if not any(self.count(k, built_only=True) for k in sources):
                     continue
                 at = self.factory_site(kind)
                 if at is None:
@@ -249,15 +262,20 @@ class Bot:
         self.connect(*at)
         return True
 
+    def scrapers_wanted(self):
+        """Two, and one more for every building that eats regolith."""
+        return 2 + sum(self.count(k, built_only=True) for k in ("sinter_kiln", "sorter", "volatiles_oven"))
+
     def units_order(self):
         w = self.w
         bays = [s for s in w.structures.values() if s.kind == "rover_bay" and s.built]
         if not bays or bays[0].queue:
             return
-        if self.missing():
+        if self.missing().get("parts", 0) > 0:
             return  # construction first
         from game.content.units import UNITS
-        for kind, goal, after in UNIT_GOALS:
+        goals = list(UNIT_GOALS) + [("scraper", self.scrapers_wanted(), "sinter_kiln")]
+        for kind, goal, after in goals:
             if not w.unlocked(kind) or (after and not self.count(after, built_only=True)):
                 continue
             if self.units(kind) + self.queued(kind) < goal:
@@ -326,14 +344,28 @@ class Bot:
                 self.log(f"accept {c.qty} {c.good}")
 
     def raise_cash(self):
-        """Short of parts and credits: sell scrap toward a parts crate."""
+        """Short of parts and credits: sell scrap toward a parts crate; sell any
+        big surplus so research keeps going."""
         w = self.w
+        for item, keep in SELL_ABOVE.items():
+            if w.stock(item) > keep + 10:
+                w.sell(item, w.stock(item) - keep)
         if self.missing().get("parts", 0) > 0 and w.credits < 100 and w.stock("scrap") > 100:
             n = w.sell("scrap", w.stock("scrap") - 100)
             if n:
                 self.log(f"sell {n} scrap")
 
+    def pace_goal(self):
+        """Short of parts for building: let production have the iron first."""
+        from game.sim import massdriver
+        md = massdriver.find(self.w)
+        if md is not None and md.built:
+            want = "low" if self.missing().get("parts", 0) > 0 or self.w.stock("parts") < 10 else "normal"
+            if md.priority != want:
+                self.w.set_priority(md.id, want)
+
     def step(self):
+        self.pace_goal()
         self.contracts()
         self.raise_cash()
         self.research()

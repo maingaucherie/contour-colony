@@ -366,7 +366,7 @@ class App:
                 self.audio.play("menu")
         elif action == "priority":
             s = self._selected_structure()
-            if s is not None and s.spec.get("draw_kw"):
+            if s is not None and (s.spec.get("draw_kw") or s.kind == massdriver.KIND):
                 order = W.PRIORITIES
                 self.world.set_priority(s.id, order[(order.index(s.priority) + 1) % len(order)])
         elif action == "cancel_site":

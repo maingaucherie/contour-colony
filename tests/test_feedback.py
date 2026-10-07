@@ -10,6 +10,7 @@ from tests.test_world import make_world
 
 
 def build(w, kind, near, rmin=3, rmax=12):
+    w.lander.storage["sinter"] = w.lander.storage.get("sinter", 0) + 40   # most buildings need sinter
     site, reason = w.place(kind, *find_spot(w, kind, near, rmin, rmax))
     assert site is not None, reason
     assert run_until(w, lambda: site.built, 400), f"{kind} not built"

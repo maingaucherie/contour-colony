@@ -157,6 +157,8 @@ def _structure_lines(world, s):
         what = "CHARGING DOCKS" if spec.get("charge_slots") else "UNLOADING DOCKS"
         lines.append((f"{what} {used}/{len(s.docks)} IN USE", 1, D.COLOR_TEXT_DIM))
     if s.kind == MD.KIND:
+        lines.append((f"PRIORITY  {s.priority.upper()}  (P: HIGH TAKES GOODS FIRST, LOW LEAVES THEM FOR PRODUCTION)",
+                      1, D.COLOR_FLOW))
         lines.extend(_mass_driver_lines(world, s))
     if s.kind == "conveyor":
         lines.extend(_conveyor_lines(world, s))
@@ -331,7 +333,12 @@ def _production_lines(world, s, r):
                     D.COLOR_FLOW))
     if s.status == P.BLOCKED:
         capped = [ITEMS[k]["name"].upper() for k in r["out"] if world.stock(k) >= world.item_cap(k)]
-        if capped:
+        waste = [k for k in r["out"] if ITEMS[k]["tier"] == "waste" and s.outputs.get(k, 0) >= P.output_cap(s, k)
+                 and not any(o.stores() and o.accepts(k) for o in world.structures.values())]
+        if waste:
+            out.append((", ".join(ITEMS[k]["name"].upper() for k in waste) + " HAS NOWHERE TO GO: BUILD A SLAG HEAP",
+                        1, D.COLOR_ALERT))
+        elif capped:
             out.append((", ".join(capped) + " AT COLONY CAP: USE OR SELL (O)", 1, D.COLOR_ALERT))
         elif world.storage_full:
             out.append(("STORAGE FULL - BUILD A DEPOT OR SELL (O)", 1, D.COLOR_ALERT))

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from game.content import structures as S
 from game.content import units as U
 from game.content import world as W
+from game.content.items import ITEMS
 from game.content.structures import STRUCTURES
 from game.sim import fields as F
 
@@ -82,9 +83,12 @@ class Structure:
         return self.built and self.spec.get("storage", 0) > 0
 
     def accepts(self, item):
-        """Storage that keeps only some items (a hangar keeps parts) says so."""
+        """Storage that keeps only some items (a hangar keeps parts, a slag heap
+        slag) says so; ordinary storage takes anything but waste."""
         allowed = self.spec.get("accepts")
-        return allowed is None or item in allowed
+        if allowed is None:
+            return ITEMS[item]["tier"] != "waste"
+        return item in allowed
 
     def is_line(self):
         """Conveyors and roads: drawn as lines, driven over, never in the way."""

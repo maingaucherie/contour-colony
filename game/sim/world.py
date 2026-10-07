@@ -145,13 +145,20 @@ class World:
 
     # Colony storage ----------------------------------------------------------------------
 
+    def general_storages(self):
+        """The colony pool: storage that takes any (non-waste) good. Special
+        stores (a hangar's parts, a slag heap) don't count toward it."""
+        return [s for s in self.storages() if s.spec.get("accepts") is None]
+
     def capacity(self):
-        return sum(s.spec["storage"] for s in self.storages())
+        return sum(s.spec["storage"] for s in self.general_storages())
 
     def stored_total(self):
-        return sum(s.stored() for s in self.storages())
+        return sum(s.stored() for s in self.general_storages())
 
     def item_cap(self, item):
+        if I.ITEMS[item]["tier"] == "waste":   # as much as the stores that take it hold
+            return sum(s.spec["storage"] for s in self.storages() if s.accepts(item))
         share = I.ITEMS[item].get("cap_fraction", W.ITEM_CAP_FRACTION)
         return max(W.ITEM_CAP_MIN, int(share * self.capacity()))
 

@@ -70,7 +70,7 @@ def requests(world):
             for item, left in massdriver.needs(s).items():
                 space = left - s.reserved_in.get(item, 0)
                 if space > 0:
-                    yield s, item, space, W.JOB_MASS_DRIVER_MULT
+                    yield s, item, space, W.JOB_MASS_DRIVER_MULT * W.JOB_PRIORITY_MULT[s.priority]
         if s.spec.get("export_bay") and contracts is not None:
             for item, remaining in contracts.needs().items():
                 space = remaining - s.reserved_in.get(item, 0)
@@ -112,6 +112,8 @@ def best_job(world, unit, f, only_item=None):
                 continue
             best = (score, None, dst, only_item, min(amount, space))
         return best
+    # Goods construction sites are waiting for go to storage first.
+    short = {k: n - world.stock(k) for k, n in construction_needs(world).items() if n > world.stock(k)}
     for src, item, avail, kind in offers(world):
         d1 = f.dist[grid.node_at(src.x, src.y)]
         if d1 == math.inf:
@@ -130,6 +132,8 @@ def best_job(world, unit, f, only_item=None):
                 if room is None:
                     room = world.storage_room(item)
                 space = min(space, room)
+                if short.get(item, 0) > 0:
+                    mult = max(mult, W.JOB_CONSTRUCTION_MULT)
             amount = min(avail, space, cap)
             if amount <= 0:
                 continue

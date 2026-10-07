@@ -45,7 +45,7 @@ def is_store(kind):
 
 def _accepts(kind, item):
     allowed = STRUCTURES[kind].get("accepts")
-    return allowed is None or item in allowed
+    return ITEMS[item]["tier"] != "waste" if allowed is None else item in allowed
 
 
 def items_for(a_kind, b_kind):
