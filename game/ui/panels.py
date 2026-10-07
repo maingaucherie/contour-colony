@@ -11,6 +11,7 @@ from game.render.hershey import draw_text, line_height
 from game.sim import conveyors as CONV
 from game.sim import massdriver as MD
 from game.sim import production as P
+from game.sim import structures as ST
 from game.sim import wear
 from game.sim import units as US
 from game.ui.menus import cost_text
@@ -135,6 +136,14 @@ def _structure_lines(world, s):
     grid = world.power_grids.get(s.grid)
     if spec.get("power_kw"):
         lines.append((f"OUTPUT    +{s.output_kw:.1f} KW", 1, D.COLOR_TEXT_DIM))
+    if spec.get("generates_kw"):
+        lines.append((f"OUTPUT    +{s.output_kw:.1f} KW (UP TO {spec['generates_kw'] * s.cooling:.0f} WHILE FUELLED)",
+                      1, D.COLOR_TEXT_DIM))
+        need = spec.get("cooling_radiators", 0)
+        if need:
+            n = ST.radiators_near(world, s)
+            lines.append((f"RADIATORS {min(n, need)}/{need}  COOLING {s.cooling * 100:.0f}%", 1,
+                          D.COLOR_TEXT_DIM if n >= need else D.COLOR_ALERT))
     if spec.get("draw_kw"):
         state = "POWERED" if s.powered else ("NO GRID - BUILD A PYLON" if s.grid == -1 else "UNPOWERED - GRID OVERLOADED")
         lines.append((f"DRAW      {s.draw_kw():.1f} KW  {state}", 1, D.COLOR_TEXT_DIM if s.powered else D.COLOR_ALERT))

@@ -79,6 +79,15 @@ def update(world, s):
     r = recipe(s)
     if r is None or not s.built:
         return
+    _run(world, s, r)
+    if "generates_kw" in s.spec:   # fuelled generators make power only while a cycle runs
+        out = s.spec["generates_kw"] * s.cooling if s.status == WORKING else 0.0
+        if abs(out - s.output_kw) > 1e-6:
+            s.output_kw = out
+            world.dirty_power = True
+
+
+def _run(world, s, r):
     dt = 1.0 / W.TICK_RATE
     _update_heat(world, s, dt)
     if wear.broken(world, s):

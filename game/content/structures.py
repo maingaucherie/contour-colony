@@ -4,6 +4,7 @@ footprint_cells  radius of the structure on the ground, in cells
 max_slope_deg    steepest ground under the footprint it can be built on
 build_cost       items delivered by constructors; build_time_s of assembly after that
 power_kw         generation (lander, solar arrays at full sun)
+generates_kw     generation only while a recipe cycle runs (fuel cells, reactors)
 draw_kw          consumption while built and powered
 grid_reach_cells structures within this distance join the power grid through it
 scan_radius_cells, sweep_period_s  scanner radar: reach and time per revolution
@@ -236,6 +237,57 @@ STRUCTURES = {
         "recipe": {"in": {"rare_earths": 1, "parts": 1}, "out": {"electronics": 1}, "time_s": 8.0},
         "wear_per_cycle": 0.001,
     },
+    # Power ladder ---------------------------------------------------------------
+    "power_tower": {
+        # A tall, long-reach pylon: carries power across the site.
+        "name": "power tower", "footprint_cells": 0.5, "max_slope_deg": 20.0,
+        "build_cost": {"sinter": 4, "aluminium": 4}, "build_time_s": 8.0,
+        "grid_reach_cells": 24.0, "unlocked_by": "aluminium",
+    },
+    "fuel_cell_bank": {
+        # Burns hydrogen and oxygen back into power (and water): gas that would
+        # otherwise vent. Generates only while it has fuel (generates_kw).
+        "name": "fuel cell bank", "footprint_cells": 1.0, "max_slope_deg": 5.0,
+        "build_cost": {"sinter": 15, "parts": 3, "aluminium": 4}, "build_time_s": 15.0,
+        "grid_reach_cells": 4.0, "generates_kw": 15.0, "unlocked_by": "fuel_cells",
+        "recipe": {"in": {"hydrogen": 2, "oxygen": 1}, "out": {"water": 1}, "time_s": 6.0},
+        "wear_per_cycle": 0.0005,
+    },
+    "heliostat_tower": {
+        # A ring of mirrors focused on a Stirling engine: about three times a
+        # solar array's power for its ground, but it needs a wide flat circle.
+        "name": "heliostat tower", "footprint_cells": 2.4, "max_slope_deg": 5.0,
+        "build_cost": {"sinter": 40, "parts": 6, "aluminium": 15}, "build_time_s": 35.0,
+        "power_kw": 60.0, "grid_reach_cells": 6.0, "unlocked_by": "solar_thermal",
+    },
+    "fuel_fabricator": {
+        "name": "fuel fabricator", "footprint_cells": 1.1, "max_slope_deg": 5.0,
+        "build_cost": {"sinter": 25, "parts": 6, "aluminium": 10}, "build_time_s": 25.0,
+        "draw_kw": 10.0, "unlocked_by": "fission",
+        "recipe": {"in": {"thorium": 2}, "out": {"fuel_rods": 1}, "time_s": 10.0}, "wear_per_cycle": 0.001,
+    },
+    "fission_reactor": {
+        # Kilopower-style: steady power from fuel rods, one every two minutes,
+        # leaving spent fuel. It needs radiator panels close by to shed its
+        # heat: cooling_radiators for full output, half output with none.
+        "name": "fission reactor", "footprint_cells": 1.3, "max_slope_deg": 5.0,
+        "build_cost": {"sinter": 40, "parts": 10, "aluminium": 20, "titanium": 10}, "build_time_s": 40.0,
+        "grid_reach_cells": 6.0, "generates_kw": 60.0, "unlocked_by": "fission",
+        "recipe": {"in": {"fuel_rods": 1}, "out": {"spent_fuel": 1}, "time_s": 120.0},
+        "cooling_radiators": 2, "cooling_reach_cells": 1.5, "wear_per_cycle": 0.004,
+    },
+    "radiator": {
+        # Sheds a reactor's heat. Panels snap edge to edge like solar arrays.
+        "name": "radiator panel", "footprint_cells": 0.8, "max_slope_deg": 8.0,
+        "build_cost": {"aluminium": 4, "sinter": 2}, "build_time_s": 6.0,
+        "unlocked_by": "fission", "snap": {"cell": (1.5, 0.9), "farm_bonus": 0.0},
+    },
+    "cask_store": {
+        "name": "cask store", "footprint_cells": 1.1, "max_slope_deg": 5.0,
+        "build_cost": {"sinter": 20, "parts": 2}, "build_time_s": 12.0,
+        "storage": 40, "accepts": ("spent_fuel",), "dock_slots": 1, "dock_radius_cells": 1.7,
+        "unlocked_by": "fission",
+    },
     "mass_driver": {
         # The goal. Built once, then completed in phases: each phase is a bill
         # of goods delivered like any other (haulers, conveyors), and each one
@@ -251,7 +303,7 @@ STRUCTURES = {
             {"name": "coils", "needs": {"parts": 300, "titanium": 150, "electronics": 100}},
             {"name": "launch", "needs": {"frames": 200, "electronics": 150}},
         ),
-        "launch_kw": 400.0, "launch_charge_s": 60.0,
+        "launch_kw": 300.0, "launch_charge_s": 60.0,
     },
     "conveyor": {
         # A belt from one building to another (see conveyors.py), placed by
@@ -274,7 +326,8 @@ STRUCTURES = {
 # The build menu: one tab per category, in this order.
 BUILD_CATEGORIES = (
     ("goal", ("mass_driver",)),
-    ("power", ("solar", "pylon")),
+    ("power", ("solar", "pylon", "power_tower", "fuel_cell_bank", "heliostat_tower", "fuel_fabricator",
+               "fission_reactor", "radiator", "cask_store")),
     ("gather", ("rover_bay", "scanner", "ilmenite_mine", "anorthite_mine", "kreep_mine", "ice_mine")),
     ("process", ("scrap_furnace", "sinter_kiln", "sorter", "crusher", "ice_melter", "electrolyzer",
                  "reduction_furnace", "volatiles_oven", "aluminium_cell", "titanium_refinery",

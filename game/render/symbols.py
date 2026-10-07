@@ -91,6 +91,22 @@ STRUCTURES = {
                              [(-0.5, -0.4), (0.5, -0.4)], [(0.0, 0.6), (0.0, 0.95)]],
     "electronics_plant": [_box(-0.55, -0.55, 0.55, 0.55)] + [[(-0.9, y), (-0.55, y)] for y in (-0.3, 0.0, 0.3)]
                          + [[(0.55, y), (0.9, y)] for y in (-0.3, 0.0, 0.3)] + [_box(-0.2, -0.2, 0.2, 0.2)],
+    # Power ladder. Tower: a tall lattice mast; fuel cells: stacked plates with a
+    # bolt; heliostat: a ring of mirrors round a tower; fuel fabricator: a box
+    # with a rod; reactor: a dome inside a square with a trefoil hint;
+    # radiator: a finned panel; cask store: a row of casks.
+    "power_tower": [[(-0.5, 0.95), (0.0, -0.95), (0.5, 0.95)], [(-0.3, 0.2), (0.3, 0.2)], [(-0.9, -0.5), (0.9, -0.5)]],
+    "fuel_cell_bank": [_box(-0.8, -0.8, 0.8, 0.8), [(-0.8, -0.3), (0.8, -0.3)], [(-0.8, 0.2), (0.8, 0.2)],
+                       [(0.15, -0.65), (-0.15, -0.05), (0.15, -0.05), (-0.15, 0.6)]],
+    "heliostat_tower": [_poly(16, 0.95), _poly(6, 0.2)] + [[(0.95 * math.cos(a), 0.95 * math.sin(a)),
+                                                            (0.65 * math.cos(a), 0.65 * math.sin(a))]
+                                                           for a in [k * math.pi / 4 for k in range(8)]],
+    "fuel_fabricator": [_box(-0.85, -0.6, 0.85, 0.6), _box(-0.15, -0.95, 0.15, 0.6), [(-0.85, 0.0), (-0.15, 0.0)]],
+    "fission_reactor": [_box(-0.9, -0.9, 0.9, 0.9), _poly(16, 0.6), _poly(8, 0.15),
+                        [(0.0, -0.6), (0.0, -0.25)], [(0.52, 0.3), (0.22, 0.13)], [(-0.52, 0.3), (-0.22, 0.13)]],
+    "radiator": [_box(-0.9, -0.5, 0.9, 0.5)] + [[(x, -0.5), (x, 0.5)] for x in (-0.6, -0.3, 0.0, 0.3, 0.6)],
+    "cask_store": [_box(-0.9, -0.7, 0.9, 0.7), _poly(10, 0.25, 0.0, -0.45, 0.0), _poly(10, 0.25, 0.0, 0.2, 0.0),
+                   _poly(10, 0.18, 0.0, 0.65, 0.2)],
     # Mass driver: a long launch rail with coil rings, on a base.
     "mass_driver": [_box(-0.95, -0.25, 0.95, 0.25), [(-0.95, 0.0), (0.95, 0.0)],
                     _poly(10, 0.2, 0.0, -0.45, 0.0), _poly(10, 0.2, 0.0, 0.0, 0.0), _poly(10, 0.2, 0.0, 0.45, 0.0),

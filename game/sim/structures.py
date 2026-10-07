@@ -58,6 +58,7 @@ class Structure:
     grade_deg: float = 0.0                          # degrees of grading the site needs
     grade_cr: int = 0                               # credits paid for grading (refunded on cancel)
     warm: bool = False                              # getting waste heat from a neighbour
+    cooling: float = 1.0                            # reactors: output factor from radiators nearby
     phase: int = 0                                  # mass driver: phases finished
     charge_s: float = 0.0                           # mass driver: launch charge so far
     deconstruct: bool = False                       # marked for a constructor to dismantle
@@ -283,13 +284,24 @@ def farm_neighbours(world, s):
     return n
 
 
+def radiators_near(world, s):
+    reach = s.spec.get("cooling_reach_cells", 0.0)
+    return sum(1 for o in world.structures.values() if o.kind == "radiator" and o.built
+               and math.hypot(o.x - s.x, o.y - s.y) <= s.spec["footprint_cells"] + o.spec["footprint_cells"] + reach)
+
+
 def refresh_output(world):
-    """Power output of every generator (solar: sunlight, plus the farm bonus)."""
+    """Power output of every generator (solar and heliostats: sunlight, plus a
+    solar farm's bonus). Fuelled generators set their own output while they
+    run (production.py); here they only learn how well they are cooled."""
     for s in world.structures.values():
         if not s.built:
             continue
-        if s.kind == "solar":
-            bonus = 1.0 + s.spec["snap"]["farm_bonus"] * farm_neighbours(world, s)
+        if "generates_kw" in s.spec:
+            need = s.spec.get("cooling_radiators", 0)
+            s.cooling = 1.0 if not need else 0.5 + 0.5 * min(1.0, radiators_near(world, s) / need)
+        elif s.kind in ("solar", "heliostat_tower"):
+            bonus = 1.0 + s.spec["snap"]["farm_bonus"] * farm_neighbours(world, s) if s.spec.get("snap") else 1.0
             s.output_kw = s.spec["power_kw"] * world.illumination_at(s.x, s.y) * bonus
         else:
             s.output_kw = s.spec.get("power_kw", 0.0)

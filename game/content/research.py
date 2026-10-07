@@ -36,7 +36,9 @@ RESEARCH = {
     "volatiles": {"name": "volatiles", "requires": ("extraction",), "phase": 1, "cost": 100, "time_s": 50,
                   "unlocks": ("volatiles_oven",)},
     "aluminium": {"name": "aluminium", "requires": (), "phase": 1, "cost": 120, "time_s": 60,
-                  "unlocks": ("aluminium_cell", "slag_heap")},
+                  "unlocks": ("aluminium_cell", "slag_heap", "power_tower")},
+    "fuel_cells": {"name": "fuel cells", "requires": (), "phase": 1, "cost": 120, "time_s": 50,
+                   "unlocks": ("fuel_cell_bank",)},
     "fabrication": {"name": "fabrication", "requires": ("aluminium",), "phase": 1, "cost": 150, "time_s": 60,
                     "unlocks": ("fabrication_line",)},
     # Later Tier II (after the Rails).
@@ -44,10 +46,14 @@ RESEARCH = {
                  "unlocks": ("titanium_refinery", "frame_works")},
     "rare_earths": {"name": "rare earths", "requires": (), "phase": 2, "cost": 200, "time_s": 75,
                     "unlocks": ("rare_earth_separator", "electronics_plant")},
+    "solar_thermal": {"name": "solar thermal", "requires": ("aluminium",), "phase": 2, "cost": 180, "time_s": 60,
+                      "unlocks": ("heliostat_tower",)},
+    "fission": {"name": "fission", "requires": ("rare_earths", "titanium"), "phase": 2, "cost": 300,
+                "time_s": 90, "unlocks": ("fuel_fabricator", "fission_reactor", "radiator", "cask_store")},
 }
 
 # Order of the research panel (each gets a letter key).
 RESEARCH_MENU = ("sorting", "logistics_1", "better_batteries",
                  "prospecting", "deep_survey", "extraction", "electrolysis", "conveyors",
                  "volatiles", "aluminium", "fabrication", "maintenance", "hardened_bearings", "overclocking",
-                 "titanium", "rare_earths")
+                 "fuel_cells", "titanium", "rare_earths", "solar_thermal", "fission")
