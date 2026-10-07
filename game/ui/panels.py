@@ -169,7 +169,7 @@ def _structure_lines(world, s):
         lines.append((f"PRIORITY  {s.priority.upper()}  (P: HIGH TAKES GOODS FIRST, LOW LEAVES THEM FOR PRODUCTION)",
                       1, D.COLOR_FLOW))
         lines.extend(_mass_driver_lines(world, s))
-    if s.kind == "conveyor":
+    if s.spec.get("carries"):
         lines.extend(_conveyor_lines(world, s))
     if s.kind == "road":
         lines.append((f"LENGTH    {s.length:.1f} CELLS", 1, D.COLOR_TEXT_DIM))
@@ -232,7 +232,8 @@ def _conveyor_lines(world, c):
     a, b = world.structures.get(c.src), world.structures.get(c.dst)
     if a is None or b is None:
         return []
-    carries = ", ".join(ITEMS[k]["name"].upper() for k in CONV.items_for(a.kind, b.kind))
+    kinds = CONV.items_for(a.kind, b.kind, c.kind)
+    carries = "EVERYTHING STORED" if len(kinds) > 6 else ", ".join(ITEMS[k]["name"].upper() for k in kinds)
     state = {P.WORKING: "MOVING", P.UNPOWERED: "UNPOWERED"}.get(c.status, "WAITING")
     if state == "WAITING":
         if not (a.built and b.built):
@@ -242,7 +243,7 @@ def _conveyor_lines(world, c):
     return [
         (f"FROM {a.spec['name'].upper()} TO {b.spec['name'].upper()}", 1, D.COLOR_TEXT),
         (f"CARRIES   {carries}", 1, D.COLOR_TEXT_DIM),
-        (f"LENGTH    {c.length:.1f} CELLS   {S.CONVEYOR_ITEMS_PER_S:.0f} ITEM/S", 1, D.COLOR_TEXT_DIM),
+        (f"LENGTH    {c.length:.1f} CELLS   {c.spec['items_per_s']:.0f} ITEM/S", 1, D.COLOR_TEXT_DIM),
         (f"STATUS    {state}   MOVED {c.moved}", 1, D.COLOR_FLOW if c.status == P.WORKING else D.COLOR_TEXT_DIM),
     ]
 

@@ -1,18 +1,22 @@
-"""Conveyors: a powered belt from one building to another. Never imports pygame.
+"""Conveyors and monorails: powered lines from one building to another.
+Never imports pygame.
 
-A conveyor runs in a straight line from the edge of its source building to the
-edge of its destination, at most CONVEYOR_MAX_CELLS long. Its ground must be
-no steeper than the conveyor's max_slope_deg; ground up to GRADE_MAX_DEG is
-graded for credits as part of the build (the conveyor bed). It costs sinter
-per cell of length and constructors build it like any structure, working at
-its midpoint. It draws power from its source's grid (or else its
-destination's).
+A line runs straight from the edge of its source building to the edge of its
+destination, at most max_cells long (its spec). A conveyor's ground must be no
+steeper than its max_slope_deg; ground up to GRADE_MAX_DEG is graded for
+credits as part of the build (the conveyor bed). A monorail is elevated: it
+crosses buildings and needs no grading, but can't climb past its
+max_slope_deg. Both cost materials per cell of length, are built by
+constructors like any structure, working at the midpoint, and draw power from
+the source's grid (or else the destination's).
 
-Built and powered, it moves CONVEYOR_ITEMS_PER_S, one item at a time:
+Built and powered, a line moves items_per_s, one item at a time:
   producer -> consumer   the consumer's ingredients that the producer makes
   producer -> storage    everything the producer makes (at the lander, contract
                          goods ship straight away)
   storage  -> consumer   the consumer's ingredients, from that store
+  storage  -> storage    monorails only (store_to_store): everything, so a far
+                         depot is emptied into one near home
 Items a hauler has reserved are never taken; haulers still move the rest.
 When either building is removed, its conveyors go too (with the usual refund).
 """
@@ -48,9 +52,13 @@ def _accepts(kind, item):
     return ITEMS[item]["tier"] != "waste" if allowed is None else item in allowed
 
 
-def items_for(a_kind, b_kind):
-    """Items a conveyor from a building of a_kind to one of b_kind would carry."""
+def items_for(a_kind, b_kind, kind="conveyor"):
+    """Items a line of kind from a building of a_kind to one of b_kind would carry."""
     a, b = STRUCTURES[a_kind], STRUCTURES[b_kind]
+    if is_store(a_kind) and is_store(b_kind):
+        if not STRUCTURES[kind].get("store_to_store"):
+            return []
+        return [k for k in ITEMS if _accepts(a_kind, k) and _accepts(b_kind, k)]
     if b_kind == massdriver.KIND:   # anything any phase needs, from a producer or a store
         made = a["recipe"]["out"] if is_producer(a_kind) else (ITEMS if is_store(a_kind) else ())
         return [k for k in made if k in massdriver.wants(b_kind) and _accepts(a_kind, k)]
@@ -87,11 +95,11 @@ def _cells_along(world, p0, p1):
     return out
 
 
-def plan(world, a, b):
-    """Check a conveyor from a to b. Returns a dict: ok, reason, and when it
+def plan(world, a, b, kind="conveyor"):
+    """Check a line of kind from a to b. Returns a dict: ok, reason, and when it
     could be built, start, end, length, grade_deg and credits (for grading)."""
     out = {"ok": False, "reason": ""}
-    spec = STRUCTURES["conveyor"]
+    spec = STRUCTURES[kind]
     if not world.research.unlocked(spec.get("unlocked_by")):
         out["reason"] = "NOT RESEARCHED"
         return out
@@ -102,13 +110,13 @@ def plan(world, a, b):
     if b is a or b.is_line():
         out["reason"] = "PICK ANOTHER BUILDING"
         return out
-    items = items_for(a.kind, b.kind)
+    items = items_for(a.kind, b.kind, kind)
     if not items:
         both_stores = is_store(a.kind) and is_store(b.kind)
         out["reason"] = ("HAULERS MOVE STORAGE TO STORAGE" if both_stores
                          else f"{b.spec['name'].upper()} USES NOTHING {a.spec['name'].upper()} SENDS")
         return out
-    if any(c.kind == "conveyor" and c.src == a.id and c.dst == b.id for c in world.structures.values()):
+    if any(c.kind == kind and c.src == a.id and c.dst == b.id for c in world.structures.values()):
         out["reason"] = "ALREADY LINKED"
         return out
     p0, p1 = ST.link_ends(a, b)
@@ -116,11 +124,12 @@ def plan(world, a, b):
     if length <= S.FEED_REACH_CELLS and feeds.items_between(a.kind, b.kind):
         out["reason"] = "ALREADY FED DIRECTLY"
         return out
-    if length > S.CONVEYOR_MAX_CELLS:
-        out["reason"] = f"TOO LONG ({length:.0f} CELLS, MAX {S.CONVEYOR_MAX_CELLS:.0f})"
+    if length > spec["max_cells"]:
+        out["reason"] = f"TOO LONG ({length:.0f} CELLS, MAX {spec['max_cells']:.0f})"
         return out
+    elevated = spec.get("elevated", False)
     for o in world.structures.values():
-        if o is a or o is b or o.is_line():
+        if elevated or o is a or o is b or o.is_line():
             continue
         if ST.distance_to_segment(o.x, o.y, p0, p1) < o.spec["footprint_cells"] + spec["footprint_cells"] / 2:
             out["reason"] = "BLOCKED BY " + o.spec["name"].upper()
@@ -129,10 +138,14 @@ def plan(world, a, b):
     size = world.heightmap.size
     for cx, cy in _cells_along(world, p0, p1):
         slope = world.slopes[cy * size + cx]
+        if elevated and slope > spec["max_slope_deg"]:
+            out["reason"] = f"TOO STEEP ({slope:.1f} DEG, PILLARS MAX {spec['max_slope_deg']:.0f})"
+            return out
         if slope > S.GRADE_MAX_DEG:
             out["reason"] = f"TOO STEEP ({slope:.1f} DEG, GRADING MAX {S.GRADE_MAX_DEG:.0f})"
             return out
-        grade += max(0.0, slope - spec["max_slope_deg"])
+        if not elevated:
+            grade += max(0.0, slope - spec["max_slope_deg"])
     credits = ST.grade_credits(spec, grade)
     if world.credits < credits:
         out["reason"] = f"GRADING NEEDS {credits} CR"
@@ -142,16 +155,16 @@ def plan(world, a, b):
     return out
 
 
-def place(world, src_id, dst_id):
-    """Lay out a conveyor site from src to dst. Returns (site or None, reason)."""
+def place(world, src_id, dst_id, kind="conveyor"):
+    """Lay out a line site of kind from src to dst. Returns (site or None, reason)."""
     a, b = world.structures.get(src_id), world.structures.get(dst_id)
     if a is None or b is None:
         return None, "PICK A BUILDING"
-    p = plan(world, a, b)
+    p = plan(world, a, b, kind)
     if not p["ok"]:
         return None, p["reason"]
     (x0, y0), (x1, y1) = p["start"], p["end"]
-    c = ST.Structure(world.new_id(), "conveyor", (x0 + x1) / 2, (y0 + y1) / 2, built=False,
+    c = ST.Structure(world.new_id(), kind, (x0 + x1) / 2, (y0 + y1) / 2, built=False,
                      created_tick=world.tick_count, src=a.id, dst=b.id, length=p["length"])
     c.grade_deg, c.grade_cr = p["grade_deg"], p["credits"]
     world.credits -= c.grade_cr
@@ -161,8 +174,8 @@ def place(world, src_id, dst_id):
 
 
 def attached(world, s):
-    """Conveyors that start or end at s."""
-    return [c for c in world.structures.values() if c.kind == "conveyor" and s.id in (c.src, c.dst)]
+    """Conveyors and monorails that start or end at s."""
+    return [c for c in world.structures.values() if c.spec.get("carries") and s.id in (c.src, c.dst)]
 
 
 # Moving items ---------------------------------------------------------------
@@ -172,7 +185,9 @@ def _free_at_source(a, item):
     return held.get(item, 0) - a.reserved_out.get(item, 0)
 
 
-def _room_at_destination(world, b, item):
+def _room_at_destination(world, b, item, a=None):
+    if a is not None and a.stores() and b.stores():   # store to store: the colony's stock doesn't change
+        return b.spec["storage"] - b.stored() if b.accepts(item) else 0
     if b.kind == massdriver.KIND:
         return massdriver.room(b, item)
     r = P.recipe(b)
@@ -188,9 +203,9 @@ def _room_at_destination(world, b, item):
 def next_item(world, c, a, b):
     """The item c moves next: of those it can, the one most piled up at the source."""
     best = None
-    for item in items_for(a.kind, b.kind):
+    for item in items_for(a.kind, b.kind, c.kind):
         free = _free_at_source(a, item)
-        if free > 0 and _room_at_destination(world, b, item) > 0 and (best is None or free > best[0]):
+        if free > 0 and _room_at_destination(world, b, item, a) > 0 and (best is None or free > best[0]):
             best = (free, item)
     return best[1] if best else None
 
@@ -204,16 +219,17 @@ def _move(world, a, b, item):
     if r and item in r["in"]:
         b.inputs[item] = b.inputs.get(item, 0) + 1
         b.fed += 1
+    elif a.stores() and b.stores():
+        b.storage[item] = b.storage.get(item, 0) + 1
     else:
         world.deliver(b, item, 1)
 
 
 def update(world):
-    every = max(1, round(W.TICK_RATE / S.CONVEYOR_ITEMS_PER_S))
-    if world.tick_count % every:
-        return
     for c in world.structures.values():
-        if c.kind != "conveyor" or not c.built:
+        if not c.spec.get("carries") or not c.built:
+            continue
+        if world.tick_count % max(1, round(W.TICK_RATE / c.spec["items_per_s"])):
             continue
         a, b = world.structures.get(c.src), world.structures.get(c.dst)
         if not c.powered:

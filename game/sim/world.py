@@ -243,8 +243,8 @@ class World:
     def place(self, kind, x, y):
         return structures.place_site(self, kind, x, y)
 
-    def place_conveyor(self, src_id, dst_id):
-        return conveyors.place(self, src_id, dst_id)
+    def place_conveyor(self, src_id, dst_id, kind="conveyor"):
+        return conveyors.place(self, src_id, dst_id, kind)
 
     def place_road(self, p0, p1):
         return roads.place(self, p0, p1)
@@ -427,8 +427,8 @@ class World:
     def _sample_rates(self):
         """Recent cycles per minute of each production building (items per
         minute for conveyors), for the flow view. Display only."""
-        counts = {s.id: s.moved if s.kind == "conveyor" else s.cycles for s in self.structures.values()
-                  if s.built and (s.kind == "conveyor" or production.recipe(s))}
+        counts = {s.id: s.moved if s.spec.get("carries") else s.cycles for s in self.structures.values()
+                  if s.built and (s.spec.get("carries") or production.recipe(s))}
         self._rate_log.append(counts)
         oldest = self._rate_log[0]
         span_min = (len(self._rate_log) - 1) * W.RATE_SAMPLE_S / 60.0

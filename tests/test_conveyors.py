@@ -8,7 +8,7 @@ from game.content import world as W
 from game.sim import conveyors as C
 from game.sim import save
 from game.sim import structures as ST
-from tests.test_build_power import run_until
+from tests.test_build_power import find_spot, run_until
 from tests.test_chain import built_structure, ledger_ok
 from tests.test_industry import finish
 from tests.test_world import make_world
@@ -55,7 +55,7 @@ class PlanTests(unittest.TestCase):
     def test_too_long_and_already_linked(self):
         w = researched(make_world(1))
         crusher = built_structure(w, "crusher")
-        far = finish(w, "reduction_furnace", crusher.x + S.CONVEYOR_MAX_CELLS + 4, crusher.y)
+        far = finish(w, "reduction_furnace", crusher.x + S.STRUCTURES["conveyor"]["max_cells"] + 4, crusher.y)
         self.assertTrue(C.plan(w, crusher, far)["reason"].startswith("TOO LONG"))
         del w.structures[far.id]
         furnace = linked_pair(w, crusher, "reduction_furnace")
@@ -100,7 +100,7 @@ class TransferTests(unittest.TestCase):
         crusher.outputs["concentrate"] = 4
         crusher.reserved_out["concentrate"] = 1   # a hauler's: never taken
         w.produced["concentrate"] = 4
-        for _ in range(int(5 * W.TICK_RATE / S.CONVEYOR_ITEMS_PER_S)):
+        for _ in range(int(5 * W.TICK_RATE / S.STRUCTURES["conveyor"]["items_per_s"])):
             w.tick()
         self.assertEqual(furnace.inputs.get("concentrate", 0), 3)
         self.assertEqual(crusher.outputs["concentrate"], 1)
@@ -190,3 +190,45 @@ class LifecycleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MonorailTests(unittest.TestCase):
+    def setUp(self):
+        self.w = researched(make_world(1))
+        self.w.research.done.update({"monorail", "logistics_1"})
+
+    def test_empties_a_far_store_into_one_at_home(self):
+        w = self.w
+        L = w.lander
+        x, y = find_spot(w, "depot", (L.x, L.y), 25, 60)
+        depot = finish(w, "depot", x, y)
+        self.assertEqual(C.plan(w, depot, L)["reason"], "HAULERS MOVE STORAGE TO STORAGE")   # belts can't
+        p = C.plan(w, depot, L, "monorail")
+        self.assertTrue(p["ok"], p["reason"])
+        rail, _ = w.place_conveyor(depot.id, L.id, "monorail")
+        cells = rail.cells()
+        self.assertEqual(rail.build_cost(), {"sinter": cells, "aluminium": math.ceil(0.25 * cells)})
+        ST.complete(w, rail)
+        depot.storage = {"ilmenite": 12, "iron": 3}
+        w.produced["ilmenite"] = w.produced.get("ilmenite", 0) + 12
+        w.produced["iron"] = w.produced.get("iron", 0) + 3
+        before = L.storage.get("ilmenite", 0)
+        w.tick()
+        self.assertTrue(rail.powered)
+        run_until(w, lambda: not depot.storage, 20)
+        self.assertEqual(depot.storage, {})
+        self.assertEqual(L.storage.get("ilmenite", 0) - before, 12)
+        self.assertTrue(ledger_ok(w, "ilmenite")[0])
+
+    def test_runs_over_buildings_and_buildings_fit_under_it(self):
+        w = self.w
+        L = w.lander
+        x, y = find_spot(w, "depot", (L.x, L.y), 30, 60)
+        depot = finish(w, "depot", x, y)
+        mid = ((x + L.x) / 2, (y + L.y) / 2)
+        if ST.check_placement(w, "pylon", *mid)[0]:
+            finish(w, "pylon", *mid)
+        self.assertTrue(C.plan(w, depot, L, "monorail")["ok"])
+        rail, _ = w.place_conveyor(depot.id, L.id, "monorail")
+        spot = find_spot(w, "pylon", mid, 3, 8)
+        self.assertTrue(ST.check_placement(w, "pylon", *spot)[0])

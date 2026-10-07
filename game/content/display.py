@@ -170,6 +170,8 @@ CONVEYOR_WIDTH_MIN_PX = 3
 CONVEYOR_DOT_SPACING_CELLS = 1.0  # items on a working belt, this far apart
 CONVEYOR_PICK_PX = 6              # clicks this close to a belt select it
 COLOR_ROAD = (120, 130, 120)      # graded road edges
+MONORAIL_PILLAR_CELLS = 3.0       # a pillar tick this often along a monorail
+MONORAIL_CAR_SPEED_CELLS = 8.0    # how fast the drawn car shuttles (cells per second)
 
 # Views, cycled with Tab: the normal operations view, the survey view (height
 # colours, slope marks) and three overlays that recolour what is already

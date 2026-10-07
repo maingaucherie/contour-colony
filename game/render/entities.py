@@ -291,6 +291,52 @@ def draw_road(surface, world, s, camera, now_s, selected=None):
     return 2
 
 
+def draw_monorail(surface, world, m, camera, now_s, selected=None):
+    """A monorail: one beam on pillars, with a car shuttling along it while it works."""
+    line = ST.line_of(world, m)
+    if line is None:
+        return 0
+    a, b = camera.world_to_screen(*line[0]), camera.world_to_screen(*line[1])
+    w, h = surface.get_size()
+    if max(a[0], b[0]) < 0 or min(a[0], b[0]) > w or max(a[1], b[1]) < 0 or min(a[1], b[1]) > h:
+        return 0
+    color = D.COLOR_FLOW
+    if not m.built:
+        color = D.COLOR_SITE
+    elif m.deconstruct:
+        color = _scale(D.COLOR_ALERT, 0.5 + 0.5 * (int(now_s * 2) % 2))
+    elif not m.powered:
+        color = _scale(color, 0.5 * _flicker(now_s, m.id))
+    if selected == ("structure", m.id):
+        color = D.COLOR_SELECT
+    d = math.hypot(b[0] - a[0], b[1] - a[1]) or 1.0
+    ux, uy = (b[0] - a[0]) / d, (b[1] - a[1]) / d
+    if not m.built:
+        G.dotted(surface, color, a, b, D.DOT_SPACING_PX)
+        k = m.build_progress()
+        pygame.draw.line(surface, color, a, (a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k), 2)
+        return 1
+    pygame.draw.line(surface, color, a, b, 2)
+    step = max(D.MONORAIL_PILLAR_CELLS * camera.zoom, 8.0)
+    pos = step / 2
+    while pos < d:   # pillars: short ticks across the beam
+        px, py = a[0] + ux * pos, a[1] + uy * pos
+        pygame.draw.aaline(surface, _scale(color, 0.6), (px - uy * 3, py + ux * 3), (px + uy * 3, py - ux * 3))
+        pos += step
+    if m.status == P.WORKING:
+        trip = d / max(D.MONORAIL_CAR_SPEED_CELLS * camera.zoom, 1e-3)
+        k = (now_s / trip) % 2.0
+        k = k if k <= 1.0 else 2.0 - k          # there and back
+        cx, cy = a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k
+        half = max(2.0, 0.6 * camera.zoom)
+        pts = [(cx - ux * half * 1.6 - uy * half, cy - uy * half * 1.6 + ux * half),
+               (cx + ux * half * 1.6 - uy * half, cy + uy * half * 1.6 + ux * half),
+               (cx + ux * half * 1.6 + uy * half, cy + uy * half * 1.6 - ux * half),
+               (cx - ux * half * 1.6 + uy * half, cy - uy * half * 1.6 - ux * half)]
+        pygame.draw.polygon(surface, D.COLOR_SELECT, pts, 1)
+    return 2
+
+
 def draw_conveyor(surface, world, c, camera, now_s, selected=None, color=None):
     """A belt: two cyan rails, with items running along it while it works.
     A site is dotted, solid as far as it is built."""
@@ -326,7 +372,7 @@ def draw_conveyor(surface, world, c, camera, now_s, selected=None, color=None):
         draw_text(surface, f"{rate:.0f}/MIN", ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 6), 1, color, "center")
     if c.status == P.WORKING:
         spacing = max(D.CONVEYOR_DOT_SPACING_CELLS * camera.zoom, 6.0)
-        speed = S.CONVEYOR_ITEMS_PER_S * spacing   # one item arrives per second
+        speed = c.spec["items_per_s"] * spacing   # one item arrives per second
         ux, uy = (b[0] - a[0]) / d, (b[1] - a[1]) / d
         pos = (now_s * speed) % spacing
         while pos < d:
@@ -443,6 +489,8 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
     for s in world.structures.values():
         if s.kind == "conveyor":
             segments += draw_conveyor(surface, world, s, camera, now_s, selected)
+        elif s.kind == "monorail":
+            segments += draw_monorail(surface, world, s, camera, now_s, selected)
     for s in world.structures.values():
         if s.is_line():
             continue
@@ -532,19 +580,20 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
 def draw_conveyor_ghost(surface, world, camera, ghost):
     """Conveyor placement: the source picked (or the one under the cursor), then
     the belt to the destination under the cursor, with its cost or why not."""
-    _, src, hover, (mx, my) = ghost
+    kind, src, hover, (mx, my) = ghost
+    name = S.STRUCTURES[kind]["name"].upper()
     sx, sy = camera.world_to_screen(mx, my)
     a = world.structures.get(src) if src is not None else None
     b = world.structures.get(hover) if hover is not None else None
     if a is None:
         if b is None:
-            draw_text(surface, "CONVEYOR: CLICK A BUILDING TO SEND FROM", (sx, sy + 14), 1, D.COLOR_TEXT, "center")
+            draw_text(surface, f"{name}: CLICK A BUILDING TO SEND FROM", (sx, sy + 14), 1, D.COLOR_TEXT, "center")
             return 0
         ok, reason = CONV.can_start(b)
         bx, by = camera.world_to_screen(b.x, b.y)
         _brackets(surface, bx, by, structure_half_px(b.spec, camera.zoom, b is world.lander) * 1.15)
         note = f"SEND FROM {b.spec['name'].upper()}" if ok else reason
-        draw_text(surface, "CONVEYOR: " + note, (bx, by + 14), 1, D.COLOR_TEXT if ok else D.COLOR_ALERT, "center")
+        draw_text(surface, f"{name}: " + note, (bx, by + 14), 1, D.COLOR_TEXT if ok else D.COLOR_ALERT, "center")
         return 0
     ax, ay = camera.world_to_screen(a.x, a.y)
     _brackets(surface, ax, ay, structure_half_px(a.spec, camera.zoom, a is world.lander) * 1.15)
@@ -553,7 +602,7 @@ def draw_conveyor_ghost(surface, world, camera, ghost):
         draw_text(surface, f"FROM {a.spec['name'].upper()}: CLICK WHERE TO SEND", (sx, sy + 14), 1, D.COLOR_TEXT,
                   "center")
         return 0
-    p = CONV.plan(world, a, b)
+    p = CONV.plan(world, a, b, kind)
     p0, p1 = ST.link_ends(a, b)
     color = D.COLOR_GHOST_OK if p["ok"] else D.COLOR_ALERT
     _, _, _, left, right = _rails(camera, p0, p1)
@@ -562,7 +611,7 @@ def draw_conveyor_ghost(surface, world, camera, ghost):
     bx, by = camera.world_to_screen(b.x, b.y)
     if p["ok"]:
         cells = max(1, math.ceil(p["length"] - 1e-6))
-        cost = ", ".join(f"{n * cells} {k.upper()}" for k, n in S.STRUCTURES["conveyor"]["cost_per_cell"].items())
+        cost = ", ".join(f"{math.ceil(n * cells)} {k.upper()}" for k, n in S.STRUCTURES[kind]["cost_per_cell"].items())
         note = (f"TO {b.spec['name'].upper()}  {p['length']:.1f} CELLS  {cost}  CARRIES "
                 + ", ".join(k.upper() for k in p["items"]))
         if p["credits"]:
@@ -600,7 +649,7 @@ def draw_road_ghost(surface, world, camera, ghost):
 
 def draw_ghost(surface, world, camera, ghost):
     """Placement preview: the structure where it would go, its grid reach, and why not."""
-    if ghost[0] == "conveyor":
+    if ghost[0] in ("conveyor", "monorail"):
         return draw_conveyor_ghost(surface, world, camera, ghost)
     if ghost[0] == "road":
         return draw_road_ghost(surface, world, camera, ghost)

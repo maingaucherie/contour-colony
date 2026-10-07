@@ -521,7 +521,7 @@ class App:
             if inp.right_click is not None:
                 self.targeting = False
             return
-        if self.placing == "conveyor":
+        if self.placing in ("conveyor", "monorail"):
             self._conveyor_input()
             return
         if self.placing == "road":
@@ -582,12 +582,12 @@ class App:
                 if ok:
                     self.line_from = target.id
                 else:
-                    world.event(f"CONVEYOR: {reason}", "info")
+                    world.event(f"{self.placing.upper()}: {reason}", "info")
             else:
-                site, reason = world.place_conveyor(self.line_from, target.id)
+                site, reason = world.place_conveyor(self.line_from, target.id, self.placing)
                 self.audio.play("place" if site is not None else "error")
                 if site is None:
-                    world.event(f"CAN'T BUILD CONVEYOR: {reason}", "info")
+                    world.event(f"CAN'T BUILD {self.placing.upper()}: {reason}", "info")
                 else:
                     self.line_from = None
                     if not (pygame.key.get_mods() & pygame.KMOD_SHIFT):
@@ -665,12 +665,12 @@ class App:
         if self.view == "survey" and not self.placing:
             draw.draw_slope_marks(self.screen, world, cam, W.SLOPE_BUILDABLE_DEG, impassable_only=True)
         ghost = None
-        if self.placing == "conveyor" and self.input.mouse_inside:
+        if self.placing in ("conveyor", "monorail") and self.input.mouse_inside:
             mx, my = self._mouse_world()
-            draw.draw_slope_marks(self.screen, world, cam, STRUCTURES["conveyor"]["max_slope_deg"],
+            draw.draw_slope_marks(self.screen, world, cam, STRUCTURES[self.placing]["max_slope_deg"],
                                   (mx, my), D.SLOPE_MARK_RADIUS_CELLS, gradable=STRUCTURE_RULES.GRADE_MAX_DEG)
             hover = entities.structure_at(world, mx, my)
-            ghost = ("conveyor", self.line_from, hover.id if hover else None, (mx, my))
+            ghost = (self.placing, self.line_from, hover.id if hover else None, (mx, my))
         elif self.placing == "road" and self.input.mouse_inside:
             mx, my = self._mouse_world()
             draw.draw_slope_marks(self.screen, world, cam, STRUCTURES["road"]["max_slope_deg"],
@@ -836,9 +836,9 @@ class App:
             return "ORBITAL SCAN:  CLICK THE MAP TO SCAN THERE  RIGHT CLICK/ESC CANCEL"
         if self.view in D.VIEW_LEGENDS and not self.placing:
             return D.VIEW_LEGENDS[self.view] + "   TAB: NEXT VIEW"
-        if self.placing == "conveyor":
+        if self.placing in ("conveyor", "monorail"):
             step = "CLICK WHERE TO SEND" if self.line_from is not None else "CLICK A BUILDING TO SEND FROM"
-            return f"CONVEYOR:  {step}  SHIFT: LAY SEVERAL  RIGHT CLICK/ESC BACK"
+            return f"{self.placing.upper()}:  {step}  SHIFT: LAY SEVERAL  RIGHT CLICK/ESC BACK"
         if self.placing == "road":
             step = "CLICK THE OTHER END" if self.line_from is not None else "CLICK WHERE IT STARTS"
             return f"ROAD:  {step}  SHIFT: CARRY ON FROM THERE  RIGHT CLICK/ESC BACK"

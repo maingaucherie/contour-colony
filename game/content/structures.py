@@ -25,7 +25,9 @@ heat             warms up while working and cools when idle; runs at heat x
 waste_heat       runs `speed` times faster within gap_cells of a working one of `from`
 wear_per_cycle   wear added by each recipe cycle (0..1 scale; see WEAR)
 accepts          storage that takes only these items (the default is anything but waste)
-cost_per_cell    conveyors: build cost per cell of length (plus build_time_per_cell_s)
+cost_per_cell    conveyors, monorails: build cost per cell of length (rounded up;
+                 plus build_time_per_cell_s)
+carries          a line that moves items (conveyors.py): max_cells long, items_per_s
 snap             tiles edge to edge with others of its kind on a (dx, dy) lattice
                  instead of keeping a gap; farm_bonus per touching neighbour
 unique           only one may be built
@@ -312,6 +314,18 @@ STRUCTURES = {
         "name": "conveyor", "footprint_cells": 0.5, "max_slope_deg": 5.0,
         "cost_per_cell": {"sinter": 1}, "build_time_s": 4.0, "build_time_per_cell_s": 1.0,
         "draw_kw": 0.5, "unlocked_by": "conveyors", "line": True,
+        "carries": True, "max_cells": 10.0, "items_per_s": 1.0,
+    },
+    "monorail": {
+        # A line on pillars between two buildings, for bulk over long distances:
+        # cars run back and forth carrying items_per_s. Unlike a belt it may join
+        # two stores (store_to_store: a far depot emptied into one at home), it
+        # stands clear of the ground (elevated: crosses anything, no grading, up
+        # to max_slope_deg), and it costs aluminium as well as sinter.
+        "name": "monorail", "footprint_cells": 0.5, "max_slope_deg": 20.0,
+        "cost_per_cell": {"sinter": 1, "aluminium": 0.25}, "build_time_s": 10.0, "build_time_per_cell_s": 0.3,
+        "draw_kw": 6.0, "unlocked_by": "monorail", "line": True,
+        "carries": True, "max_cells": 120.0, "items_per_s": 3.0, "store_to_store": True, "elevated": True,
     },
     "road": {
         # A graded strip rovers drive twice as fast on (see roads.py), placed
@@ -333,7 +347,8 @@ BUILD_CATEGORIES = (
                  "reduction_furnace", "volatiles_oven", "aluminium_cell", "titanium_refinery",
                  "rare_earth_separator")),
     ("make", ("machine_shop", "fabrication_line", "frame_works", "electronics_plant")),
-    ("logistics", ("charging_pad", "depot", "outpost", "road", "conveyor", "maintenance_hangar", "slag_heap")),
+    ("logistics", ("charging_pad", "depot", "outpost", "road", "conveyor", "monorail", "maintenance_hangar",
+                   "slag_heap")),
 )
 BUILD_MENU = tuple(kind for _, kinds in BUILD_CATEGORIES for kind in kinds)
 
@@ -375,11 +390,8 @@ SNAP_RADIUS_CELLS = 3.0              # a snapping structure this close to one of
 FEED_REACH_CELLS = 0.9
 FEED_ITEMS_PER_S = 1.0
 
-# Conveyors: at most CONVEYOR_MAX_CELLS long between the edges of the two
-# buildings, moving CONVEYOR_ITEMS_PER_S. Placement shows CONVEYOR_PICK_CELLS
-# around the cursor as the building it would pick.
-CONVEYOR_MAX_CELLS = 16.0
-CONVEYOR_ITEMS_PER_S = 1.0
+# Conveyors and monorails (max_cells, items_per_s in their specs): placement
+# shows CONVEYOR_PICK_CELLS around the cursor as the building it would pick.
 CONVEYOR_PICK_CELLS = 2.5
 
 # Roads: at most ROAD_MAX_CELLS long, ROAD_WIDTH_CELLS wide, over ground up to

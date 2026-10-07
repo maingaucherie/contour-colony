@@ -103,7 +103,7 @@ class Structure:
         """Items constructors bring. A conveyor's grows with its length."""
         per_cell = self.spec.get("cost_per_cell")
         if per_cell:
-            return {k: n * self.cells() for k, n in per_cell.items()}
+            return {k: math.ceil(n * self.cells()) for k, n in per_cell.items()}
         return self.spec.get("build_cost", {})
 
     def materials_needed(self):
@@ -329,6 +329,8 @@ def check_placement(world, kind, x, y):
             return False, f"GRADING NEEDS {cost} CR"
     for other in world.structures.values():
         if other.is_line():
+            if other.spec.get("elevated"):
+                continue   # on pillars: buildings fit underneath
             line = line_of(world, other)
             if line and distance_to_segment(x, y, *line) < r + other.spec["footprint_cells"] / 2:
                 return False, "OVERLAPS " + other.spec["name"].upper()
@@ -386,7 +388,7 @@ def complete(world, s):
 
 def remove_conveyors(world, s):
     """Conveyors to or from s go with it: sites are cancelled, built ones dismantled."""
-    for c in [c for c in world.structures.values() if c.kind == "conveyor" and s.id in (c.src, c.dst)]:
+    for c in [c for c in world.structures.values() if c.spec.get("carries") and s.id in (c.src, c.dst)]:
         if c.id in world.structures:
             (dismantle if c.built else cancel_site)(world, c)
 

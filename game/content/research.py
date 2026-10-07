@@ -46,6 +46,8 @@ RESEARCH = {
                  "unlocks": ("titanium_refinery", "frame_works")},
     "rare_earths": {"name": "rare earths", "requires": (), "phase": 2, "cost": 200, "time_s": 75,
                     "unlocks": ("rare_earth_separator", "electronics_plant")},
+    "monorail": {"name": "monorail", "requires": ("conveyors",), "phase": 2, "cost": 200, "time_s": 75,
+                 "unlocks": ("monorail",)},
     "solar_thermal": {"name": "solar thermal", "requires": ("aluminium",), "phase": 2, "cost": 180, "time_s": 60,
                       "unlocks": ("heliostat_tower",)},
     "fission": {"name": "fission", "requires": ("rare_earths", "titanium"), "phase": 2, "cost": 300,
@@ -56,4 +58,4 @@ RESEARCH = {
 RESEARCH_MENU = ("sorting", "logistics_1", "better_batteries",
                  "prospecting", "deep_survey", "extraction", "electrolysis", "conveyors",
                  "volatiles", "aluminium", "fabrication", "maintenance", "hardened_bearings", "overclocking",
-                 "fuel_cells", "titanium", "rare_earths", "solar_thermal", "fission")
+                 "fuel_cells", "titanium", "rare_earths", "monorail", "solar_thermal", "fission")
