@@ -103,6 +103,29 @@ UNITS["maintenance_drone"] = {
     "bay_cost": {"sinter": 8, "parts": 6}, "bay_time_s": 20.0, "unlocked_by": "maintenance",
 }
 
+UNITS["harvester"] = {
+    # A roaming helium-3 plant on treads: it scrapes like a scraper, bakes the
+    # regolith on board and drops it behind, keeping only the helium-3. The
+    # solar wind left most of it in titanium-rich mare soil (yield_by_zone).
+    "name": "helium harvester",
+    "start_count": 0,
+    "base_speed_cells_per_s": 2.0,
+    "scrape_speed_fraction": 0.5,
+    "battery": 140.0,
+    "drain_per_cost_cell": 0.35,
+    "cargo": 12,                     # helium-3 canisters
+    "gathers": "he3",
+    "cells_per_load": 6.0,           # cells scraped per canister, on mare ground
+    "yield_by_zone": {"mare": 1.0, "kreep": 0.6, "highlands": 0.35},
+    "zone_radius_cells": 14.0,
+    "lane_spacing_cells": 1.8,
+    "min_lane_cells": 4.0,
+    "sight_cells": 2.5,
+    "unload_s": 2.0,
+    "launch_stagger_s": 0.0,
+    "bay_cost": {"parts": 8, "titanium": 12, "electronics": 4}, "bay_time_s": 40.0, "unlocked_by": "harvesters",
+}
+
 UNITS["construction_drone"] = {
     # A flying constructor: straight over cliffs and craters, so far sites go up
     # without roads or relays. Smaller loads than a constructor.
@@ -130,7 +153,7 @@ SEARCH_ATTEMPTS = 12
 
 # Order of the rover bay's build list.
 BAY_MENU = ("scavenger", "scraper", "constructor", "survey_rover", "hauler", "maintenance_drone",
-            "construction_drone")
+            "construction_drone", "harvester")
 
 # Shared unit rules.
 SLOPE_DIVISOR_DEG = 5.0              # speed = base / (1 + slope / SLOPE_DIVISOR_DEG)

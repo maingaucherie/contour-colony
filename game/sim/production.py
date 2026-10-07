@@ -136,6 +136,8 @@ def cycle_outputs(world, s, r):
     output picked with the weights of the ground it stands on."""
     if not s.spec.get("picks_one"):
         chance = s.spec.get("chance")
+        if "chance_by_zone" in s.spec:
+            chance = s.spec["chance_by_zone"][G.zone_at(world.heightmap.geology, s.x, s.y)]
         if not chance:
             return r["out"]
         return {k: n for k, n in r["out"].items() if k not in chance or world.rng.random() < chance[k]}

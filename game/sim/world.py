@@ -317,7 +317,7 @@ class World:
         if kind == "survey" and u.kind != "survey_rover":
             kind = "move"
         ok, reason = units.give_order(self, u, kind, x, y)
-        if ok and u.kind == "scraper":   # a scraper sent somewhere sweeps there from now on
+        if ok and "zone_radius_cells" in u.spec:   # a scraper sent somewhere sweeps there from now on
             u.zone, u.lane = (x, y), 0
         return ok, reason
 

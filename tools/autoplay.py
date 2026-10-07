@@ -23,7 +23,8 @@ from game.sim.terrain import generate_terrain, run_to_completion  # noqa: E402
 from game.sim.world import build_world  # noqa: E402
 
 RESEARCH_ORDER = ("logistics_1", "sorting", "extraction", "volatiles", "aluminium", "prospecting", "electrolysis",
-                  "fabrication", "titanium", "rare_earths", "maintenance", "conveyors")
+                  "fabrication", "titanium", "rare_earths", "solar_thermal", "maintenance", "conveyors", "drones",
+                  "harvesters", "fusion", "molten_regolith")
 # Act I: iron from scrap, sinter from scraped regolith, parts from the shop.
 ACT_ONE = ("scrap_furnace", "sinter_kiln", "machine_shop", "sorter")
 # Later industry, each built once its inputs have a source: (kind, needs any of these to exist).
@@ -33,16 +34,24 @@ FACTORY = (("crusher", ("ilmenite_mine", "sorter")), ("aluminium_cell", ("anorth
            ("reduction_furnace", ("crusher",)), ("fabrication_line", ("aluminium_cell",)),
            ("titanium_refinery", ("reduction_furnace",)), ("frame_works", ("titanium_refinery",)),
            ("rare_earth_separator", ("kreep_mine", "sorter")), ("electronics_plant", ("rare_earth_separator",)))
+# Scaling up for the later bills: (mass driver phases done, kind, how many).
+SCALE = ((2, "crusher", 2), (2, "reduction_furnace", 2), (2, "titanium_refinery", 2), (2, "electrolyzer", 2),
+         (2, "fabrication_line", 2), (3, "frame_works", 2), (3, "titanium_refinery", 3), (3, "reduction_furnace", 3),
+         (3, "crusher", 3), (3, "electronics_plant", 2), (3, "aluminium_cell", 2))
 MINES = (("ilmenite_mine", "ilmenite"), ("ice_mine", "ice"), ("anorthite_mine", "anorthite"), ("kreep_mine", "kreep"))
 SELL_ABOVE = {"sinter": 120, "regolith": 120, "anorthite": 80, "ilmenite": 80, "kreep": 40, "titania": 40,
               "water": 30, "concentrate": 60, "ice": 60}
+# ... but keep a bigger buffer of what a built consumer turns into goal goods.
+KEEP_FOR = {"titania": ("titanium_refinery", 300), "kreep": ("rare_earth_separator", 200),
+            "concentrate": ("reduction_furnace", 150), "ilmenite": ("crusher", 150)}
 # (unit, how many, structure that must exist first)
 UNIT_GOALS = (("hauler", 2, None), ("scraper", 2, "sinter_kiln"), ("scavenger", 4, None), ("constructor", 2, "sorter"),
               ("hauler", 3, "scrap_furnace"), ("survey_rover", 1, None), ("hauler", 4, "crusher"),
               ("constructor", 2, "machine_shop"), ("scraper", 3, "sorter"), ("hauler", 5, "electrolyzer"),
               ("hauler", 6, "reduction_furnace"), ("scraper", 4, "volatiles_oven"), ("hauler", 7, "aluminium_cell"),
               ("constructor", 3, "fabrication_line"), ("hauler", 8, "titanium_refinery"),
-              ("hauler", 9, "electronics_plant"))
+              ("hauler", 9, "electronics_plant"), ("construction_drone", 2, None), ("hauler", 11, "frame_works"),
+              ("harvester", 2, "fusion_reactor"))
 MAX_DEPOTS = 6
 UNIT_PARTS_RESERVE = 4     # keep this many parts spare after ordering a unit
 OUTPOST_PARTS_SPARE = 20   # build outposts (rather than pads) only with this many parts in stock
@@ -114,11 +123,18 @@ class Bot:
         return self.powered_spot(x, y)
 
     def grid_balance(self):
-        """Planned supply minus planned demand on the lander's grid (sites count)."""
+        """Planned supply minus planned demand on the lander's grid (sites count).
+        Before the launch, the mass driver's charge counts as demand."""
+        from game.sim import massdriver
         supply = demand = 0.0
+        md = massdriver.find(self.w)
+        if md is not None and md.phase >= len(massdriver.phases(md)) - 1:
+            demand += md.spec["launch_kw"]
         for s in self.w.structures.values():
-            if s.kind == "solar":
+            if s.kind in ("solar", "heliostat_tower"):
                 supply += s.spec["power_kw"] * self.w.illumination_at(s.x, s.y)
+            elif "generates_kw" in s.spec:
+                supply += s.output_kw   # fuelled: only what it makes now
             else:
                 supply += s.spec.get("power_kw", 0.0)
             demand += s.draw_kw()
@@ -160,9 +176,11 @@ class Bot:
         if self.depot():
             return
         if self.grid_balance() < POWER_MARGIN_KW and w.unlocked("solar"):
-            at = self.factory_site("solar")
+            big = w.unlocked("heliostat_tower") and w.stock("aluminium") >= 15 and self.grid_balance() < -30
+            kind = "heliostat_tower" if big else "solar"
+            at = self.factory_site(kind)
             if at:
-                self.place("solar", at)
+                self.place(kind, at)
                 return
         if w.unlocked("rover_bay") and not self.count("rover_bay"):
             at = self.factory_site("rover_bay")
@@ -173,6 +191,10 @@ class Bot:
             at = self.spot("mass_driver", (L.x, L.y), 8.0, 40.0)
             if at:
                 self.place("mass_driver", at)
+                return
+        md = next((s for s in w.structures.values() if s.kind == "mass_driver"), None)
+        if md is not None and md.phase >= 2 and not self.powered_spot(md.x, md.y):
+            if self.connect(md.x, md.y):
                 return
         for kind in ACT_ONE:
             if w.unlocked(kind) and not self.count(kind):
@@ -203,6 +225,38 @@ class Bot:
                     return
                 self.place(kind, at)
                 return
+        if self.fusion():
+            return
+        for phase, kind, n in SCALE:
+            if w.research.phase >= phase and w.unlocked(kind) and self.count(kind) < n:
+                at = self.factory_site(kind)
+                if at is not None:
+                    self.place(kind, at)
+                    return
+        if w.research.phase >= 2:
+            for kind, field_kind in MINES:
+                if w.unlocked(kind) and 0 < self.count(kind) < 2 and kind != "ice_mine":
+                    if self.mine(kind, field_kind):
+                        return
+
+    def fusion(self):
+        """Tier III power for the launch: a deuterium still, a fusion reactor
+        and its radiators. True if something was placed."""
+        w = self.w
+        if not w.unlocked("fusion_reactor"):
+            return False
+        for kind in ("deuterium_still", "fusion_reactor"):
+            if not self.count(kind):
+                at = self.factory_site(kind)
+                return at is not None and self.place(kind, at) is not None
+        r = next(s for s in w.structures.values() if s.kind == "fusion_reactor")
+        reach = r.spec["footprint_cells"] + STRUCTURES["radiator"]["footprint_cells"] + r.spec["cooling_reach_cells"]
+        near = sum(1 for o in w.structures.values() if o.kind == "radiator"
+                   and math.hypot(o.x - r.x, o.y - r.y) <= reach)
+        if near < r.spec["cooling_radiators"]:
+            at = self.spot("radiator", (r.x, r.y), 1.0, reach - 0.1)
+            return at is not None and self.place("radiator", at) is not None
+        return False
 
     def depot(self):
         w = self.w
@@ -348,6 +402,9 @@ class Bot:
         big surplus so research keeps going."""
         w = self.w
         for item, keep in SELL_ABOVE.items():
+            consumer, more = KEEP_FOR.get(item, (None, 0))
+            if consumer and self.count(consumer, built_only=True):
+                keep = more
             if w.stock(item) > keep + 10:
                 w.sell(item, w.stock(item) - keep)
         if self.missing().get("parts", 0) > 0 and w.credits < 100 and w.stock("scrap") > 100:
@@ -361,6 +418,8 @@ class Bot:
         md = massdriver.find(self.w)
         if md is not None and md.built:
             want = "low" if self.missing().get("parts", 0) > 0 or self.w.stock("parts") < 10 else "normal"
+            if md.status == massdriver.CHARGING:
+                want = "high"
             if md.priority != want:
                 self.w.set_priority(md.id, want)
 

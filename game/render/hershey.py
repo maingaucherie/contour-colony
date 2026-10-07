@@ -52,6 +52,15 @@ def render(text, size=1, color=D.COLOR_TEXT):
     return surf
 
 
+def fit(text, width, size=1):
+    """text, cut short with ".." if it is wider than width pixels."""
+    if text_width(text, size) <= width:
+        return text
+    while text and text_width(text + "..", size) > width:
+        text = text[:-1]
+    return text.rstrip() + ".."
+
+
 def draw_text(dest, text, pos, size=1, color=D.COLOR_TEXT, align="left", additive=False):
     """Blit cached text. pos is the top-left (or top-right/top-centre).
 

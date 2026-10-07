@@ -94,7 +94,7 @@ def brain(unit):
     from game.sim import constructor, drone, hauler, scavenger, scraper, surveyor
     return {"scavenger": scavenger, "constructor": constructor, "survey_rover": surveyor,
             "hauler": hauler, "maintenance_drone": drone, "scraper": scraper,
-            "construction_drone": constructor}[unit.kind]
+            "construction_drone": constructor, "harvester": scraper}[unit.kind]
 
 
 def flies(unit):

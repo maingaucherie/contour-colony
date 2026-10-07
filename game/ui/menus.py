@@ -6,7 +6,7 @@ from game.content import display as D
 from game.content.research import RESEARCH, RESEARCH_MENU
 from game.content.structures import BUILD_CATEGORIES, STRUCTURES
 from game.content.items import ITEMS
-from game.render.hershey import draw_text, line_height, text_width
+from game.render.hershey import draw_text, fit, line_height, text_width
 from game.sim import stats
 
 BUILD_KEYS = "1234567890"
@@ -37,7 +37,7 @@ def _panel(surface, x, y, w, lines, title, cursor=None, selectable=0):
         # A line is plain text or columns [(x offset, text), ...]: the font is proportional,
         # so spaces can't line columns up.
         for dx, part in ([(0, text)] if isinstance(text, str) else text):
-            draw_text(surface, part, (x + 10 + dx, ty), 1, color, additive=True)
+            draw_text(surface, fit(part, w - 20 - dx), (x + 10 + dx, ty), 1, color, additive=True)
         ty += lh
     return rect, rows
 
@@ -68,6 +68,8 @@ def draw_build_menu(surface, world, x, y, cursor=None, tab=0):
             short = [k for k, n in spec.get("cost_per_cell", spec.get("build_cost", {})).items()
                      if world.stock(k) < n]
             note = "  SHORT OF " + ", ".join(s.upper() for s in short) if short else ""
+            if note and text_width(cost + note) > D.MENU_WIDTH - 20 - c2:
+                note = "  SHORT"
             lines.append(([(0, key), (c1, spec["name"].upper()), (c2, cost + note)],
                           D.COLOR_TEXT if not short else D.COLOR_TEXT_DIM))
         else:

@@ -7,8 +7,9 @@ from game.content import structures as S
 from game.content import units as U
 from game.content import world as W
 from game.content.items import ITEMS
-from game.render.hershey import draw_text, line_height
+from game.render.hershey import draw_text, fit, line_height, text_width
 from game.sim import conveyors as CONV
+from game.sim import geology as G
 from game.sim import massdriver as MD
 from game.sim import production as P
 from game.sim import structures as ST
@@ -95,6 +96,10 @@ def _unit_lines(world, unit):
     lines.append((f"BATTERY   {frac * 100:3.0f}% OF {cap:.0f}", 1, D.COLOR_TEXT_DIM, ("bar", frac)))
     if unit.kind == "scavenger":
         lines.append((f"COLLECTED {unit.collected}", 1, D.COLOR_TEXT_DIM))
+    if "yield_by_zone" in unit.spec and unit.zone is not None:
+        zone = G.zone_at(world.heightmap.geology, *unit.zone)
+        lines.append((f"GROUND    {zone.upper()}: YIELD {unit.spec['yield_by_zone'][zone] * 100:.0f}%"
+                      + ("" if zone == "mare" else " (BEST ON MARE)"), 1, D.COLOR_TEXT_DIM))
     lines.append((f"POSITION  {unit.x * km:5.1f}, {unit.y * km:5.1f} KM", 1, D.COLOR_TEXT_DIM))
     hint = "RIGHT CLICK: SURVEY HERE" if unit.kind == "survey_rover" else "RIGHT CLICK: GO HERE"
     lines.append((hint, 1, D.COLOR_FLOW))
@@ -116,9 +121,10 @@ def _structure_lines(world, s):
         if short:
             lines.append(("WAITING FOR " + ", ".join(k.upper() for k in short) + " IN STORAGE", 1, D.COLOR_ALERT))
         builders = [u for u in world.units.values() if u.kind == "constructor"]
-        if not builders:
+        drones = [u for u in world.units.values() if u.kind == "construction_drone"]
+        if not builders and not drones:
             lines.append(("NO CONSTRUCTOR ON SITE", 1, D.COLOR_ALERT))
-        elif not US.in_charger_range(world, builders[0], s.x, s.y):
+        elif not drones and not US.in_charger_range(world, builders[0], s.x, s.y):
             lines.append(("OUT OF ROVER RANGE - BUILD A CHARGING PAD NEARER", 1, D.COLOR_ALERT))
         if s.grade_deg > 0 and delivered:
             lines.append((f"GRADING   {s.grade_deg:.1f} DEG ({s.grade_cr} CR PAID, +{s.build_time() - s.assembly_time():.0f} S)",
@@ -203,7 +209,11 @@ def _structure_lines(world, s):
         for i, kind in enumerate(U.BAY_MENU):
             spec_u = U.UNITS[kind]
             if world.unlocked(kind):
-                lines.append((f"{i + 1}  {spec_u['name'].upper()}: {cost_text(spec_u['bay_cost'])}", 1, D.COLOR_FLOW))
+                text = f"{i + 1}  {spec_u['name'].upper()}: {cost_text(spec_u['bay_cost'])}"
+                if text_width(text) > D.PANEL_WIDTH:   # the cost on a line of its own
+                    lines.append((f"{i + 1}  {spec_u['name'].upper()}:", 1, D.COLOR_FLOW))
+                    text = "    " + cost_text(spec_u["bay_cost"])
+                lines.append((text, 1, D.COLOR_FLOW))
     return lines
 
 
@@ -382,7 +392,7 @@ def draw_inspect(surface, world, selected, top):
     pygame.draw.rect(surface, D.COLOR_FRAME, rect, 1)
     y = top + pad
     for line, hgt in zip(lines, heights):
-        draw_text(surface, line[0], (x, y), line[1], line[2])
+        draw_text(surface, fit(line[0], D.PANEL_WIDTH, line[1]), (x, y), line[1], line[2])
         if len(line) > 3:
             _bar(surface, x, y + line_height(line[1]) + 3, line[3][1], D.COLOR_FLOW)
         y += hgt

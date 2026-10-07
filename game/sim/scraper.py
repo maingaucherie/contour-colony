@@ -9,11 +9,21 @@ like the harvesters in the film Moon. A full load goes
 to the nearest storage. Lumpy ground it scrapes often enough is levelled
 (World.scrape). When colony storage holds all the regolith it may, scrapers
 wait.
+
+Helium harvesters use this brain too. They process the regolith on board and
+keep only what their spec `gathers` (helium-3), one per cells_per_load cells
+scraped, times the yield of the zone they are scraping (yield_by_zone).
 """
 
 import math
 
+from game.sim import geology as G
 from game.sim import units as UN
+
+
+def gathers(unit):
+    """The item this unit's blade collects."""
+    return unit.spec.get("gathers", "regolith")
 
 
 def _lanes(unit):
@@ -62,14 +72,15 @@ def lane_segment(world, unit, k, reverse):
     return (b, a) if reverse else (a, b)
 
 
-def _room_at(world, s):
-    return s is not None and s.accepts("regolith") and s.stored() < s.spec["storage"]
+def _room_at(world, s, item):
+    return s is not None and s.accepts(item) and s.stored() < s.spec["storage"]
 
 
 def think(world, unit):
     roles = UN.dock_roles(world, unit)
-    room = world.storage_room("regolith") > 0
-    if unit.cargo_total() and "store" in roles and room and _room_at(world, world.structures.get(unit.dock)):
+    room = world.storage_room(gathers(unit)) > 0
+    if unit.cargo_total() and "store" in roles and room and _room_at(world, world.structures.get(unit.dock),
+                                                                     gathers(unit)):
         UN.work(unit, "unload", unit.spec["unload_s"])
         return
     if UN.try_charge(world, unit):
@@ -136,12 +147,16 @@ def on_move(world, unit):
     if unit.activity != "scraping":
         return
     spec = unit.spec
-    unit.scraped += unit.odometer - unit.blade_odo
+    item = gathers(unit)
+    gain = unit.odometer - unit.blade_odo
+    if "yield_by_zone" in spec:
+        gain *= spec["yield_by_zone"][G.zone_at(world.heightmap.geology, unit.x, unit.y)]
+    unit.scraped += gain
     unit.blade_odo = unit.odometer
     while unit.scraped >= spec["cells_per_load"] and unit.cargo_total() < spec["cargo"]:
         unit.scraped -= spec["cells_per_load"]
-        unit.cargo["regolith"] = unit.cargo.get("regolith", 0) + 1
-        world.produced["regolith"] = world.produced.get("regolith", 0) + 1
+        unit.cargo[item] = unit.cargo.get(item, 0) + 1
+        world.produced[item] = world.produced.get(item, 0) + 1
     size = world.heightmap.size
     cell = min(max(int(unit.y + 0.5), 0), size - 1) * size + min(max(int(unit.x + 0.5), 0), size - 1)
     if cell != unit.blade_cell:
@@ -155,12 +170,13 @@ def on_move(world, unit):
 def work_done(world, unit):
     if unit.activity == "unload":
         s = world.structures.get(unit.dock)
-        if s is not None:
-            n = min(unit.cargo.get("regolith", 0), world.storage_room("regolith"))
-            put = world.store(s, "regolith", n)
-            unit.cargo["regolith"] -= put
-            if not unit.cargo["regolith"]:
-                del unit.cargo["regolith"]
+        item = gathers(unit)
+        if s is not None and item in unit.cargo:
+            n = min(unit.cargo[item], world.storage_room(item))
+            put = world.store(s, item, n)
+            unit.cargo[item] -= put
+            if not unit.cargo[item]:
+                del unit.cargo[item]
         think(world, unit)
 
 

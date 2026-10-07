@@ -17,6 +17,7 @@ requires_field   only on a confirmed (survey level 2) field of this kind; mines
                  slow down as the field's reserves run out (see world.py)
 recipe           per cycle: consume "in", after time_s produce "out"
 chance           {item: odds}: that output appears only with these odds per cycle
+chance_by_zone   the same, by the zone of the ground it stands on (see geology.py)
 picks_one        the recipe yields ONE of its outputs per cycle, picked at random
                  with the weights in sorts[zone of the ground it stands on]
 sun_speed        recipe speed from the darkest to the brightest ground (a solar concentrator)
@@ -290,6 +291,39 @@ STRUCTURES = {
         "storage": 40, "accepts": ("spent_fuel",), "dock_slots": 1, "dock_radius_cells": 1.7,
         "unlocked_by": "fission",
     },
+    # Tier III (after the Coils).
+    "molten_regolith_cell": {
+        # Molten regolith electrolysis: melt raw regolith at 1600 C and pull
+        # the metals out with current. No sorting, crushing or reducing: the
+        # whole ore chain in one hungry box. What metal comes out depends on
+        # the ground (mare: titania; highlands: aluminium), and it leaves slag.
+        "name": "molten regolith cell", "footprint_cells": 1.6, "max_slope_deg": 5.0,
+        "build_cost": {"sinter": 40, "parts": 8, "titanium": 15, "electronics": 6}, "build_time_s": 40.0,
+        "draw_kw": 80.0, "unlocked_by": "molten_regolith",
+        "recipe": {"in": {"regolith": 5}, "out": {"iron": 1, "titania": 1, "aluminium": 1, "oxygen": 2, "slag": 2},
+                   "time_s": 6.0},
+        "chance_by_zone": {"mare": {"titania": 0.9, "aluminium": 0.3},
+                           "highlands": {"titania": 0.2, "aluminium": 0.9},
+                           "kreep": {"titania": 0.5, "aluminium": 0.5}},
+        "wear_per_cycle": 0.003,
+    },
+    "deuterium_still": {
+        # Cryogenic distillation of water for its heavy fraction. Lunar ice is
+        # rich in deuterium, but it still takes a lot of water for a little.
+        "name": "deuterium still", "footprint_cells": 1.1, "max_slope_deg": 5.0,
+        "build_cost": {"sinter": 25, "parts": 4, "aluminium": 10, "titanium": 5}, "build_time_s": 25.0,
+        "draw_kw": 20.0, "unlocked_by": "fusion",
+        "recipe": {"in": {"water": 4}, "out": {"deuterium": 1}, "time_s": 10.0}, "wear_per_cycle": 0.001,
+    },
+    "fusion_reactor": {
+        # Deuterium and helium-3: aneutronic fusion, so no spent fuel, only heat.
+        # Five times a fission reactor, and it needs three times the radiators.
+        "name": "fusion reactor", "footprint_cells": 1.8, "max_slope_deg": 5.0,
+        "build_cost": {"sinter": 60, "parts": 10, "aluminium": 30, "titanium": 30, "electronics": 20},
+        "build_time_s": 60.0, "grid_reach_cells": 7.0, "generates_kw": 300.0, "unlocked_by": "fusion",
+        "recipe": {"in": {"he3": 1, "deuterium": 1}, "out": {}, "time_s": 20.0},
+        "cooling_radiators": 6, "cooling_reach_cells": 2.0, "wear_per_cycle": 0.002,
+    },
     "mass_driver": {
         # The goal. Built once, then completed in phases: each phase is a bill
         # of goods delivered like any other (haulers, conveyors), and each one
@@ -341,14 +375,14 @@ STRUCTURES = {
 BUILD_CATEGORIES = (
     ("goal", ("mass_driver",)),
     ("power", ("solar", "pylon", "power_tower", "fuel_cell_bank", "heliostat_tower", "fuel_fabricator",
-               "fission_reactor", "radiator", "cask_store")),
+               "fission_reactor", "radiator", "deuterium_still", "fusion_reactor")),
     ("gather", ("rover_bay", "scanner", "ilmenite_mine", "anorthite_mine", "kreep_mine", "ice_mine")),
     ("process", ("scrap_furnace", "sinter_kiln", "sorter", "crusher", "ice_melter", "electrolyzer",
                  "reduction_furnace", "volatiles_oven", "aluminium_cell", "titanium_refinery",
-                 "rare_earth_separator")),
+                 "rare_earth_separator", "molten_regolith_cell")),
     ("make", ("machine_shop", "fabrication_line", "frame_works", "electronics_plant")),
     ("logistics", ("charging_pad", "depot", "outpost", "road", "conveyor", "monorail", "maintenance_hangar",
-                   "slag_heap")),
+                   "slag_heap", "cask_store")),
 )
 BUILD_MENU = tuple(kind for _, kinds in BUILD_CATEGORIES for kind in kinds)
 

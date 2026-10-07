@@ -6,9 +6,11 @@ console. `DESIGN.md` is the design brief and the single source of truth.
 Status: **Milestone 6 (progression), in progress**. Land with scavengers and
 a scraper on a 512-cell site, scrape regolith, sort it for minerals, melt scrap
 into the first iron, and build the mass driver: four phases of goods, each
-opening the next tier of research, then a launch that wins the site. Act I
-and the mass driver are playable; the Tier II and III industries are being
-built (see DESIGN.md, Progression).
+opening the next tier of research, then a launch that wins the site. All
+three tiers are playable (Tier II: aluminium, titanium, frames, rare earths,
+electronics, fuel cells, heliostats, fission, monorails, construction drones;
+Tier III: molten regolith cells, helium harvesters, fusion); balancing the
+later acts is in progress (see DESIGN.md, Progression).
 
 ## Play
 
@@ -36,7 +38,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | O | Orbit and market: order supply drops (crates or ready-built units, land during the next pass), aim the free orbital scan while the ship is overhead, or sell 10 of any stored good |
 | Left click | Select a unit or structure (inspect panel) |
 | Right click | Order the selected unit: go there, or for a survey rover, survey there; a scraper sent somewhere sweeps there from then on |
-| 1-6 with a rover bay selected | Build a scavenger, scraper, constructor, survey rover, hauler or maintenance drone |
+| 1-8 with a rover bay selected | Build a scavenger, scraper, constructor, survey rover, hauler, maintenance drone, construction drone or helium harvester |
 | P | Cycle the selected structure's power priority |
 | J | Clock speed of the selected production building: 100%, 50% (less power, less wear), 150% after Overclocking |
 | Del | Cancel the selected construction site (materials refunded), or mark a finished structure for a constructor to dismantle (75% back); Del again keeps it |
@@ -84,6 +86,11 @@ needed; solar arrays click together into farms. Slightly steep ground can be
 graded for credits (amber marks while placing). Outposts give far fields
 their own power, charging and storage.
 
+Later processes make waste: the aluminium cell and the molten regolith cell
+leave slag (build a slag heap), the fission reactor spent fuel (a cask store),
+and reactors need radiator panels beside them to run at full power. A plant
+whose waste has nowhere to go stops, like one whose output is full.
+
 A rover that runs flat isn't lost: it trickle-charges from its emergency
 panels (faster in sunlight) and drives home when it can.
 
@@ -92,9 +99,12 @@ machine part per 10%). Constructors repair when idle; maintenance drones
 (after Maintenance research) fly straight to them from their hangar.
 
 Conveyors (after the Conveyors research) are belts between two buildings up
-to 16 cells apart: a producer to a building that uses its output, a producer
+to 10 cells apart: a producer to a building that uses its output, a producer
 to storage, or storage to a building that uses what it holds. They cost a
 sinter block per cell, run on the source's power and move an item a second.
+Monorails (after the Rails) run on pillars up to 120 cells, over buildings
+and rough ground, three items a second; unlike belts they can join two
+stores, so a far depot empties itself into one at home.
 Roads cost credits per cell (more on steep ground) and any constructor grades
 them; rovers drive twice as fast on them on less battery, find them on their
 own, and can climb a road up ground too steep to drive otherwise.
@@ -108,7 +118,7 @@ Zoom right in to hear the site: machinery thumping, process plant humming,
 rovers whining past.
 
 Storage is one colony-wide pool: the lander plus every depot. No single good
-may fill more than 30% of it (scrap 60%), so a surplus backs up at its
+may fill more than 30% of it (scrap and regolith 40%, gases 5%), so a surplus backs up at its
 producer instead of clogging the colony; sell surplus from the orbit menu.
 Scrap that doesn't fit is sold on arrival, and hydrogen and oxygen are vented
 when nothing takes them. The HUD shows colony storage and whether loads are

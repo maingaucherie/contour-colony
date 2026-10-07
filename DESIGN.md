@@ -396,14 +396,14 @@ Playtest verdict on Milestone 5: the game felt like a sequence of actions, never
 
 **Run shape.** A site runs 1.5–3 hours across several sittings (saves carry it): Act I *Scramble* (0–30 min), Act II *Industry* (30–90), Act III *Mastery* (90–150+).
 
-**The goal: the mass driver.** Placed once, then completed in four phases, each a bill of goods delivered like any consumer's inputs (haulers, conveyors), each opening the next research tier. Then it charges (400 kW for a minute) and fires: the site is won, and "keep playing" carries on. Contracts are side income; calm sites can't be lost.
+**The goal: the mass driver.** Placed once, then completed in four phases, each a bill of goods delivered like any consumer's inputs (haulers, conveyors), each opening the next research tier. Then it charges (300 kW for a minute) and fires: the site is won, and "keep playing" carries on. Contracts are side income; calm sites can't be lost.
 
 | Phase | Needs | Opens |
 | --- | --- | --- |
 | 1. Foundation | 150 sinter, 40 iron | Tier II (prospecting, extraction, electrolysis, reduction, conveyors, maintenance, overclocking) |
 | 2. Rails | 300 iron, 150 parts, 120 aluminium | Later Tier II (titanium, frames, rare earths, fission, monorail) |
 | 3. Coils | 300 parts, 150 titanium, 100 electronics | Tier III (molten regolith cells, harvesters, fusion) |
-| 4. Launch | 200 frames, 150 electronics, then 400 kW for 60 s | The end |
+| 4. Launch | 200 frames, 150 electronics, then 300 kW for 60 s | The end |
 
 **Ladders: each rung a different process.** Higher rungs give more but ask for more logistics, power or waste handling; lower rungs stay useful, and every road reaches the launch without the top-end buildings.
 
@@ -418,9 +418,11 @@ Playtest verdict on Milestone 5: the game felt like a sequence of actions, never
 
 **The site** is 512 cells across (about 205 km) with planned geology: the landing mare in the middle, highlands around it (anorthite), cold-trap craters near one "pole" edge (ice), a KREEP province on the far side. Route searches use precomputed edges and stop at a rover's battery range, so the larger map stays fast.
 
-**Defaults taken for the open questions** (to revisit): no day/night yet; the sorter weights by local geology; monorail track in straight segments; haulers collect harvester canisters; storage keeps back what construction sites still need.
+**Defaults taken for the open questions** (to revisit): no day/night yet; the sorter weights by local geology; monorail track in straight segments; harvesters bring their own canisters home (like scrapers); storage keeps back what construction sites still need.
 
-**Build status.** Done: the 512-cell site and geology, scrapers, sorter, scrap furnace, field drills for all four minerals, the research tiers, the mass driver, the production panel (L), a categorised build menu. Next: Tier II (aluminium, titanium, frames, rare earths, electronics, volatiles oven, fabrication line, fuel cells, heliostat, fission, monorail, construction drones, minimap), then Tier III and balancing toward the act targets.
+**Build status.** Done: the 512-cell site and geology, scrapers, sorter, scrap furnace, field drills for all four minerals, the research tiers, the mass driver, the production panel (L), a categorised build menu; Tier II (aluminium and slag, titanium, frames, rare earths, electronics, volatiles oven, fabrication line, fuel cells, power towers, heliostat, fission with radiators and spent fuel, monorail, construction drones); the minimap (U); Tier III (molten regolith cell whose metals follow the ground, helium harvesters that scrape like scrapers and keep only helium-3, deuterium still, fusion reactor with six radiators). Next: balancing toward the act targets with the autoplayer.
+
+**Tier III numbers.** Molten regolith cell: 5 regolith and 80 kW → 1 iron, 2 oxygen, 2 slag, and titania / aluminium with odds set by the ground (mare 90% / 30%, highlands 20% / 90%). Harvester: one helium-3 canister per 6 cells scraped on mare (60% on KREEP ground, 35% on highlands). Deuterium still: 4 water → 1 deuterium in 10 s. Fusion reactor: 1 helium-3 + 1 deuterium every 20 s → 300 kW (half without its six radiators): one ice mine, melter and still, plus one or two harvesters, keep one running.
 
 ## Later: touch screens and teaching
 

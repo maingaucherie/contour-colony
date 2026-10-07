@@ -54,10 +54,18 @@ RESEARCH = {
                "time_s": 60, "unlocks": ("construction_drone",)},
     "fission": {"name": "fission", "requires": ("rare_earths", "titanium"), "phase": 2, "cost": 300,
                 "time_s": 90, "unlocks": ("fuel_fabricator", "fission_reactor", "radiator", "cask_store")},
+    # Tier III (after the Coils).
+    "molten_regolith": {"name": "molten regolith", "requires": ("titanium",), "phase": 3, "cost": 300,
+                        "time_s": 90, "unlocks": ("molten_regolith_cell",)},
+    "harvesters": {"name": "helium harvesters", "requires": ("volatiles",), "phase": 3, "cost": 300,
+                   "time_s": 90, "unlocks": ("harvester",)},
+    "fusion": {"name": "fusion", "requires": ("harvesters", "rare_earths"), "phase": 3, "cost": 400,
+               "time_s": 120, "unlocks": ("deuterium_still", "fusion_reactor")},
 }
 
 # Order of the research panel (each gets a letter key).
 RESEARCH_MENU = ("sorting", "logistics_1", "better_batteries",
                  "prospecting", "deep_survey", "extraction", "electrolysis", "conveyors",
                  "volatiles", "aluminium", "fabrication", "maintenance", "hardened_bearings", "overclocking",
-                 "fuel_cells", "titanium", "rare_earths", "monorail", "solar_thermal", "drones", "fission")
+                 "fuel_cells", "titanium", "rare_earths", "monorail", "solar_thermal", "drones", "fission",
+                 "molten_regolith", "harvesters", "fusion")
