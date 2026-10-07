@@ -336,8 +336,8 @@ STRUCTURES = {
         "phases": (
             {"name": "foundation", "needs": {"sinter": 150, "iron": 40}},
             {"name": "rails", "needs": {"iron": 300, "parts": 150, "aluminium": 120}},
-            {"name": "coils", "needs": {"parts": 300, "titanium": 150, "electronics": 100}},
-            {"name": "launch", "needs": {"frames": 200, "electronics": 150}},
+            {"name": "coils", "needs": {"parts": 200, "titanium": 120, "electronics": 80}},
+            {"name": "launch", "needs": {"frames": 120, "electronics": 120}},
         ),
         "launch_kw": 300.0, "launch_charge_s": 60.0,
         # After the launch it ships exports: hauled into a hold of ship_hold

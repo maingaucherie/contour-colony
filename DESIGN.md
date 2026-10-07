@@ -402,8 +402,8 @@ Playtest verdict on Milestone 5: the game felt like a sequence of actions, never
 | --- | --- | --- |
 | 1. Foundation | 150 sinter, 40 iron | Tier II (prospecting, extraction, electrolysis, reduction, conveyors, maintenance, overclocking) |
 | 2. Rails | 300 iron, 150 parts, 120 aluminium | Later Tier II (titanium, frames, rare earths, fission, monorail) |
-| 3. Coils | 300 parts, 150 titanium, 100 electronics | Tier III (molten regolith cells, harvesters, fusion) |
-| 4. Launch | 200 frames, 150 electronics, then 300 kW for 60 s | The end |
+| 3. Coils | 200 parts, 120 titanium, 80 electronics | Tier III (molten regolith cells, harvesters, fusion) |
+| 4. Launch | 120 frames, 120 electronics, then 300 kW for 60 s | The end |
 
 **Ladders: each rung a different process.** Higher rungs give more but ask for more logistics, power or waste handling; lower rungs stay useful, and every road reaches the launch without the top-end buildings.
 
@@ -422,7 +422,13 @@ Playtest verdict on Milestone 5: the game felt like a sequence of actions, never
 
 **Build status.** Done: the 512-cell site and geology, scrapers, sorter, scrap furnace, field drills for all four minerals, the research tiers, the mass driver, the production panel (L), a categorised build menu; Tier II (aluminium and slag, titanium, frames, rare earths, electronics, volatiles oven, fabrication line, fuel cells, power towers, heliostat, fission with radiators and spent fuel, monorail, construction drones); the minimap (U); Tier III (molten regolith cell whose metals follow the ground, helium harvesters that scrape like scrapers and keep only helium-3, deuterium still, fusion reactor with six radiators). Next: balancing toward the act targets with the autoplayer.
 
-**Balance (autoplayer, six seeds, calm pace).** Foundation at 15–26 min, Rails at 62–113, Coils at 101–163; one seed launched at 185 min, four more were in the Launch phase at 200. What it took: the mass driver's goods win ties with other consumers (twice a normal consumer's hauling weight), storage pressure handled by selling surplus (a full colony store stops the scrapers and, through hydrogen, iron), KREEP stretched (2 KREEP → 2 rare earths + thorium; 1 rare earth + 1 part → 2 electronics) because the KREEP province is 160–230 cells out and the mare sorters only trickle it.
+**Balance (autoplayer, six seeds, calm pace, 220 min).** Foundation at 15–26 min, Rails at 62–110, Coils at 95–156, launch at 139, 140, 147 and 188 min on four seeds; the other two were partway through the Launch bill. What it took:
+- The mass driver's goods win ties with other consumers (twice a normal consumer's hauling weight); before, iron went into hundreds of spare parts while the driver waited on its last few.
+- Storage pressure: a full colony store stops the scrapers and, through hydrogen, iron. The bot sells surplus; the HUD storage line turns red and the event says so.
+- Scrapers whose zone the colony has built over move to open ground by themselves.
+- Production buildings can be switched off (J), so parts makers stop eating the frames' aluminium.
+- KREEP stretched (2 KREEP → 2 rare earths + thorium; 1 rare earth + 1 part → 2 electronics): the KREEP province is 160–230 cells out and the mare sorters only trickle it.
+- Smaller late bills (Coils 200 / 120 / 80, Launch 120 / 120).
 
 **Tier III numbers.** Molten regolith cell: 5 regolith and 80 kW → 1 iron, 2 oxygen, 2 slag, and titania / aluminium with odds set by the ground (mare 90% / 30%, highlands 20% / 90%). Harvester: one helium-3 canister per 6 cells scraped on mare (60% on KREEP ground, 35% on highlands). Deuterium still: 4 water → 1 deuterium in 10 s. Fusion reactor: 1 helium-3 + 1 deuterium every 20 s → 300 kW (half without its six radiators): one ice mine, melter and still, plus one or two harvesters, keep one running.
 
