@@ -14,6 +14,7 @@ from game.content import structures as S
 from game.content import units as U
 from game.sim import conveyors as CONV
 from game.sim import feeds as FEEDS
+from game.sim import massdriver as MD
 from game.sim import roads as ROADS
 from game.sim import production as P
 from game.sim import structures as ST
@@ -23,6 +24,7 @@ _facing = {}  # unit id -> +1 / -1, with a deadband so rovers don't flip-flop
 style = D.ICON_STYLES[0]  # set by the app
 lander_lift = 0.0         # pixels above its spot, while it lands in the intro (set by the app)
 view = "operations"       # the current view (D.VIEWS), set by the app
+_fired_at = {}            # mass driver id -> real time it was first seen fired
 
 
 def interp(unit, alpha):
@@ -255,6 +257,38 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
         bx, by = G.LANDER_BEACON if style == "pictorial" else (0.0, 0.0)
         pygame.draw.circle(surface, D.COLOR_SELECT, (int(sx + bx * half), int(sy + by * half)), 1)
     return segs
+
+
+def _draw_mass_driver(surface, s, camera, now_s):
+    """Charging: rings closing in on the breech as the charge builds. Fired:
+    a bolt of light up the rails and off the screen, then one more every
+    MD_LAUNCH_EVERY_S while the site runs on (it keeps shipping)."""
+    if not s.built:
+        return 0
+    sx, sy = camera.world_to_screen(s.x, s.y)
+    r = s.spec["footprint_cells"] * camera.zoom
+    if s.status == MD.CHARGING:
+        frac = min(1.0, s.charge_s / s.spec["launch_charge_s"])
+        color = D.COLOR_POWER if s.powered else _scale(D.COLOR_POWER, 0.35)
+        pulse = (now_s * D.MD_PULSE_HZ) % 1.0
+        G.dotted_circle(surface, color, sx, sy, r * (2.2 - 1.2 * pulse), D.DOT_SPACING_PX)
+        pygame.draw.arc(surface, color, (sx - r * 1.3, sy - r * 1.3, r * 2.6, r * 2.6),
+                        math.pi / 2, math.pi / 2 + 2 * math.pi * frac, 2)
+        return 2
+    if s.status != MD.FIRED:
+        return 0
+    start = _fired_at.setdefault(s.id, now_s)
+    t = (now_s - start) % D.MD_LAUNCH_EVERY_S
+    if t > D.MD_STREAK_S:
+        return 0
+    dx, dy = D.MD_LAUNCH_DIRECTION[style]
+    reach = max(surface.get_size()) * 1.5
+    head = r + reach * min(1.0, t / (D.MD_STREAK_S * 0.25))     # from the muzzle out
+    tail = r + reach * max(0.0, (t - D.MD_STREAK_S * 0.2) / (D.MD_STREAK_S * 0.8))
+    fade = 1.0 - t / D.MD_STREAK_S
+    pygame.draw.line(surface, _scale(D.COLOR_SELECT, 0.4 + 0.6 * fade), (sx + dx * tail, sy + dy * tail),
+                     (sx + dx * head, sy + dy * head), 2)
+    return 1
 
 
 def _rails(camera, p0, p1, width_cells=D.CONVEYOR_WIDTH_CELLS):
@@ -497,6 +531,8 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
         if s.kind == "scanner" and s.built and s.powered:
             segments += _draw_scan_beam(surface, s, camera)
         segments += _draw_structure(surface, world, s, camera, now_s, selected)
+        if s.kind == MD.KIND:
+            segments += _draw_mass_driver(surface, s, camera, now_s)
 
     segments += draw_pods(surface, world, camera)
     if lander_lift > 0:

@@ -35,10 +35,10 @@ FACTORY = (("crusher", ("ilmenite_mine", "sorter")), ("aluminium_cell", ("anorth
            ("titanium_refinery", ("reduction_furnace",)), ("frame_works", ("titanium_refinery",)),
            ("rare_earth_separator", ("kreep_mine", "sorter")), ("electronics_plant", ("rare_earth_separator",)))
 # Scaling up for the later bills: (mass driver phases done, kind, how many).
-SCALE = ((2, "crusher", 2), (2, "reduction_furnace", 2), (2, "titanium_refinery", 2), (2, "electrolyzer", 2),
+SCALE = ((1, "sorter", 3), (2, "sorter", 4), (2, "aluminium_cell", 2), (2, "crusher", 2), (2, "reduction_furnace", 2), (2, "titanium_refinery", 2), (2, "electrolyzer", 2),
          (2, "fabrication_line", 2), (3, "frame_works", 2), (3, "titanium_refinery", 3), (3, "reduction_furnace", 3),
          (3, "crusher", 3), (3, "electronics_plant", 2), (3, "aluminium_cell", 2))
-MINES = (("ilmenite_mine", "ilmenite"), ("ice_mine", "ice"), ("anorthite_mine", "anorthite"), ("kreep_mine", "kreep"))
+MINES = (("ilmenite_mine", "ilmenite"), ("anorthite_mine", "anorthite"), ("ice_mine", "ice"), ("kreep_mine", "kreep"))
 SELL_ABOVE = {"sinter": 120, "regolith": 120, "anorthite": 80, "ilmenite": 80, "kreep": 40, "titania": 40,
               "water": 30, "concentrate": 60, "ice": 60}
 # ... but keep a bigger buffer of what a built consumer turns into goal goods.
@@ -392,7 +392,16 @@ class Bot:
         mass driver's current phase needs them."""
         from game.sim import massdriver
         md = massdriver.find(self.w)
-        wanted = massdriver.needs(md) if md is not None and md.built else {}
+        wanted = set(massdriver.needs(md)) if md is not None and md.built else set()
+        # ... nor what goes into them.
+        grew = True
+        while grew:
+            grew = False
+            for spec in STRUCTURES.values():
+                r = spec.get("recipe")
+                if r and wanted & set(r["out"]) and not set(r["in"]) <= wanted:
+                    wanted |= set(r["in"])
+                    grew = True
         for c in list(self.w.contracts.offers):
             if self.makes(c.good) and c.good not in wanted and self.w.accept_contract(c.id)[0]:
                 self.log(f"accept {c.qty} {c.good}")
