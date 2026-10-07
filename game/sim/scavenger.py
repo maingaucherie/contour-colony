@@ -92,6 +92,7 @@ def work_done(world, unit):
         if piece is not None:
             unit.cargo["scrap"] = unit.cargo.get("scrap", 0) + piece.value
             unit.collected += piece.value
+            world.scrap_collected += piece.value
             unit.battery = max(0.0, unit.battery - unit.spec["pickup_energy"])
         think(world, unit)
     elif unit.activity == "unload":

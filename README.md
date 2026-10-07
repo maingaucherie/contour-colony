@@ -3,15 +3,12 @@
 A small, systems-driven lunar mining game in Python, drawn as a CRT vector
 console. `DESIGN.md` is the design brief and the single source of truth.
 
-Status: **Milestone 5 (depth)**. A full site can be won and lost:
-mines, crushers, melters, kilns, electrolyzers, reduction furnaces and machine
-shops run recipes with input and output buffers; haulers work a job board with
-reservations, and conveyors and graded roads speed the busiest links;
-buildings wear and get repaired; consortium contracts pay credits and
-reputation; the ship's orbital passes bring supply drops and a free orbital
-scan. Fill the standing contract for machine parts twice in a row without
-ordering a drop and the site is handed off (won). Let reputation reach zero
-and it is lost.
+Status: **Milestone 6 (progression), in progress**. Land with scavengers and
+a scraper on a 512-cell site, scrape regolith, sort it for minerals, melt scrap
+into the first iron, and build the mass driver: four phases of goods, each
+opening the next tier of research, then a launch that wins the site. Act I
+and the mass driver are playable; the Tier II and III industries are being
+built (see DESIGN.md, Progression).
 
 ## Play
 
@@ -31,13 +28,14 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 | Input | Action |
 | --- | --- |
-| B | Build menu: Up/Down (or W/S) + Enter, click a row, or press 1-0; then click to place (Shift+click places more), right click or Esc cancels. Conveyors: click the building to send from, then the one to send to. Roads: click one end, then the other (Shift+click carries on from there) |
+| B | Build menu: Left/Right (or A/D, or click) picks a category; Up/Down (or W/S) + Enter, click a row, or press 1-9; then click to place (Shift+click places more), right click or Esc cancels. Conveyors: click the building to send from, then the one to send to. Roads: click one end, then the other (Shift+click carries on from there) |
 | R | Research panel: Up/Down + Enter or click a row to start a project |
 | K | Contract offers: accept one (or click an offer on the board) |
+| L | Production: everything made per minute, and a graph over the whole run |
 | O | Orbit and market: order supply drops (crates or ready-built units, land during the next pass), aim the free orbital scan while the ship is overhead, or sell 10 of any stored good |
 | Left click | Select a unit or structure (inspect panel) |
-| Right click | Order the selected unit: go there, or for a survey rover, survey there |
-| 1-5 with a rover bay selected | Build a scavenger, constructor, survey rover, hauler or maintenance drone |
+| Right click | Order the selected unit: go there, or for a survey rover, survey there; a scraper sent somewhere sweeps there from then on |
+| 1-6 with a rover bay selected | Build a scavenger, scraper, constructor, survey rover, hauler or maintenance drone |
 | P | Cycle the selected structure's power priority |
 | J | Clock speed of the selected production building: 100%, 50% (less power, less wear), 150% after Overclocking |
 | Del | Cancel the selected construction site (materials refunded), or mark a finished structure for a constructor to dismantle (75% back); Del again keeps it |
@@ -67,15 +65,15 @@ bay. Filled on time pays credits and +10 reputation, late pays credits only,
 expired costs 15 reputation. Pressure mode assigns contracts outright and
 drains reputation slowly after the first fifteen minutes.
 
-A first plan: build a scanner (its radar reveals debris for the scavengers and,
-after three sweeps, flags fields as "SIGNAL?"), research Field Survey and
-Logistics I, build a rover bay, a survey rover to confirm a field (green dashed
-outline) and two haulers, research Extraction, then put a mine on the field.
-From there: crusher, ice mine and melter, sinter kiln (sinter builds tier 2),
-electrolyzer, reduction furnace and machine shop. Fields far from the lander
-need a charging pad (and pylons) nearer to them: rovers top up on the way.
-Red, blinking structures are starved or blocked; the thin bars beside them
-are their input (left) and output (right) buffers.
+A first plan: place the mass driver (Goal tab) on flat ground near the
+lander, then a scrap furnace (scrap to iron), a sinter kiln (regolith to
+sinter) and solar power; research Logistics I and build haulers at a rover
+bay, plus another scraper or two. Haulers bring the Foundation's sinter and
+iron to the mass driver. Phase 1 opens Prospecting (the scanner, survey
+rovers and drills for ilmenite, anorthite, KREEP and ice) and the hydrogen
+route to iron. A sorter turns regolith into minerals; what it finds depends
+on the ground it stands on. Red, blinking structures are starved or blocked;
+the thin bars beside them are their input (left) and output (right) buffers.
 
 Buildings have their own quirks: mines slow as a field runs out, the sinter
 kiln likes sunlight, the reduction furnace needs to warm up (keep it fed), and

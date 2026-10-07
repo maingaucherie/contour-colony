@@ -83,6 +83,8 @@ def draw_running(surface, info):
     y += lh
     stored, cap = info["storage"]
     stock = f"STORAGE {stored}/{cap}   SCRAP {info['scrap']}   PARTS {info['parts']}   SINTER {info['sinter']}"
+    if info.get("output") is not None:
+        stock += f"   OUTPUT {info['output']:.0f}/MIN (L)"
     draw_text(surface, stock, (M + 6, y), 1, D.COLOR_TEXT_DIM)
 
     t = int(info["time_s"])

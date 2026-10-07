@@ -5,7 +5,9 @@ import pygame
 from game.content import display as D
 from game.content.research import RESEARCH, RESEARCH_MENU
 from game.content.structures import BUILD_CATEGORIES, STRUCTURES
+from game.content.items import ITEMS
 from game.render.hershey import draw_text, line_height, text_width
+from game.sim import stats
 
 BUILD_KEYS = "1234567890"
 
@@ -125,6 +127,44 @@ def draw_research(surface, world, cursor=None):
     w = D.RESEARCH_WIDTH
     x = (surface.get_width() - w) // 2
     return _panel(surface, x, D.RESEARCH_TOP, w, lines, "RESEARCH", cursor, n)
+
+
+def draw_production(surface, world):
+    """Everything the colony makes: per minute now, made so far, and a bar
+    graph of the rate over the whole run."""
+    c1, c2, c3 = D.PRODUCTION_COLUMNS
+    lines = [([(0, "GOOD"), (c1, "NOW / MIN"), (c2, "MADE"), (c3, "OVER THE RUN")], D.COLOR_TEXT_DIM)]
+    items = stats.made_items(world)
+    for k in items:
+        color = D.COLOR_ALERT if ITEMS[k]["tier"] == "waste" else D.COLOR_TEXT
+        lines.append(([(0, ITEMS[k]["name"].upper()), (c1, f"{stats.rate_now(world, k):5.1f}"),
+                       (c2, str(stats.made(world).get(k, 0)))], color))
+    if not items:
+        lines.append(("NOTHING MADE YET", D.COLOR_TEXT_DIM))
+    lines.append(("", D.COLOR_TEXT_DIM))
+    lines.append((f"COLONY OUTPUT {stats.colony_output(world):.0f} ITEMS / MIN      L OR ESC: CLOSE", D.COLOR_FLOW))
+    w = D.PRODUCTION_WIDTH
+    rect, rows = _panel(surface, (surface.get_width() - w) // 2, D.RESEARCH_TOP, w, lines, "PRODUCTION",
+                        None, len(items) + 1)
+    for k, row in zip(items, rows[1:]):
+        _sparkline(surface, stats.series(world, k), rect.x + 10 + c3, row.y + 1, w - c3 - 24, row.height - 3)
+    return rect, []
+
+
+def _sparkline(surface, values, x, y, w, h):
+    """Bars for the rate in each interval, scaled to this good's best."""
+    if not values:
+        return
+    n = min(len(values), max(1, w // 2))
+    step = len(values) / n
+    bars = [max(values[int(i * step):int((i + 1) * step)] or [0.0]) for i in range(n)]
+    top = max(bars) or 1.0
+    bw = max(1, w // n)
+    for i, v in enumerate(bars):
+        bh = int(h * v / top)
+        if bh:
+            color = D.COLOR_FLOW if i == n - 1 else D.COLOR_FLOW_DIM
+            pygame.draw.rect(surface, color, (x + i * bw, y + h - bh, max(1, bw - 1), bh))
 
 
 def _effect_text(spec):

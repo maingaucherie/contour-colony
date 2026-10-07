@@ -155,3 +155,22 @@ class MassDriverTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProductionPanelTests(unittest.TestCase):
+    def test_history_rates_and_colony_output(self):
+        from game.sim import stats
+        w = make_world(2)
+        for _ in range(minutes(6)):
+            w.tick()
+        self.assertEqual(len(w.history), 6 * 60 // W.HISTORY_SAMPLE_S)
+        self.assertIn("regolith", stats.made_items(w))
+        series = stats.series(w, "regolith")
+        self.assertEqual(len(series), len(w.history) - 1)
+        self.assertGreater(max(series), 0)
+        made = stats.made(w)["scrap"] - (w.history[0][1].get("scrap", 0))
+        self.assertGreaterEqual(made, 0)
+        self.assertGreaterEqual(stats.colony_output(w), 0.0)
+        loaded = run_to_completion(build_world(2, w.heightmap))
+        save.apply(loaded, save.read(save.dumps(w)))
+        self.assertEqual(stats.series(loaded, "regolith"), series)

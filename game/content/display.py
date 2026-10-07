@@ -85,6 +85,7 @@ KEY_BINDINGS = {
     "priority": ("p",),
     "orbit": ("o",),
     "contracts": ("k",),
+    "production": ("l",),
     "clock": ("j",),
     "cancel_site": ("delete", "backspace"),
     "quit": ("escape",),
@@ -122,6 +123,7 @@ COLOR_UNIT = (240, 250, 240)
 COLOR_DEBRIS = (150, 140, 120)
 COLOR_POWER = (255, 176, 40)      # amber: power links, charging
 COLOR_FLOW = (70, 220, 235)       # cyan: item flow, routes, buffer gauges
+COLOR_FLOW_DIM = (30, 105, 115)
 COLOR_ALERT = (255, 70, 60)       # red: broken, stranded, deadlines
 COLOR_SELECT = (255, 255, 255)
 COLOR_FIELD = (90, 235, 120)      # green: resource fields and survey data
@@ -231,6 +233,8 @@ PANEL_GAP = 8                     # inspect panel sits this far under the contra
 MENU_WIDTH = 560                  # build menu, top left under the HUD
 MENU_TOP = 126
 MENU_COLUMNS = (22, 205)          # x offsets: name, cost
+PRODUCTION_WIDTH = 660            # production panel (L)
+PRODUCTION_COLUMNS = (170, 270, 360)  # x offsets: per minute, made, graph
 RESEARCH_WIDTH = 790
 RESEARCH_COLUMNS = (6, 190, 415)  # x offsets: name, status, effect
 COLOR_MENU_CURSOR = (5, 28, 32)   # highlighted menu row

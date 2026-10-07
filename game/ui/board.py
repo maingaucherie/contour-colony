@@ -157,7 +157,7 @@ def draw_contracts_menu(surface, world, cursor=None):
 def orbit_entries(world):
     """Rows of the orbit menu: every supply crate or unit, the scan, then a
     market row for every good in colony storage."""
-    held = sorted(k for k in ITEMS if world.stock(k) > 0)
+    held = sorted(k for k in ITEMS if world.stock(k) > 0 and world.price(k) > 0)
     return ([("supply", i) for i in range(len(C.SUPPLY))] + [("scan", None)]
             + [("sell", k) for k in held])
 

@@ -126,6 +126,10 @@ SAVE_VERSION = 1
 # RATE_SAMPLE_S over the last RATE_WINDOW_S.
 RATE_SAMPLE_S = 10
 RATE_WINDOW_S = 60
+# The production panel (L) samples everything made every HISTORY_SAMPLE_S for
+# the whole run, and shows the rate over the last RATE_NOW_S.
+HISTORY_SAMPLE_S = 30
+RATE_NOW_S = 120
 
 # Storage warning: checked every STORAGE_CHECK_S; warns once it passes this fraction.
 STORAGE_CHECK_S = 5

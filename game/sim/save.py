@@ -64,6 +64,7 @@ def snapshot(world):
         "mode": c.mode["name"],
         "world": {
             "tick_count": world.tick_count, "next_id": world.next_id, "credits": world.credits,
+            "scrap_collected": world.scrap_collected,
             "scrap_spawned": world.scrap_spawned, "scrap_sold": world.scrap_sold,
             "consumed": world.consumed, "produced": world.produced,
             "outcome": world.outcome, "outcome_text": world.outcome_text, "end_s": world.end_s,
@@ -79,6 +80,7 @@ def snapshot(world):
         "survey": _value(world.survey.levels),
         "tracks": _value(world.tracks.cells),
         "scrape_passes": _value(world.scrape_passes),
+        "history": _value(world.history),
         "flattened": _value(world.flattened),
         "research": {"done": _value(r.done), "current": r.current, "ticks_left": r.ticks_left, "phase": r.phase},
         "contracts": {
@@ -146,7 +148,7 @@ def read(text):
 def apply(world, data):
     """Lay a snapshot over a freshly built world for the same seed and mode."""
     wd = data["world"]
-    for key in ("tick_count", "next_id", "credits", "scrap_spawned", "scrap_sold", "consumed", "produced",
+    for key in ("tick_count", "next_id", "credits", "scrap_collected", "scrap_spawned", "scrap_sold", "consumed", "produced",
                 "outcome", "outcome_text", "end_s", "endless", "final_score", "debris_timer", "storage_full", "autosold",
                 "event_count"):
         setattr(world, key, wd[key])
@@ -177,6 +179,7 @@ def apply(world, data):
     world.tracks.cells = _int_keys(data["tracks"])
     world.tracks.version += 1
     world.scrape_passes = _int_keys(data["scrape_passes"])
+    world.history = [(t, dict(counts)) for t, counts in data["history"]]
     world.flattened = set(data["flattened"])
     for cell in world.flattened:
         world.slopes[cell] = U.SCRAPE_FLATTEN_TO_DEG

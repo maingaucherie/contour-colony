@@ -24,7 +24,7 @@ from game.render.surfaces import new_surface
 from game.sim.terrain import generate_terrain
 from game.sim.world import build_world
 from game.sim import conveyors as CONV
-from game.sim import massdriver
+from game.sim import massdriver, stats
 from game.sim import jobs
 from game.sim import structures as ST
 from game.content import audio as AUDIO
@@ -354,7 +354,7 @@ class App:
             styles = D.ICON_STYLES
             entities.style = styles[(styles.index(entities.style) + 1) % len(styles)]
             self._save_settings()
-        elif action in ("build", "research", "orbit", "contracts"):
+        elif action in ("build", "research", "orbit", "contracts", "production"):
             self.menu = None if self.menu == action else action
             self.menu_cursor = 0
             self.placing = self.line_from = None
@@ -389,6 +389,8 @@ class App:
             return [c.id for c in self.world.contracts.offers]
         if self.menu == "orbit":
             return board.orbit_entries(self.world)
+        if self.menu == "production":
+            return []
         return BUILD_CATEGORIES[self.build_tab][1] if self.menu == "build" else RESEARCH_MENU
 
     def _menu_choose(self, i):
@@ -712,6 +714,7 @@ class App:
             "credits": world.credits, "scrap": world.stock("scrap"), "parts": world.stock("parts"),
             "sinter": world.stock("sinter"), "reputation": world.contracts.reputation,
             "storage": (world.stored_total(), world.capacity()), "haulers": self._hauler_summary(),
+            "output": stats.colony_output(world),
             "power": self._power_summary(), "time_s": world.time_s(),
             "paused": self.paused, "speed": W.SIM_SPEEDS[self.speed_index], "actual_speed": self.actual_speed,
             "research": (RESEARCH[world.research.current]["name"], world.research.progress())
@@ -734,6 +737,8 @@ class App:
             self.menu_rects = menus.draw_research(self.screen, world, self.menu_cursor)
         elif self.menu == "orbit":
             self.menu_rects = board.draw_orbit_menu(self.screen, world, self.menu_cursor)
+        elif self.menu == "production":
+            self.menu_rects = menus.draw_production(self.screen, world)
         elif self.menu == "contracts":
             self.menu_rects = board.draw_contracts_menu(self.screen, world, self.menu_cursor)
         self.end_rects = None

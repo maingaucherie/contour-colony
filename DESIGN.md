@@ -392,49 +392,35 @@ Decisions made while playtesting Milestones 2–4, recorded here so this documen
 
 ## Progression (decided after Milestone 5)
 
-Playtest verdict on Milestone 5: the game felt like a sequence of actions, never leaving the scraping-by phase. The autoplayer showed why: the chain first ran at about 28 minutes, the site was won at 33, and nothing grew after that (4 machine parts a minute at the peak). The win rewarded the first working chain, not mastery, and there was one way to make everything.
+Playtest verdict on Milestone 5: the game felt like a sequence of actions, never leaving the scraping-by phase, with one way to make everything. The autoplayer showed why: the chain first ran at about 28 minutes, the site was won at 33, and nothing grew after that. The fix is the arc of the big factory games in pocket form: **start out scrambling, end up producing an obscene amount compared with where you started, with new processes (not just bigger numbers) at each step, and more than one road to the goal.** The visual concept (production web, ladders, example colonies, map) is the "Contour Colony Industry" artifact; this section is the summary.
 
-The fix is the arc of the big factory games in pocket form: **start out scrambling, end up producing an obscene amount compared with where you started, with better tools at each step.**
+**Run shape.** A site runs 1.5–3 hours across several sittings (saves carry it): Act I *Scramble* (0–30 min), Act II *Industry* (30–90), Act III *Mastery* (90–150+).
 
-**Run shape.** A site now runs 1.5–3 hours across several sittings (saves carry it). Three acts:
+**The goal: the mass driver.** Placed once, then completed in four phases, each a bill of goods delivered like any consumer's inputs (haulers, conveyors), each opening the next research tier. Then it charges (400 kW for a minute) and fires: the site is won, and "keep playing" carries on. Contracts are side income; calm sites can't be lost.
 
-| Act | Time | Feel | Production at the end |
-| --- | --- | --- | --- |
-| 1. Scramble | 0–25 min | Scrap, the first mine, the first chain (as now) | ~2 parts/min |
-| 2. Industry | 25–80 min | Mark 2 machines, conveyors, the colony spreads | ~10 parts/min |
-| 3. Mastery | 80–150 min | Mark 3 processes, titanium and frames, the launch | 30+ parts/min |
-
-**The goal: a mass driver,** an electromagnetic launcher that throws cargo to orbit. It is placed once (a large footprint on flat ground) and built in four phases, each a bill of goods delivered by haulers or conveyors like any consumer. Each phase unlocks the next tier of research. Firing it ends the run (and "keep playing" carries on as now). Rough bills:
-
-| Phase | Needs | Unlocks |
+| Phase | Needs | Opens |
 | --- | --- | --- |
-| 1. Foundation | 150 sinter, 40 iron | Mark 2 research |
-| 2. Rails | 400 iron, 150 parts | Titanium research |
-| 3. Coils | 600 parts, 200 titanium | Mark 3 research |
-| 4. Launch | 300 frames, 400 oxygen, a 300 kW grid while it charges | The end |
+| 1. Foundation | 150 sinter, 40 iron | Tier II (prospecting, extraction, electrolysis, reduction, conveyors, maintenance, overclocking) |
+| 2. Rails | 300 iron, 150 parts, 120 aluminium | Later Tier II (titanium, frames, rare earths, fission, monorail) |
+| 3. Coils | 300 parts, 150 titanium, 100 electronics | Tier III (molten regolith cells, harvesters, fusion) |
+| 4. Launch | 200 frames, 150 electronics, then 400 kW for 60 s | The end |
 
-Contracts stay as income and reputation, but no longer win the site. In calm mode the site cannot be lost; pressure mode keeps the reputation loss.
+**Ladders: each rung a different process.** Higher rungs give more but ask for more logistics, power or waste handling; lower rungs stay useful, and every road reaches the launch without the top-end buildings.
 
-**Machine marks, upgraded in place.** The workhorse buildings come in marks. Choose the higher mark in the build menu and click an existing building: a constructor brings the difference in cost and swaps it (the building pauses during the swap). Each mark is roughly 2–3× the last, and Mark 3 is sometimes a different process, so there is more than one way to make things:
+- *Gathering:* scavengers (scrap) → **scrapers** (sweep a zone in back-and-forth passes like the harvesters in *Moon*, scoop regolith, level lumpy ground up to 12° after three passes) → field drills (one mineral, fast; need the scanner) → harvesters (Tier III: bake regolith on board for helium-3).
+- *Regolith is the generic resource:* the **sorter** turns it into a random mineral, weighted by the geology of the ground the sorter stands on (mare: ilmenite; highlands: anorthite; KREEP province: KREEP).
+- *Iron:* scrap furnace (Act I) → hydrogen furnace (Act II: ilmenite + hydrogen from ice or the volatiles oven) → molten regolith cell (Act III: regolith and 80 kW in, iron + titania + oxygen + slag out).
+- *Power:* solar → heliostat tower → fuel cells → Kilopower-style fission (thorium from KREEP; spent fuel and heat) → deuterium–helium-3 fusion. RTG kits by orbital drop for remote outposts.
+- *Logistics:* haulers (anything to anywhere) → conveyors (short belts inside a block) → monorail between stations (bulk, long distance) and high-voltage lines.
+- *Building:* constructors → construction drones.
 
-| Line | Mark 1 | Mark 2 | Mark 3 |
-| --- | --- | --- | --- |
-| Mining | Drill | Excavator (2.5×) | Strip miner (6×, wears fast) |
-| Sinter | Solar kiln | Electric arc kiln (3×, power-hungry) | |
-| Iron | Hydrogen furnace | Large furnace (2.5×) | Molten-regolith cell: regolith and lots of power in, iron and oxygen out; no ice needed |
-| Parts | Machine shop | Fabrication line (3×) | |
-| Power | Solar array | Thin-film array (2× per area) | Fission kit (steady 120 kW, built from titanium and parts) |
-| Hauling | Hauler (10 cargo) | Heavy hauler (30 cargo) | |
-| Belts | Conveyor (1/s) | Fast conveyor (3/s) | |
-| Building | Constructor | Construction drone (flies, fast) | |
+**Waste.** Tailings, slag, spent fuel, heat, swarf, surplus gas. A building whose waste has nowhere to go backs up like a full output: a logistics job, never a timer or penalty.
 
-Later research costs goods as well as credits (e.g. Mark 2 research takes parts), so production feeds progress, and higher marks are built from what the colony manufactures: the factory builds the factory.
+**The site** is 512 cells across (about 205 km) with planned geology: the landing mare in the middle, highlands around it (anorthite), cold-trap craters near one "pole" edge (ice), a KREEP province on the far side. Route searches use precomputed edges and stop at a rover's battery range, so the larger map stays fast.
 
-**Room to spread.** More fields, the richest far from the lander, so growth means moving outward on roads and outposts as nearby fields deplete.
+**Defaults taken for the open questions** (to revisit): no day/night yet; the sorter weights by local geology; monorail track in straight segments; haulers collect harvester canisters; storage keeps back what construction sites still need.
 
-**Watching the number go up.** A production panel (L) with items per minute for each good and a sparkline over the whole run; the HUD shows total colony output; the mass driver shows a large progress bar for its current phase.
-
-**Build order.** (1) Mass driver and phases, the production panel, marks for mining, kiln, furnace and shop, upgrade in place; (2) titanium, frames, heavy haulers, fast conveyors, construction drones, research costing goods; (3) Mark 3 processes, fission, more and farther fields, rebalancing against the act targets with the autoplayer.
+**Build status.** Done: the 512-cell site and geology, scrapers, sorter, scrap furnace, field drills for all four minerals, the research tiers, the mass driver, the production panel (L), a categorised build menu. Next: Tier II (aluminium, titanium, frames, rare earths, electronics, volatiles oven, fabrication line, fuel cells, heliostat, fission, monorail, construction drones, minimap), then Tier III and balancing toward the act targets.
 
 ## Later: touch screens and teaching
 

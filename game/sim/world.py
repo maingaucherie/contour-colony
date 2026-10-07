@@ -20,7 +20,7 @@ from game.content.research import RESEARCH
 from game.content.structures import STRUCTURES
 from game.content.terrain import CONTOUR_CHUNK_CELLS
 from game.content import contracts as CT
-from game.sim import conveyors, debris, feeds, fields, massdriver, power, production, roads, structures, units
+from game.sim import conveyors, debris, feeds, fields, massdriver, power, production, roads, stats, structures, units
 from game.sim.contracts import Contracts
 from game.sim.orbit import Orbit
 from game.sim.pathing import PathGrid
@@ -59,6 +59,8 @@ class World:
         self._feeds = None
         self.autosold = 0             # scrap sold on arrival since the last report
         self.rates = {}               # structure id -> cycles (conveyors: items) per minute, recently
+        self.history = []             # (time_s, {item: made so far}) every HISTORY_SAMPLE_S (stats.py)
+        self.scrap_collected = 0      # scrap scavengers have picked up (for the production panel)
         self.scrape_passes = {}       # cell -> times a scraper's blade crossed it (lumpy ground only)
         self.flattened = set()        # cells scrapers have levelled
         self._relevel = set()         # levelled cells whose route costs are out of date
@@ -509,6 +511,8 @@ class World:
             self._check_storage()
         if self.tick_count % (W.RATE_SAMPLE_S * W.TICK_RATE) == 0:
             self._sample_rates()
+        if self.tick_count % (W.HISTORY_SAMPLE_S * W.TICK_RATE) == 0:
+            stats.sample(self)
         if self.tick_count % (U.SCRAPE_REPRICE_EVERY_S * W.TICK_RATE) == 0:
             self.relevel()
 
