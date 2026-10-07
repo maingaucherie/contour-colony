@@ -24,7 +24,7 @@ _facing = {}  # unit id -> +1 / -1, with a deadband so rovers don't flip-flop
 style = D.ICON_STYLES[0]  # set by the app
 lander_lift = 0.0         # pixels above its spot, while it lands in the intro (set by the app)
 view = "operations"       # the current view (D.VIEWS), set by the app
-_fired_at = {}            # mass driver id -> real time it was first seen fired
+_fired_at = {}            # mass driver id -> (real time a launch was first seen, its tick)
 
 
 def interp(unit, alpha):
@@ -261,8 +261,8 @@ def _draw_structure(surface, world, s, camera, now_s, selected):
 
 def _draw_mass_driver(surface, s, camera, now_s):
     """Charging: rings closing in on the breech as the charge builds. Fired:
-    a bolt of light up the rails and off the screen, then one more every
-    MD_LAUNCH_EVERY_S while the site runs on (it keeps shipping)."""
+    a bolt of light up the rails and off the screen, then one with every
+    shipment while the site runs on."""
     if not s.built:
         return 0
     sx, sy = camera.world_to_screen(s.x, s.y)
@@ -277,8 +277,11 @@ def _draw_mass_driver(surface, s, camera, now_s):
         return 2
     if s.status != MD.FIRED:
         return 0
-    start = _fired_at.setdefault(s.id, now_s)
-    t = (now_s - start) % D.MD_LAUNCH_EVERY_S
+    # Real time of the last launch: the first sighting, then each new shipment.
+    seen = _fired_at.get(s.id)
+    if seen is None or seen[1] != s.last_launch:
+        seen = _fired_at[s.id] = (now_s, s.last_launch)
+    t = now_s - seen[0]
     if t > D.MD_STREAK_S:
         return 0
     dx, dy = D.MD_LAUNCH_DIRECTION[style]

@@ -396,7 +396,7 @@ Playtest verdict on Milestone 5: the game felt like a sequence of actions, never
 
 **Run shape.** A site runs 1.5–3 hours across several sittings (saves carry it): Act I *Scramble* (0–30 min), Act II *Industry* (30–90), Act III *Mastery* (90–150+).
 
-**The goal: the mass driver.** Placed once, then completed in four phases, each a bill of goods delivered like any consumer's inputs (haulers, conveyors), each opening the next research tier. Then it charges (300 kW for a minute) and fires: the site is won, and "keep playing" carries on. Contracts are side income; calm sites can't be lost.
+**The goal: the mass driver.** Placed once, then completed in four phases, each a bill of goods delivered like any consumer's inputs (haulers, conveyors), each opening the next research tier. Then it charges (300 kW for a minute) and fires: the site is won, and "keep playing" carries on with the driver shipping exports (frames, electronics, titanium, aluminium, helium-3, fuel rods; 10 every 20 s on 120 kW, at twice market price), so the sandbox has a number to grow. Contracts are side income; calm sites can't be lost.
 
 | Phase | Needs | Opens |
 | --- | --- | --- |

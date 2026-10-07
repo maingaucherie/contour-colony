@@ -52,7 +52,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | M | Sound: all, effects only, off |
 | I | Icons: console symbols or pictorial rovers and structures |
 | N twice | Abandon the site and generate a new one (once, after a site ends) |
-| K on the win screen | Keep playing: the site runs on as a sandbox, the score stays as it was |
+| K on the win screen | Keep playing: the site runs on as a sandbox, the score stays as it was, and the mass driver ships exports (frames, electronics, metals, helium-3) for twice the market price |
 | Esc | Close menus (desktop: quit when nothing is open) |
 
 The game saves itself every minute and as each orbital pass begins (a file

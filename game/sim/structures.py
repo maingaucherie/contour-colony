@@ -61,6 +61,7 @@ class Structure:
     cooling: float = 1.0                            # reactors: output factor from radiators nearby
     phase: int = 0                                  # mass driver: phases finished
     charge_s: float = 0.0                           # mass driver: launch charge so far
+    last_launch: int = -10 ** 9                     # mass driver: tick of the last shipment
     deconstruct: bool = False                       # marked for a constructor to dismantle
     teardown_s: float = 0.0                         # dismantling seconds done
     # Conveyors (see conveyors.py): the buildings they join. Roads (roads.py): their ends.
@@ -119,7 +120,7 @@ class Structure:
     def draw_kw(self):
         """Power drawn while working, at this clock speed (the mass driver only while charging)."""
         if "launch_kw" in self.spec:
-            return self.spec["launch_kw"] if self.status == "charging" else 0.0
+            return {"charging": self.spec["launch_kw"], "fired": self.spec["ship_kw"]}.get(self.status, 0.0)
         return self.spec.get("draw_kw", 0.0) * clock_spec(self.clock)["power"]
 
     def assembly_time(self):

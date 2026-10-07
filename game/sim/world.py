@@ -54,6 +54,7 @@ class World:
         self.orbit = Orbit()
         self.outcome = None           # None, "won" or "lost"
         self.endless = False          # won, and kept playing: the site runs on as a sandbox
+        self.shipped = 0              # exports the mass driver has launched since it fired
         self.final_score = None
         self.storage_full = False
         self._feeds = None

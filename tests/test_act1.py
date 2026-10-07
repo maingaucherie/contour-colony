@@ -153,9 +153,6 @@ class MassDriverTests(unittest.TestCase):
         self.assertEqual(wanted, MD.phases(md)[0]["needs"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class ProductionPanelTests(unittest.TestCase):
     def test_history_rates_and_colony_output(self):
@@ -174,3 +171,31 @@ class ProductionPanelTests(unittest.TestCase):
         loaded = run_to_completion(build_world(2, w.heightmap))
         save.apply(loaded, save.read(save.dumps(w)))
         self.assertEqual(stats.series(loaded, "regolith"), series)
+
+
+class ShippingTests(unittest.TestCase):
+    def test_after_the_launch_it_ships_exports_for_credits(self):
+        w = make_world(1)
+        L = w.lander
+        md, _ = w.place("mass_driver", *find_spot(w, "mass_driver", (L.x, L.y), 7, 40))
+        ST.complete(w, md)
+        md.phase = len(MD.phases(md))
+        md.status = MD.FIRED
+        self.assertEqual(md.draw_kw(), md.spec["ship_kw"])
+        wanted = {item for s, item, space, mult in jobs.requests(w) if s is md}
+        self.assertEqual(wanted, set(md.spec["ships"]))
+        w.produced["frames"] = 15
+        self.assertEqual(w.deliver(md, "frames", 15), 15)
+        md.powered = True
+        credits = w.credits
+        MD.update(w, md)
+        self.assertEqual(w.shipped, md.spec["ship_batch"])
+        self.assertEqual(md.inputs["frames"], 15 - md.spec["ship_batch"])
+        self.assertGreater(w.credits, credits)
+        MD.update(w, md)   # not again until ship_every_s has passed
+        self.assertEqual(w.shipped, md.spec["ship_batch"])
+        self.assertTrue(ledger_ok(w, "frames")[0])
+
+
+if __name__ == "__main__":
+    unittest.main()

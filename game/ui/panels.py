@@ -231,6 +231,15 @@ def _mass_driver_lines(world, s):
             out.append((f"  {ITEMS[k]['name'].upper():14s} {got:4d}/{n}", 1,
                         D.COLOR_FLOW if got >= n else D.COLOR_TEXT_DIM))
         out.append(("HAULERS AND CONVEYORS DELIVER; EACH PHASE OPENS RESEARCH", 1, D.COLOR_TEXT_DIM))
+    elif MD.shipping(s):
+        spec = s.spec
+        hold = sum(s.inputs.values())
+        out.append((f"SHIPPING  {world.shipped} SENT TO ORBIT" + ("" if s.powered else
+                    f"  NEEDS {spec['ship_kw']:.0f} KW"), 1, D.COLOR_TEXT if s.powered else D.COLOR_ALERT))
+        out.append((f"HOLD      {hold}/{spec['ship_hold']}: {spec['ship_batch']} UP EVERY {spec['ship_every_s']:.0f} S",
+                    1, D.COLOR_TEXT_DIM, ("bar", hold / spec["ship_hold"])))
+        out.append((f"EXPORTS PAY {spec['ship_price_mult']:.0f}X MARKET: "
+                    + ", ".join(ITEMS[k]["name"].upper() for k in spec["ships"]), 1, D.COLOR_TEXT_DIM))
     else:
         state = "FIRED" if s.status == MD.FIRED else ("CHARGING" if s.powered else "WAITING FOR POWER")
         out.append((f"LAUNCH    {state}  {s.spec['launch_kw']:.0f} KW FOR {s.spec['launch_charge_s']:.0f} S", 1,

@@ -239,11 +239,10 @@ MINIMAP_PALETTE = ((0.0, (4, 8, 7)), (0.5, (12, 24, 19)), (1.0, (30, 48, 38)))
 
 # The mass driver: charge rings pulse this often; once fired, a bolt of light
 # runs up the rails (screen direction, matching each icon style's drawing) for MD_STREAK_S,
-# and again every MD_LAUNCH_EVERY_S while the site runs on.
+# and again with every shipment while the site runs on.
 MD_PULSE_HZ = 1.2
 MD_LAUNCH_DIRECTION = {"symbols": (1.0, 0.0), "pictorial": (0.866, -0.5)}
 MD_STREAK_S = 2.5
-MD_LAUNCH_EVERY_S = 20.0
 
 PANEL_WIDTH = 340
 PANEL_GAP = 8                     # inspect panel sits this far under the contracts board

@@ -7,6 +7,11 @@ goods are used up, the phase is done and the next tier of research opens
 (research.phase). After the last bill the driver charges: it draws launch_kw
 for launch_charge_s while its grid can carry it, then fires, and the site is
 won.
+
+After that it ships: whatever exports haulers bring it (spec "ships") go up
+the rails ship_batch at a time every ship_every_s while it has ship_kw, each
+paying ship_price_mult times its market price. A site kept running after the
+win has this to grow: the number shipped.
 """
 
 from game.content import world as W
@@ -25,9 +30,17 @@ def current(s):
     return p[s.phase] if s.phase < len(p) else None
 
 
+def shipping(s):
+    return s.status == FIRED
+
+
 def needs(s):
-    """{item: still to deliver} for the current phase."""
+    """{item: still to deliver} for the current phase (once it ships: room
+    in its hold for each export)."""
     ph = current(s)
+    if shipping(s):
+        held = sum(s.inputs.values())
+        return {k: s.spec["ship_hold"] - held for k in s.spec["ships"] if held < s.spec["ship_hold"]}
     if ph is None:
         return {}
     return {k: n - s.inputs.get(k, 0) for k, n in ph["needs"].items() if n - s.inputs.get(k, 0) > 0}
@@ -39,9 +52,10 @@ def room(s, item):
 
 
 def wants(kind):
-    """Every item any phase of a building of this kind needs (for conveyor planning)."""
+    """Every item any phase of a building of this kind needs, or it ships (for conveyor planning)."""
     from game.content.structures import STRUCTURES
-    return {k for ph in STRUCTURES[kind].get("phases", ()) for k in ph["needs"]}
+    spec = STRUCTURES[kind]
+    return {k for ph in spec.get("phases", ()) for k in ph["needs"]} | set(spec.get("ships", ()))
 
 
 def progress(s):
@@ -69,7 +83,8 @@ def goal_text(world):
     if ph is not None:
         return f"MASS DRIVER PHASE {s.phase + 1}/{total} {ph['name'].upper()} {progress(s) * 100:3.0f}%"
     if s.status == FIRED:
-        return "MASS DRIVER FIRED"
+        return f"MASS DRIVER SHIPPING: {world.shipped} SENT TO ORBIT" + ("" if s.powered else
+                                                                         f" - NEEDS {s.spec['ship_kw']:.0f} KW")
     return f"MASS DRIVER CHARGING {progress(s) * 100:3.0f}%" + ("" if s.powered else
                                                                 f" - NEEDS {s.spec['launch_kw']:.0f} KW")
 
@@ -106,6 +121,7 @@ def update(world, s):
             world.event(f"MASS DRIVER PHASE {s.phase} COMPLETE: {ph['name'].upper()} - NEW RESEARCH OPEN", "won")
         return
     if s.status == FIRED:
+        _ship(world, s)
         return
     s.status = CHARGING
     if s.powered:
@@ -114,3 +130,23 @@ def update(world, s):
             s.status = FIRED
             world.dirty_power = True
             world.finish("won", "MASS DRIVER FIRED: FIRST CARGO TO ORBIT")
+
+
+def _ship(world, s):
+    """Every ship_every_s, launch up to ship_batch of what is in the hold."""
+    every = max(1, round(s.spec["ship_every_s"] * W.TICK_RATE))
+    if not s.powered or not s.inputs or world.tick_count - s.last_launch < every:
+        return
+    left = s.spec["ship_batch"]
+    for item in sorted(s.inputs, key=lambda k: -s.inputs[k]):
+        n = min(left, s.inputs[item])
+        s.inputs[item] -= n
+        if not s.inputs[item]:
+            del s.inputs[item]
+        world.consumed[item] = world.consumed.get(item, 0) + n
+        world.credits += int(n * world.price(item) * s.spec["ship_price_mult"])
+        world.shipped += n
+        left -= n
+        if not left:
+            break
+    s.last_launch = world.tick_count

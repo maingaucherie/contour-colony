@@ -64,7 +64,7 @@ def snapshot(world):
         "mode": c.mode["name"],
         "world": {
             "tick_count": world.tick_count, "next_id": world.next_id, "credits": world.credits,
-            "scrap_collected": world.scrap_collected,
+            "scrap_collected": world.scrap_collected, "shipped": world.shipped,
             "scrap_spawned": world.scrap_spawned, "scrap_sold": world.scrap_sold,
             "consumed": world.consumed, "produced": world.produced,
             "outcome": world.outcome, "outcome_text": world.outcome_text, "end_s": world.end_s,
@@ -148,7 +148,7 @@ def read(text):
 def apply(world, data):
     """Lay a snapshot over a freshly built world for the same seed and mode."""
     wd = data["world"]
-    for key in ("tick_count", "next_id", "credits", "scrap_collected", "scrap_spawned", "scrap_sold", "consumed", "produced",
+    for key in ("tick_count", "next_id", "credits", "scrap_collected", "shipped", "scrap_spawned", "scrap_sold", "consumed", "produced",
                 "outcome", "outcome_text", "end_s", "endless", "final_score", "debris_timer", "storage_full", "autosold",
                 "event_count"):
         setattr(world, key, wd[key])

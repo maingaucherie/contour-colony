@@ -340,6 +340,11 @@ STRUCTURES = {
             {"name": "launch", "needs": {"frames": 200, "electronics": 150}},
         ),
         "launch_kw": 300.0, "launch_charge_s": 60.0,
+        # After the launch it ships exports: hauled into a hold of ship_hold
+        # items, ship_batch launched every ship_every_s while it has ship_kw,
+        # each paid at ship_price_mult times the market price.
+        "ships": ("frames", "electronics", "titanium", "aluminium", "he3", "fuel_rods"),
+        "ship_hold": 40, "ship_batch": 10, "ship_every_s": 20.0, "ship_kw": 120.0, "ship_price_mult": 2.0,
     },
     "conveyor": {
         # A belt from one building to another (see conveyors.py), placed by
