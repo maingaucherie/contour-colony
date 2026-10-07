@@ -230,14 +230,14 @@ STRUCTURES = {
         "name": "rare-earth separator", "footprint_cells": 1.2, "max_slope_deg": 5.0,
         "build_cost": {"sinter": 25, "parts": 4, "aluminium": 5}, "build_time_s": 25.0,
         "draw_kw": 12.0, "unlocked_by": "rare_earths",
-        "recipe": {"in": {"kreep": 2}, "out": {"rare_earths": 1, "thorium": 1}, "time_s": 8.0},
+        "recipe": {"in": {"kreep": 2}, "out": {"rare_earths": 2, "thorium": 1}, "time_s": 8.0},
         "wear_per_cycle": 0.0012,
     },
     "electronics_plant": {
         "name": "electronics plant", "footprint_cells": 1.2, "max_slope_deg": 5.0,
         "build_cost": {"sinter": 25, "parts": 6, "aluminium": 10}, "build_time_s": 30.0,
         "draw_kw": 12.0, "unlocked_by": "rare_earths",
-        "recipe": {"in": {"rare_earths": 1, "parts": 1}, "out": {"electronics": 1}, "time_s": 8.0},
+        "recipe": {"in": {"rare_earths": 1, "parts": 1}, "out": {"electronics": 2}, "time_s": 8.0},
         "wear_per_cycle": 0.001,
     },
     # Power ladder ---------------------------------------------------------------

@@ -447,11 +447,15 @@ class Bot:
         w = self.w
         if w.stored_total() < STORAGE_SELL_FROM * w.capacity():
             return
-        keep = self.goal_inputs() | {"sinter", "regolith"}
-        piles = [(w.stock(k), k) for k in ITEMS if k not in keep and ITEMS[k]["tier"] != "waste"]
-        n, item = max(piles)
-        if n > STORAGE_KEEP:
-            sold = w.sell(item, (n - STORAGE_KEEP) // 2 + 1)
+        from game.sim import massdriver
+        md = massdriver.find(w)
+        bill = massdriver.needs(md) if md is not None and md.built else {}
+        # Keep what the bill still needs, plus a working stock of everything else.
+        piles = [(w.stock(k) - bill.get(k, 0) - STORAGE_KEEP, k) for k in ITEMS
+                 if k not in ("sinter", "regolith") and ITEMS[k]["tier"] != "waste"]
+        extra, item = max(piles)
+        if extra > 0:
+            sold = w.sell(item, extra // 2 + 1)
             self.log(f"storage full: sell {sold} {item}")
 
     def waste(self):
