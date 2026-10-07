@@ -362,7 +362,7 @@ Seven milestones; each ends playable and is checked in a pygbag browser build. M
 3. **Build and power.** Construction sites and constructors, solar, pylons, depots, charging pads, power grid with priority allocation, research panel, survey rovers, survey levels, resource fields. *Exit:* you can survey a field and place a mine on it.
 4. **The chain.** Buffers, recipes, job board with reservations, haulers, mines through to machine shop, contracts, reputation, credits, orbital passes and drops, win and loss. *Exit:* one full site is winnable and losable. Playtest here and rebalance before going further.
 5. **Depth.** Wear and maintenance, conveyors, site improvements (pads, roads with contour snap), overlays, overclocking. *Exit:* a mid-game player chooses between conveyors and haulers for real reasons.
-6. **Tier 3 and polish.** Titanium, frames, fuel cells, synthesized audio, CRT dressing, settings, save and load. *Exit:* a complete 45-minute run with saves.
+6. **Progression.** The mass driver megaproject, machine marks upgraded in place, titanium and frames, the production panel, rebalancing for a 1.5–3 hour site (see *Progression* below). *Exit:* production at the launch is at least ten times production at the first machine part, and a player can feel the difference.
 7. **Balance and ship.** Headless runner for balance curves, tutorial contracts, web embed page. *Exit:* a stranger can learn it without you explaining.
 
 **Tests to write as you go:** item conservation (no items created or destroyed outside recipes), job reservations (no double-claims), power allocation by priority, unit battery returns home before dying, deterministic replay (same seed and inputs produce the same state after 5,000 ticks).
@@ -389,6 +389,52 @@ Decisions made while playtesting Milestones 2–4, recorded here so this documen
 - **Conveyors (Milestone 5)** are one-to-one belts placed by clicking a source building, then a destination up to 16 cells away (edge to edge): producer to consumer, producer to storage (everything it makes; contract goods at the lander ship), or storage to consumer. 1 sinter per cell, 0.5 kW from the source's grid (else the destination's), 1 item/s, never touching reserved items. The ground under them must be under 5°; up to 15° is graded for credits. Removing either building removes its conveyors. No splitters or mergers: direct feed plus one-to-one belts keeps logistics readable.
 - **Roads** are straight strips (up to 24 cells; Shift chains them end to end) paid in credits per cell plus grading, graded by a constructor with no materials. Rovers go 2x faster with half the slope penalty and half the battery per cell, routes use them on their own, and a road may climb ground up to 25°, so it can open a pass. Contour-snapping roads are left for later.
 - **Views.** Tab cycles operations, survey, power, flow and wear. Overlays recolour what is drawn instead of adding layers; flow shows output per minute (also in the inspect panel) and hauler routes.
+
+## Progression (decided after Milestone 5)
+
+Playtest verdict on Milestone 5: the game felt like a sequence of actions, never leaving the scraping-by phase. The autoplayer showed why: the chain first ran at about 28 minutes, the site was won at 33, and nothing grew after that (4 machine parts a minute at the peak). The win rewarded the first working chain, not mastery, and there was one way to make everything.
+
+The fix is the arc of the big factory games in pocket form: **start out scrambling, end up producing an obscene amount compared with where you started, with better tools at each step.**
+
+**Run shape.** A site now runs 1.5–3 hours across several sittings (saves carry it). Three acts:
+
+| Act | Time | Feel | Production at the end |
+| --- | --- | --- | --- |
+| 1. Scramble | 0–25 min | Scrap, the first mine, the first chain (as now) | ~2 parts/min |
+| 2. Industry | 25–80 min | Mark 2 machines, conveyors, the colony spreads | ~10 parts/min |
+| 3. Mastery | 80–150 min | Mark 3 processes, titanium and frames, the launch | 30+ parts/min |
+
+**The goal: a mass driver,** an electromagnetic launcher that throws cargo to orbit. It is placed once (a large footprint on flat ground) and built in four phases, each a bill of goods delivered by haulers or conveyors like any consumer. Each phase unlocks the next tier of research. Firing it ends the run (and "keep playing" carries on as now). Rough bills:
+
+| Phase | Needs | Unlocks |
+| --- | --- | --- |
+| 1. Foundation | 150 sinter, 40 iron | Mark 2 research |
+| 2. Rails | 400 iron, 150 parts | Titanium research |
+| 3. Coils | 600 parts, 200 titanium | Mark 3 research |
+| 4. Launch | 300 frames, 400 oxygen, a 300 kW grid while it charges | The end |
+
+Contracts stay as income and reputation, but no longer win the site. In calm mode the site cannot be lost; pressure mode keeps the reputation loss.
+
+**Machine marks, upgraded in place.** The workhorse buildings come in marks. Choose the higher mark in the build menu and click an existing building: a constructor brings the difference in cost and swaps it (the building pauses during the swap). Each mark is roughly 2–3× the last, and Mark 3 is sometimes a different process, so there is more than one way to make things:
+
+| Line | Mark 1 | Mark 2 | Mark 3 |
+| --- | --- | --- | --- |
+| Mining | Drill | Excavator (2.5×) | Strip miner (6×, wears fast) |
+| Sinter | Solar kiln | Electric arc kiln (3×, power-hungry) | |
+| Iron | Hydrogen furnace | Large furnace (2.5×) | Molten-regolith cell: regolith and lots of power in, iron and oxygen out; no ice needed |
+| Parts | Machine shop | Fabrication line (3×) | |
+| Power | Solar array | Thin-film array (2× per area) | Fission kit (steady 120 kW, built from titanium and parts) |
+| Hauling | Hauler (10 cargo) | Heavy hauler (30 cargo) | |
+| Belts | Conveyor (1/s) | Fast conveyor (3/s) | |
+| Building | Constructor | Construction drone (flies, fast) | |
+
+Later research costs goods as well as credits (e.g. Mark 2 research takes parts), so production feeds progress, and higher marks are built from what the colony manufactures: the factory builds the factory.
+
+**Room to spread.** More fields, the richest far from the lander, so growth means moving outward on roads and outposts as nearby fields deplete.
+
+**Watching the number go up.** A production panel (L) with items per minute for each good and a sparkline over the whole run; the HUD shows total colony output; the mass driver shows a large progress bar for its current phase.
+
+**Build order.** (1) Mass driver and phases, the production panel, marks for mining, kiln, furnace and shop, upgrade in place; (2) titanium, frames, heavy haulers, fast conveyors, construction drones, research costing goods; (3) Mark 3 processes, fission, more and farther fields, rebalancing against the act targets with the autoplayer.
 
 ## Later: touch screens and teaching
 
