@@ -93,7 +93,8 @@ def make_unit(world, uid, kind, x, y):
 def brain(unit):
     from game.sim import constructor, drone, hauler, scavenger, scraper, surveyor
     return {"scavenger": scavenger, "constructor": constructor, "survey_rover": surveyor,
-            "hauler": hauler, "maintenance_drone": drone, "scraper": scraper}[unit.kind]
+            "hauler": hauler, "maintenance_drone": drone, "scraper": scraper,
+            "construction_drone": constructor}[unit.kind]
 
 
 def flies(unit):
@@ -129,8 +130,47 @@ def range_limit(world, unit):
     return round(capacity(world, unit) / unit.spec["drain_per_cost_cell"] * U.FIELD_RANGE_MARGIN)
 
 
+class FlightField:
+    """Distances for a flyer: straight lines from (x, y), over everything.
+    Looks like a route field (dist[node], reachable), so brains written for
+    rovers work for flyers too."""
+
+    class _Straight:
+        def __init__(self, grid, x, y):
+            self.grid, self.x, self.y = grid, x, y
+
+        def __getitem__(self, node):
+            cx, cy = self.grid.node_centre(node)
+            return math.hypot(cx - self.x, cy - self.y)
+
+    def __init__(self, grid, x, y):
+        self.source = grid.node_at(x, y)
+        self.dist = FlightField._Straight(grid, x, y)
+
+    def reachable(self, node):
+        return True
+
+
+def field_from(world, unit, x, y):
+    """Distances from (x, y) as this unit travels: by ground, or flying."""
+    grid = world.grid
+    if flies(unit):
+        return FlightField(grid, x, y)
+    return grid.field(grid.nearest_reachable(grid.node_at(x, y), world.home_field), range_limit(world, unit))
+
+
+def back_cost_for(world, unit, x, y):
+    """Cost-cells from (x, y) back to a charger this unit can use."""
+    if flies(unit):
+        homes = [s for s in world.chargers() if s.kind in unit.spec["docks_at"]]
+        return min((math.hypot(s.x - x, s.y - y) for s in homes), default=math.inf)
+    return back_cost(world, x, y)
+
+
 def here_field(world, unit):
     grid = world.grid
+    if flies(unit):
+        return FlightField(grid, unit.x, unit.y)
     start = grid.nearest_reachable(grid.node_at(unit.x, unit.y), world.home_field)
     return grid.field(start, range_limit(world, unit))
 
@@ -318,7 +358,10 @@ def relay(world, unit, x, y, rest_cost=0.0, work_energy=0.0, start=None, battery
     cost-cells and work_energy) that is out of range from here but in range
     on a full battery from the charger nearest the destination. Hops from
     charger to charger when that one is out of reach too. None if there's no
-    way. start/battery plan from somewhere else (e.g. after loading cargo)."""
+    way. start/battery plan from somewhere else (e.g. after loading cargo).
+    Flyers don't relay: they go straight, or not at all."""
+    if flies(unit):
+        return None
     grid = world.grid
     cf = world.charge_field
     node = grid.node_at(x, y)

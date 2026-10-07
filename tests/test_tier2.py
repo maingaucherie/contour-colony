@@ -105,6 +105,20 @@ class ChanceTests(unittest.TestCase):
         self.assertTrue(50 < he3 < 160, he3)
 
 
+class DroneTests(unittest.TestCase):
+    def test_construction_drone_flies_out_and_builds(self):
+        from tests.test_build_power import run_until
+        w = site(2)
+        for u in [u for u in w.units.values() if u.kind == "constructor"]:
+            del w.units[u.id]
+        d = w.spawn_unit("construction_drone", w.lander.x + 1, w.lander.y + 1)
+        x, y = find_spot(w, "solar", (w.lander.x, w.lander.y), 12, 30)
+        s, _ = w.place("solar", x, y)
+        self.assertTrue(run_until(w, lambda: s.built, 300))
+        self.assertEqual(w.scrap_accounted(), w.scrap_spawned)
+        self.assertTrue(run_until(w, lambda: d.docked or d.activity in ("idle", "to_park"), 120))
+
+
 class SymbolTests(unittest.TestCase):
     def test_every_structure_has_a_symbol(self):
         from game.render import symbols

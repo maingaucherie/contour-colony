@@ -50,6 +50,8 @@ RESEARCH = {
                  "unlocks": ("monorail",)},
     "solar_thermal": {"name": "solar thermal", "requires": ("aluminium",), "phase": 2, "cost": 180, "time_s": 60,
                       "unlocks": ("heliostat_tower",)},
+    "drones": {"name": "construction drones", "requires": ("maintenance", "aluminium"), "phase": 2, "cost": 180,
+               "time_s": 60, "unlocks": ("construction_drone",)},
     "fission": {"name": "fission", "requires": ("rare_earths", "titanium"), "phase": 2, "cost": 300,
                 "time_s": 90, "unlocks": ("fuel_fabricator", "fission_reactor", "radiator", "cask_store")},
 }
@@ -58,4 +60,4 @@ RESEARCH = {
 RESEARCH_MENU = ("sorting", "logistics_1", "better_batteries",
                  "prospecting", "deep_survey", "extraction", "electrolysis", "conveyors",
                  "volatiles", "aluminium", "fabrication", "maintenance", "hardened_bearings", "overclocking",
-                 "fuel_cells", "titanium", "rare_earths", "monorail", "solar_thermal", "fission")
+                 "fuel_cells", "titanium", "rare_earths", "monorail", "solar_thermal", "drones", "fission")

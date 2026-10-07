@@ -103,13 +103,34 @@ UNITS["maintenance_drone"] = {
     "bay_cost": {"sinter": 8, "parts": 6}, "bay_time_s": 20.0, "unlocked_by": "maintenance",
 }
 
+UNITS["construction_drone"] = {
+    # A flying constructor: straight over cliffs and craters, so far sites go up
+    # without roads or relays. Smaller loads than a constructor.
+    "name": "construction drone",
+    "start_count": 0,
+    "base_speed_cells_per_s": 5.0,
+    "battery": 100.0,
+    "drain_per_cost_cell": 0.25,     # per cell flown
+    "cargo": 8,                      # build items, any mix
+    "flies": True,
+    "docks_at": ("maintenance_hangar", "lander", "outpost"),
+    "sight_cells": 2.5,
+    "load_s": 1.0,
+    "build_rate": 1.2,
+    "build_drain_per_s": 0.25,
+    "repair_rate": 0.5,
+    "launch_stagger_s": 0.0,
+    "bay_cost": {"sinter": 10, "parts": 4, "aluminium": 6}, "bay_time_s": 25.0, "unlocked_by": "drones",
+}
+
 # Scavengers with no known debris search: they drive to a random reachable
 # spot this far away (cells) and look around on the way.
 SEARCH_DISTANCE_CELLS = (6.0, 18.0)
 SEARCH_ATTEMPTS = 12
 
 # Order of the rover bay's build list.
-BAY_MENU = ("scavenger", "scraper", "constructor", "survey_rover", "hauler", "maintenance_drone")
+BAY_MENU = ("scavenger", "scraper", "constructor", "survey_rover", "hauler", "maintenance_drone",
+            "construction_drone")
 
 # Shared unit rules.
 SLOPE_DIVISOR_DEG = 5.0              # speed = base / (1 + slope / SLOPE_DIVISOR_DEG)

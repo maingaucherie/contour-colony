@@ -539,7 +539,7 @@ def draw_world(surface, world, camera, alpha, now_s, selected, ghost=None):
         if view == "flow" and unit.kind == "hauler" and unit.path:
             G.dashed(surface, _scale(D.COLOR_FLOW, 0.5), [(sx, sy)] + [to_screen(x, y) for x, y in unit.path],
                      D.DASH_PX, D.GAP_PX)
-        elif view in ("power", "flow") or (view == "wear" and unit.kind not in ("maintenance_drone", "constructor")):
+        elif view in ("power", "flow") or (view == "wear" and unit.kind not in ("maintenance_drone", "constructor", "construction_drone")):
             color = _scale(color, D.OVERLAY_DIM)
         if unit.state == US.CHARGING and unit.dock in world.structures:
             dock = world.structures[unit.dock]

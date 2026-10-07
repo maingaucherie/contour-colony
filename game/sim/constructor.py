@@ -1,5 +1,9 @@
 """Constructor brain: supply construction sites and assemble them. Never imports pygame.
 
+Construction drones use this brain too: they fly straight over everything,
+so their distances are straight lines (units.FlightField) and they never
+relay through chargers on the way.
+
 Sites are served oldest first. For a site still missing materials, the
 constructor loads what it needs (up to its cargo) at the nearest storage that
 has any, drives it over and delivers. Once everything is on site, it stays
@@ -35,7 +39,7 @@ def _deliver_cargo_to(world, unit, f):
         need = site.materials_needed()
         if any(unit.cargo.get(k, 0) for k in need):
             d = f.dist[world.grid.node_at(site.x, site.y)]
-            if UN.can_afford(world, unit, d + UN.back_cost(world, site.x, site.y)):
+            if UN.can_afford(world, unit, d + UN.back_cost_for(world, unit, site.x, site.y)):
                 return site
     return None
 
@@ -69,7 +73,7 @@ def think(world, unit):
         # Out of range from here: top up at the charger nearest a site that needs it.
         for site in _sites(world):
             if any(unit.cargo.get(k, 0) for k in site.materials_needed()):
-                r = UN.relay(world, unit, site.x, site.y, UN.back_cost(world, site.x, site.y))
+                r = UN.relay(world, unit, site.x, site.y, UN.back_cost_for(world, unit, site.x, site.y))
                 if r is not None and UN.stage(world, unit, r):
                     return
         if "store" in roles:
@@ -80,14 +84,14 @@ def think(world, unit):
 
     for site in _sites(world):
         site_node = grid.node_at(site.x, site.y)
-        back = UN.back_cost(world, site.x, site.y)
+        back = UN.back_cost_for(world, unit, site.x, site.y)
         need = site.materials_needed()
         if need:
             found = _storage_with(world, unit, need, f)
             if found is None:
                 continue
             d_store, store = found
-            from_store = grid.field(grid.node_at(store.x, store.y))
+            from_store = UN.field_from(world, unit, store.x, store.y)
             if not UN.can_afford(world, unit, d_store + from_store.dist[site_node] + back):
                 # Maybe via a charger near the site: load here, top up there.
                 left = unit.battery - UN.trip_energy(unit, d_store)
@@ -115,7 +119,7 @@ def think(world, unit):
             continue  # one constructor per teardown
         remaining = s.assembly_time() * ST.S.DECONSTRUCT_TIME_FRACTION - s.teardown_s
         energy = remaining / unit.spec["build_rate"] * unit.spec["build_drain_per_s"]
-        if not UN.can_afford(world, unit, f.dist[grid.node_at(s.x, s.y)] + UN.back_cost(world, s.x, s.y), energy):
+        if not UN.can_afford(world, unit, f.dist[grid.node_at(s.x, s.y)] + UN.back_cost_for(world, unit, s.x, s.y), energy):
             continue
         unit.job = s.id
         UN.release_dock(world, unit)
@@ -136,15 +140,15 @@ def _try_repair(world, unit, f):
     """Nothing to build: fetch machine parts and repair the most worn structure in range."""
     grid = world.grid
     for s in wear.jobs(world, unit):
-        store, free = wear.parts_store(world, unit, (unit.x, unit.y))
+        store, free = wear.parts_store(world, unit, (unit.x, unit.y), flies=UN.flies(unit))
         if store is None:
             return False
         n = min(wear.parts_needed(s), unit.spec["cargo"], free)
         spot = _repair_spot(s)
-        leg = grid.field(grid.node_at(store.x, store.y)).dist[grid.node_at(s.x, s.y)]
+        leg = UN.field_from(world, unit, store.x, store.y).dist[grid.node_at(s.x, s.y)]
         energy = n * wear.W_["seconds_per_step"] / unit.spec["repair_rate"] * unit.spec["build_drain_per_s"]
         if not UN.can_afford(world, unit, f.dist[grid.node_at(store.x, store.y)] + leg
-                             + UN.back_cost(world, *spot), energy):
+                             + UN.back_cost_for(world, unit, *spot), energy):
             continue
         s.repairer = unit.id
         unit.job = s.id
@@ -272,7 +276,7 @@ def work_done(world, unit):
                     space -= take
             if unit.cargo_total():
                 f = UN.here_field(world, unit)
-                back = UN.back_cost(world, site.x, site.y)
+                back = UN.back_cost_for(world, unit, site.x, site.y)
                 if UN.can_afford(world, unit, f.dist[world.grid.node_at(site.x, site.y)] + back):
                     UN.set_path(unit, UN.path_to(world, unit, (site.x, site.y), f), "to_site", site.id)
                     return
